@@ -8,29 +8,51 @@ const styles = StyleSheet.create({
         // height:'100%',
         backgroundColor:'#e4e1e1d9',
     },
-    txtRow:{
-        marginLeft:10,
+    pointer:{
+        // fontSize:17,
+        // color:'black',
+        // position:'absolute',
+        // top:45,
+        // left:'18%'
+        fontSize:17,
+        fontStyle:'italic',
+        textDecorationLine:'underline',
+        color:'#494949',
+        marginTop:100,
+        marginLeft:20,
         marginRight:10,
-        marginVertical:8,
+        marginBottom:15,
     },
     firstTxtRow:{
-        margin:10,
-        marginTop:120,
+        marginBottom:8,
+        // marginTop:120,
+        marginHorizontal:10,
+    },
+    txtRow:{
+        marginHorizontal:10,
+        marginVertical:8,
     },
     txtTitle:{
-        color:'#000000',
+        color:'#0e0d0dd9',
         fontSize:22,
         fontWeight:'bold',
         marginLeft:10,
         marginBottom:5
     },
     txt:{
-        color:'#dfdfdf',
+        color:'#f1efef',
         padding:7,
-        backgroundColor:'#252323',
+        backgroundColor:'#0e0d0dd9',
         borderRadius:25,
         fontSize:19,
 
+    },
+    btnContainer:{
+        position:'absolute',
+        bottom:0,
+        height:90,
+        width:'100%',
+        backgroundColor:'#e4e1e1d9'
     },
     btn:{
         width:150,

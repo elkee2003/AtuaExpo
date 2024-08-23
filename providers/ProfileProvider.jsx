@@ -8,7 +8,9 @@ const ProfileProvider = ({children}) => {
     const [profilePic, setProfilePic] = useState(null)
     const [firstName, setFirstName] = useState("")
     const [lastName, setLastName] = useState("")
-    const [address, setAddress] = useState( "")
+    const [address, setAddress] = useState(" ")
+    const [lat, setLat] = useState('0')
+    const [lng, setLng] = useState('0')
     const [phoneNumber, setPhoneNumber]= useState("")
     const [errorMessage, setErrorMessage] = useState('')
 
@@ -38,7 +40,7 @@ const ProfileProvider = ({children}) => {
     }
 
   return (
-    <ProfileContext.Provider value={{firstName,setFirstName, lastName, setLastName, address, setAddress, phoneNumber, setPhoneNumber, errorMessage, setErrorMessage, profilePic, setProfilePic, onValidateInput}}>
+    <ProfileContext.Provider value={{firstName,setFirstName, lastName, setLastName, address, setAddress, lat, setLat, lng, setLng, phoneNumber, setPhoneNumber, errorMessage, setErrorMessage, profilePic, setProfilePic, onValidateInput}}>
         {children}
     </ProfileContext.Provider>
   )

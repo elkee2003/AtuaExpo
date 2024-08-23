@@ -7,12 +7,13 @@ import * as Location from 'expo-location';
 import {GOOGLE_API_KEY} from '../../keys'
 import AntDesign from '@expo/vector-icons/AntDesign';
 import { useLocationContext } from '@/providers/LocationProvider';
+import { useProfileContext } from '@/providers/ProfileProvider';
 import { router } from 'expo-router';
 
-const homePlace = {
-    description: 'Home',
-    geometry: { location: { lat: 48.8152937, lng: 2.4597668 } },
-};
+// const homePlace = {
+//     description: 'Home',
+//     geometry: { location: { lat, lng} },
+// };
 
 const workPlace = {
     description: 'Work',
@@ -20,6 +21,13 @@ const workPlace = {
 };
 
 const DestinationSearchComponent = () => {
+
+    // const homePlace = {
+    //     description: 'Home',
+    //     geometry: { location: { lat, lng} },
+    // };
+
+    // const {lat,lng} = useProfileContext()
 
     const {originPlace, destinationPlace, setOriginPlace, setDestinationPlace} = useLocationContext()
 
@@ -93,6 +101,7 @@ const DestinationSearchComponent = () => {
           onFail={(error) => console.error(error)}
           onNotFound={() => console.log('No results were found')}
           isSearching={(isSearching) => setLoading(isSearching)} // Set loading state
+          // predefinedPlaces={[homePlace]}
           // currentLocation={true}
           // currentLocationLabel='Current location'
         />
@@ -133,6 +142,7 @@ const DestinationSearchComponent = () => {
           onFail={(error) => console.error(error)}
           onNotFound={() => console.log('No results were found')}
           isSearching={(isSearching) => setLoading(isSearching)} // Set loading state
+          // predefinedPlaces={[homePlace]}
         />
         {/* Activity Indicator */}
         {loading && <ActivityIndicator size="large" color="#0000ff" style={styles.activityIndicator} />}

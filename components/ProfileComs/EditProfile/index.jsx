@@ -1,6 +1,8 @@
 import { View, Text, TextInput,Pressable, Alert, ScrollView, Image, TouchableOpacity} from 'react-native'
-import React from 'react'
+import React, {useState, useRef} from 'react'
 import * as ImagePicker from 'expo-image-picker';
+import { GooglePlacesAutocomplete } from 'react-native-google-places-autocomplete';
+import { GOOGLE_API_KEY } from '@/keys';
 import styles from './styles'
 import { router } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons';
@@ -10,7 +12,11 @@ import { useProfileContext } from '../../../providers/ProfileProvider';
 
 const EditProfile = () => {
 
-    const {firstName,setFirstName, lastName, setLastName, profilePic, setProfilePic, address, setAddress, phoneNumber, setPhoneNumber, errorMessage, onValidateInput,} = useProfileContext()
+    const [isFocused, setIsFocused] = useState(false);
+
+    const autocompleteRef = useRef(null)
+
+    const {firstName,setFirstName, lastName, setLastName, profilePic, setProfilePic, address, setAddress, lat, setLat, lng, setLng, phoneNumber, setPhoneNumber, errorMessage, onValidateInput,} = useProfileContext()
 
     const pickImage = async () => {
       // No permissions request is necessary for launching the image library
@@ -31,8 +37,37 @@ const EditProfile = () => {
       }
     };
 
+    // function to handle focus
+    const handleFocusChange = (focused) => {
+      setIsFocused(focused);
+    };
+
+    // Start Of GooglePlacesAutoComplete function
+    const handlePlaceSelect = (data, details = null) => {
+      // Extract the address from the selected place
+      const selectedAddress = data?.description || details?.formatted_address;
+
+      const selectedAddylat = JSON.stringify(details?.geometry?.location.lat) 
+
+      const selectedAddylng = JSON.stringify(details?.geometry?.location.lng) 
+
+      console.log(selectedAddylng, selectedAddylat)
+  
+      // Update the address state
+      setAddress(selectedAddress);
+      setLat(selectedAddylat)
+      setLng(selectedAddylng)
+  
+    };
+
+    // function to clear autocompleter
+    const handleClearAddress = () => {
+        autocompleteRef.current?.clear(); // Clear the autocomplete input
+        setAddress(null);
+    };
+
     return (
-    <ScrollView style={styles.container}>
+    <View style={styles.container}>
 
       <Text style={styles.title}>Profile</Text>
 
@@ -63,12 +98,46 @@ const EditProfile = () => {
       style={styles.input}
       />
 
-      <TextInput 
+      {/* <TextInput 
       value={address}
       onChangeText={setAddress}
       placeholder='Address'
       style={{...styles.input, color: '#04df04'}}
-      />
+      /> */}
+
+      {/* Googleplaces autocomplete */}
+      <View style={isFocused ? styles.gContainerFocused : styles.gContainer}>
+        <GooglePlacesAutocomplete
+        fetchDetails
+        ref={autocompleteRef}
+        placeholder='Select Address From Here'
+        onPress={handlePlaceSelect}
+        textInputProps={{
+          onFocus:() => handleFocusChange(true),
+          onBlur:() => handleFocusChange(false),
+          
+        }} 
+        styles={{
+          textInput:styles.gTextInput,
+          textInputContainer:styles.gTextInputContainer,
+          listView:styles.glistView,
+          poweredContainer:styles.gPoweredContainer
+        }}
+        query={{
+          key: GOOGLE_API_KEY,
+          language: 'en',
+          components: 'country:ng',
+        }}
+        // renderRightButton={() => (
+        //   <TouchableOpacity onPress={handleClearAddress} style={styles.clearIconContainer}>
+        //     <Ionicons name='close-circle' style={styles.clearIcon}/>
+        //   </TouchableOpacity>
+        // )}
+        />
+        <TouchableOpacity onPress={handleClearAddress} style={styles.clearIconContainer}>
+          <Ionicons name='close-circle' style={styles.clearIcon}/>
+        </TouchableOpacity>
+      </View>
     
       <TextInput
       value={phoneNumber}
@@ -94,7 +163,7 @@ const EditProfile = () => {
       </View>
       
       
-    </ScrollView>
+    </View>
   )
 }
 

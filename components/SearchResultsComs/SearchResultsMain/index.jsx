@@ -17,16 +17,34 @@ const SearchResultComponent = () => {
     const [totalMins, setTotalMins]=useState(0);
     const [totalKm, setTotalKm]=useState(0);
 
+    // Surcharges
+    const [isPeakHour, setIsPeakHour] = useState(false);
+    const [isWeekend, setIsWeekend] = useState(false);
+    const [isHighTrafficArea, setIsHighTrafficArea] = useState(false);
+    const [isNightTime, setIsNightTime] = useState(false);
+    const [isHeavyItem, setIsHeavyItem] = useState(false);
+    const [isFragileItem, setIsFragileItem] = useState(false);
+    // const [isLongDistance, setIsLongDistance] = useState(false);
+    // const [isRushDelivery, setIsRushDelivery] = useState(false);
+    const [isHoliday, setIsHoliday] = useState(false);
+
 
   return (
     <GestureHandlerRootView style={styles.container}>
 
         {/* Map */}
         <ResultMap
-        totalMins={totalMins}
         setTotalMins={setTotalMins}
-        totalKm={totalKm}
         setTotalKm={setTotalKm}
+        setIsPeakHour={setIsPeakHour}
+        setIsWeekend={setIsWeekend}
+        setIsHighTrafficArea={setIsHighTrafficArea}
+        // setIsLongDistance={setIsLongDistance}
+        // setIsRushDelivery={setIsRushDelivery}
+        setIsNightTime={setIsNightTime}
+        setIsHoliday={setIsHoliday}
+        setIsHeavyItem={setIsHeavyItem}
+        setIsFragileItem={setIsFragileItem}
         />
 
         <Pressable onPress={()=>router.back()} style={styles.bckBtn}>
@@ -47,6 +65,15 @@ const SearchResultComponent = () => {
                 setCalculatedPrice={setCalculatedPrice}
                 totalMins={totalMins}
                 totalKm={totalKm}
+                isPeakHour={isPeakHour}
+                isWeekend={isWeekend}
+                isHighTrafficArea={isHighTrafficArea}
+                // isLongDistance={isLongDistance}
+                // isRushDelivery={isRushDelivery}
+                isNightTime={isNightTime}
+                isHoliday={isHoliday}
+                isHeavyItem={isHeavyItem}
+                isFragileItem={isFragileItem}
                 />
             </BottomSheetScrollView>
         </BottomSheet>

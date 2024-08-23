@@ -85,7 +85,41 @@ const styles = StyleSheet.create({
         signoutTxt:{
         fontSize:20,
         color:'#c70707'
-    }
+    },
+    gContainer:{
+        position:'relative',
+        height:'8%',
+        zIndex:2,
+        marginVertical:10,
+    },
+    clearIconContainer:{
+        position:'absolute',
+        right:10,
+        top:15,
+        zIndex:3,
+    },
+    clearIcon:{
+        fontSize:35,
+        color:'grey'
+    }, 
+    gContainerFocused: {
+        height: '30%', // Set the desired height when typing
+        zIndex: 2,
+    },
+    gTextInputContainer:{
+        paddingLeft:10,
+        paddingRight:10,
+    },
+    gTextInput: {
+        height: 60,
+    },
+    glistView:{
+        paddingLeft:10,
+        paddingRight:10,
+    },
+    gPoweredContainer:{
+        display:'none'
+    },
   
   })
 

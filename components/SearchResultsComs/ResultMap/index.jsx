@@ -10,14 +10,22 @@ import FontAwesome6 from '@expo/vector-icons/FontAwesome6';
 import TMediums from '../../../assets/data/TMediums'
 
 const ResultMap = ({
-  totalMins,
   setTotalMins,
-  totalKm,
   setTotalKm,
+  setIsPeakHour,
+  setIsWeekend,
+  setIsHighTrafficArea,
+  setIsLongDistance,
+  setIsRushDelivery,
+  setIsNightTime,
+  setIsHoliday,
+  setIsHeavyItem,
+  setIsFragileItem,
 }) => {
     const {width, height} = useWindowDimensions()
     const [location, setLocation] = useState(null);
     const [errorMsg, setErrorMsg] = useState(null);
+    const [currentHour, setCurrentHour] = useState(new Date().getHours());
 
     const {originPlace, destinationPlace} = useLocationContext()
 
@@ -50,6 +58,38 @@ const ResultMap = ({
         setTotalKm(distance.toFixed(2))
         setTotalMins(duration.toFixed(0))
     }
+
+    const checkIfHoliday = (date) => {
+    // Implement your logic to check if today is a holiday
+    return false; // Example: return true if it's a holiday
+    };
+
+    const checkHighTrafficArea = (location) => {
+    // Implement your logic to check if the location is a high-traffic area
+    return false; // Example: return true if it's a high-traffic area
+    };
+
+    useEffect(() => {
+        const currentDay = new Date().getDay();
+
+        // Detect peak hours (e.g., 5 PM to 8 PM)
+        setIsPeakHour(currentHour >= 17 && currentHour <= 20);
+        setIsWeekend(currentDay === 0 || currentDay === 6);
+        setIsNightTime(currentHour >= 22 || currentHour < 5);
+        setIsHoliday(checkIfHoliday(new Date()));
+        setIsHeavyItem(false); // Assuming itemWeight is available
+        setIsFragileItem(false); // Assuming this is determined from item properties
+
+        // Here you could add logic to detect if the user is in a high-traffic area
+        // You might use specific coordinates or a third-party service to check this
+
+        // const isHighTrafficArea = // Your logic to detect high-traffic area
+        // setIsHighTrafficArea(isHighTrafficArea);
+
+        // new surcharge
+        // setIsLongDistance(distance > 25);
+        // setIsRushDelivery(false); // e.g., based on user input
+    }, [location, currentHour]);
 
     useEffect(() => {
         let foregroundSubscription;

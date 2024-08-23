@@ -11,7 +11,16 @@ const AtuaTypes = ({
   calculatedPrice,
   setCalculatedPrice, 
   totalKm,
-  totalMins
+  totalMins,
+  isPeakHour,
+  isWeekend,
+  isHighTrafficArea,
+  // isLongDistance, 
+  // isRushDelivery,
+  isNightTime,
+  isHoliday,
+  isHeavyItem,
+  isFragileItem,
 }) => {
 
   const getImage=(medium)=>{
@@ -33,39 +42,109 @@ const AtuaTypes = ({
     console.log(medium.type)
   }
 
-  const calculatePrice = (type, distance) => {
-    const baseFare = 300; // Base fare added to all calculations
+  const calculatePrice = (type, distance,) => {
+    const serviceFee = 300; // service fee added to all calculations
     
-    let pricePerKm;
-  
-    if (distance <= 1) {
-      // Fixed price for 1km or less
+    // Flat rates for distances less than 3km
+    if (distance <= 3) {
       if (type === 'BICYCLE') return 300;
-      if (type === 'BIKE') return 700;
-      if (type === 'CAR') return 1000;
-      if (type === 'GROUP') return 200;
-    } else if (distance <= 5){
-      // Price per km for distances between 2km and 5km
-      if (type === 'BICYCLE') pricePerKm = 350;
-      if (type === 'BIKE') pricePerKm = 500;
-      if (type === 'CAR') pricePerKm = 700;
-      if (type === 'GROUP') pricePerKm = 300;
+      if (type === 'BIKE') return 500;
+      if (type === 'CAR') return 700;
+      if (type === 'GROUP') return 250;
+    } 
+
+    let pricePerKm;
+    let baseCharge;
+
+     // Distance ranges with base charges and per km rates
+    if (distance <= 5){
+      // Base charge and price per km for distances between 3.01km and 5km
+      baseCharge = 50; // Mild base charge for this range
+      if (type === 'BICYCLE') pricePerKm = 185;
+      if (type === 'BIKE') pricePerKm = 220;
+      if (type === 'CAR') pricePerKm = 250;
+      if (type === 'GROUP') pricePerKm = 170;
     } else if (distance <= 10) {
-      // Price per km for distances between 6km and 10km
-      if (type === 'BICYCLE') pricePerKm = 400;
-      if (type === 'BIKE') pricePerKm = 700;
-      if (type === 'CAR') pricePerKm = 900;
-      if (type === 'GROUP') pricePerKm = 300;
+      // Base charge and price per km for distances between 5.01km and 10km
+      baseCharge = 75; // Mild base charge for this range
+      if (type === 'BICYCLE') pricePerKm = 180;
+      if (type === 'BIKE') pricePerKm = 210;
+      if (type === 'CAR') pricePerKm = 240;
+      if (type === 'GROUP') pricePerKm = 150;
     } else if (distance <= 15) {
-      // Price per km for distances between 7.1km and 15km
-      if (type === 'BICYCLE') pricePerKm = 370;
-      if (type === 'BIKE') pricePerKm = 650;
-      if (type === 'CAR') pricePerKm = 850;
-      if (type === 'GROUP') pricePerKm = 300;
+      // Base charge and price per km for distances between 10.01km and 15km
+      baseCharge = 100; // Mild base charge for this range
+      if (type === 'BICYCLE') pricePerKm = 175;
+      if (type === 'BIKE') pricePerKm = 200;
+      if (type === 'CAR') pricePerKm = 230;
+      if (type === 'GROUP') pricePerKm = 140;
+    }else if (distance <= 20) {
+      baseCharge = 125; // Base charge for this range
+      if (type === 'BICYCLE') pricePerKm = 170;
+      if (type === 'BIKE') pricePerKm = 190;
+      if (type === 'CAR') pricePerKm = 220;
+      if (type === 'GROUP') pricePerKm = 130;
+    } else if (distance <= 25) {
+      baseCharge = 150; // Base charge for this range
+      if (type === 'BICYCLE') pricePerKm = 165;
+      if (type === 'BIKE') pricePerKm = 185;
+      if (type === 'CAR') pricePerKm = 210;
+      if (type === 'GROUP') pricePerKm = 125;
+    } else if (distance <= 30) {
+      baseCharge = 175; // Base charge for this range
+      if (type === 'BICYCLE') pricePerKm = 160;
+      if (type === 'BIKE') pricePerKm = 180;
+      if (type === 'CAR') pricePerKm = 200;
+      if (type === 'GROUP') pricePerKm = 120;
+    } else if (distance > 30) {
+      baseCharge = 250; // Higher base charge for 40km and above
+      if (type === 'BICYCLE') pricePerKm = 150;
+      if (type === 'BIKE') pricePerKm = 175;
+      if (type === 'CAR') pricePerKm = 190;
+      if (type === 'GROUP') pricePerKm = 110;
     }
   
-    // Calculate the price by multiplying the distance by pricePerKm and adding the base fare
-    const estimatedPrice = baseFare + (distance * pricePerKm);
+    // Calculate the price by multiplying the distance by pricePerKm, adding the base charge and service fee
+    let estimatedPrice = baseCharge + (distance * pricePerKm) + serviceFee;
+
+
+    // Let's say you want to add the following surcharges:
+    // Peak Hours Surcharge: 20% increase during peak hours (e.g., 5 PM to 8 PM).
+    // Weekend Surcharge: Fixed NGN 100 extra for weekend deliveries.
+    // Location Surcharge: NGN 50 extra for certain high-traffic areas.
+    
+    // Apply surcharges
+    if (isPeakHour) {
+      estimatedPrice *= 1.2; // 20% surcharge for peak hours
+    }
+
+    if (isNightTime) {
+      estimatedPrice += 150; // NGN 150 surcharge for night deliveries
+    }
+
+    if (isWeekend) {
+      estimatedPrice += 100; // NGN 100 surcharge for weekends
+    }
+
+    if (isHighTrafficArea) {
+      estimatedPrice += 50; // NGN 50 surcharge for high-traffic areas
+    }
+    // 4. Long-Distance Surcharge (if distance > 25 km)
+    if ( distance > 45) {
+      estimatedPrice += 250; // Add NGN 200 if distance exceeds 25 km
+    }
+    if (isHoliday) {
+      estimatedPrice += 200; // NGN 200 surcharge for deliveries on holidays
+    }
+    if (isHeavyItem) {
+      estimatedPrice += 300; // NGN 300 surcharge for heavy items
+    }
+  
+    // 9. Fragile Item Surcharge
+    if (isFragileItem) {
+      estimatedPrice += 100; // NGN 100 surcharge for fragile items
+    }
+
     return estimatedPrice.toFixed(2); // Rounds the price to 2 decimal places
   };
 
