@@ -75,9 +75,9 @@ const EditProfile = () => {
       <View style={styles.profilePicContainer}>
         {profilePic && <Image source={{ uri: profilePic }} style={styles.img} />}
         <View style={styles.plusIconContainer}>
-        <TouchableOpacity onPress={pickImage}>
-          <AntDesign style={styles.plusIcon} name="pluscircle"  />
-        </TouchableOpacity>
+          <TouchableOpacity onPress={pickImage}>
+            <AntDesign style={styles.plusIcon} name="pluscircle"  />
+          </TouchableOpacity>
         </View>
       </View>
       {/* <TouchableOpacity onPress={pickImage}>

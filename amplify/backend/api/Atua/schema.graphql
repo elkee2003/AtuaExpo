@@ -1,0 +1,93 @@
+enum OrderStatus {
+  READY_FOR_PICKUP
+  ACCEPTED
+  PICKEDUP
+  DELIVERED
+}
+
+type CompanyVehicle @model @auth(rules: [{allow: public}]) {
+  id: ID!
+  vehicleType: String
+  model: String
+  regNumber: String
+  couriercompanyID: ID! @index(name: "byCourierCompany")
+}
+
+type CourierCompany @model @auth(rules: [{allow: public}]) {
+  id: ID!
+  sub: String!
+  firstName: String!
+  lastName: String
+  profilePic: String
+  address: String
+  lat: Float
+  lng: Float
+  landmark: String
+  phoneNumber: String
+  email: String
+  adminFirstName: String
+  adminLastName: String
+  adminPhoneNumber: String
+  bankName: String
+  CompanyVehicles: [CompanyVehicle] @hasMany(indexName: "byCourierCompany", fields: ["id"])
+  accountNumber: String
+}
+
+type User @model @auth(rules: [{allow: public}]) {
+  id: ID!
+  sub: String!
+  firstName: String!
+  lastName: String
+  profilePic: String
+  address: String
+  lat: String
+  lng: String
+  Orders: [Order] @hasMany(indexName: "byUser", fields: ["id"])
+}
+
+type Courier @model @auth(rules: [{allow: public}]) {
+  id: ID!
+  sub: String!
+  firstName: String!
+  lastName: String
+  profilePic: String
+  address: String
+  landmark: String
+  phoneNumber: String
+  email: String
+  courierNIN: String
+  courierBVN: String
+  bankName: String
+  accountName: String
+  accountNumber: String
+  transportationType: String
+  guarantorName: [String]
+  guarantorLastName: [String]
+  guarantorProfession: String
+  guarantorNumber: String
+  guarantorRelationship: String
+  guarantorAddress: String
+  guarantorEmail: String
+  guarantorNIN: String
+  lat: Float
+  lng: Float
+  heading: Float
+}
+
+type Order @model @auth(rules: [{allow: public}]) {
+  id: ID!
+  recipientName: String
+  recipientNumber: String
+  orderDetails: String
+  parcelOrigin: String
+  parcelOriginLat: Float
+  parcelOriginLng: Float
+  parcelDestination: String
+  parcelDestinationLat: Float
+  parcelDestinationLng: Float
+  status: OrderStatus
+  price: Float
+  Courier: Courier @hasOne
+  userID: ID! @index(name: "byUser")
+}
+ 

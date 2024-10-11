@@ -1,7 +1,7 @@
 export default [
   {
     id: '0',
-    type: 'Walk',
+    type: 'Bicycle',
     latitude: 4.8089763,
     longitude: 7.0220555,
     heading: 130,

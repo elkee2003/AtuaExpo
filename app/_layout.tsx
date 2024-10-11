@@ -1,10 +1,19 @@
+navigator.geolocation = require('@react-native-community/geolocation');
 import { Stack } from "expo-router";
 import AuthProvider from '../providers/AuthProvider'
 import OrderProvider from '../providers/OrderProvider'
 import LocationProvider from '../providers/LocationProvider'
 import ProfileProvider from "@/providers/ProfileProvider";
+import {
+  withAuthenticator,
+  useAuthenticator
+} from '@aws-amplify/ui-react-native';
+import { Amplify } from 'aws-amplify';
+import amplifyconfig from '../src/amplifyconfiguration.json'
 
-export default function RootLayout() {
+Amplify.configure(amplifyconfig);
+
+const RootLayout = () => {
   return (
     <AuthProvider>
       <ProfileProvider>
@@ -21,3 +30,6 @@ export default function RootLayout() {
     </AuthProvider>
   );
 }
+
+// export default withAuthenticator(RootLayout);
+export default RootLayout;

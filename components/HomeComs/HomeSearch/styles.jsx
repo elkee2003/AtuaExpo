@@ -12,14 +12,14 @@ const styles = StyleSheet.create({
     },
     inputText:{
         fontSize: 20,
-        fontWeight:'600',
+        fontWeight:'bold',
         color: '#535353'
     },
     orderContainer:{
         flexDirection:'row',
         justifyContent: 'center',
-        width:70,
-        padding:5,
+        width:50,
+        padding:2,
         backgroundColor:'#fff',
         borderRadius:50
     },

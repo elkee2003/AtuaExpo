@@ -14,13 +14,14 @@ const AtuaTypes = ({
   totalMins,
   isPeakHour,
   isWeekend,
-  isHighTrafficArea,
-  // isLongDistance, 
-  // isRushDelivery,
   isNightTime,
   isHoliday,
-  isHeavyItem,
-  isFragileItem,
+  // isLongDistance, 
+  // isRushDelivery,
+
+  // isHighTrafficArea,
+  // isHeavyItem,
+  // isFragileItem,
 }) => {
 
   const getImage=(medium)=>{
@@ -32,6 +33,9 @@ const AtuaTypes = ({
       }
       if (medium?.type === 'CAR'){
           return require('../../../assets/atuaImages/UberXL.jpeg')
+      }
+      if (medium?.type === 'GROUP'){
+          return require('../../../assets/atuaImages/Deliverybicycle.png')
       }
       return require('../../../assets/atuaImages/UberXL.jpeg');
   }
@@ -46,11 +50,11 @@ const AtuaTypes = ({
     const serviceFee = 300; // service fee added to all calculations
     
     // Flat rates for distances less than 3km
-    if (distance <= 3) {
-      if (type === 'BICYCLE') return 300;
-      if (type === 'BIKE') return 500;
-      if (type === 'CAR') return 700;
-      if (type === 'GROUP') return 250;
+    if (distance <= 2.7) {
+      if (type === 'BICYCLE') return 300 + serviceFee; // 300 flat rate + 300 service fee
+        if (type === 'BIKE') return 500 + serviceFee; // 500 flat rate + 300 service fee
+        if (type === 'CAR') return 700 + serviceFee; // 700 flat rate + 300 service fee
+        if (type === 'GROUP') return 250 + serviceFee; // 250 flat rate + 300 service fee
     } 
 
     let pricePerKm;
@@ -126,31 +130,48 @@ const AtuaTypes = ({
       estimatedPrice += 100; // NGN 100 surcharge for weekends
     }
 
-    if (isHighTrafficArea) {
-      estimatedPrice += 50; // NGN 50 surcharge for high-traffic areas
-    }
-    // 4. Long-Distance Surcharge (if distance > 25 km)
-    if ( distance > 45) {
-      estimatedPrice += 250; // Add NGN 200 if distance exceeds 25 km
-    }
     if (isHoliday) {
       estimatedPrice += 200; // NGN 200 surcharge for deliveries on holidays
     }
-    if (isHeavyItem) {
-      estimatedPrice += 300; // NGN 300 surcharge for heavy items
+
+    // 4. Long-Distance Surcharge (if distance > 25 km)
+    if ( distance > 45) {
+      estimatedPrice += 250; 
     }
+    // if (isHighTrafficArea) {
+    //   estimatedPrice += 50; // NGN 50 surcharge for high-traffic areas
+    // }
+    // if (isHeavyItem) {
+    //   estimatedPrice += 300; // NGN 300 surcharge for heavy items
+    // }
   
-    // 9. Fragile Item Surcharge
-    if (isFragileItem) {
-      estimatedPrice += 100; // NGN 100 surcharge for fragile items
-    }
+    // // 9. Fragile Item Surcharge
+    // if (isFragileItem) {
+    //   estimatedPrice += 100; // NGN 100 surcharge for fragile items
+    // }
 
     return estimatedPrice.toFixed(2); // Rounds the price to 2 decimal places
   };
 
+  // Filter out BICYCLE if distance > 13km and BIKE if distance > 30km (two different distances)
+  // const filteredDeliveryMediums = deliveryMediums.filter(medium => {
+  //   return !((medium.type === 'BICYCLE' && totalKm > 13) || (medium.type === 'BIKE' && totalKm > 30));
+  // });
+
+  // Filter out BICYCLE and BIKE options if distance > 13km (same distance)
+  // const filteredDeliveryMediums = deliveryMediums.filter(medium => {
+  //   return !( (medium.type === 'BICYCLE' || medium.type === 'BIKE') && totalKm > 13);
+  // });
+
+  // Filter out BICYCLE option if distance > 13km
+  const filteredDeliveryMediums = deliveryMediums.filter(medium => {
+    return !(medium.type === 'BICYCLE' && totalKm > 13);
+  });
+
   return (
     <ScrollView>
-      {deliveryMediums.map(medium =>{
+      {/* note it was previous deliverymediums.map() */}
+      {filteredDeliveryMediums.map(medium =>{
         const calculatedCost = calculatePrice(medium.type, totalKm);
         return(
           <TouchableOpacity

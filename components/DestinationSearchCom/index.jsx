@@ -4,6 +4,7 @@ import styles from './styles'
 import PlaceRow from './placeRow'
 import { GooglePlacesAutocomplete } from 'react-native-google-places-autocomplete';
 import * as Location from 'expo-location'; 
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {GOOGLE_API_KEY} from '../../keys'
 import AntDesign from '@expo/vector-icons/AntDesign';
 import { useLocationContext } from '@/providers/LocationProvider';
@@ -48,6 +49,14 @@ const DestinationSearchComponent = () => {
           destinationAutocompleteRef.current.clear(); // Clear the input field
         }
         setDestinationPlace(null); // Clear destinationPlace state
+    };
+
+    const saveLastDestination = async (destination) => {
+      try {
+        await AsyncStorage.setItem('lastDestination', destination);
+      } catch (error) {
+        console.error('Failed to save the last destination:', error);
+      }
     };
 
 
@@ -111,7 +120,8 @@ const DestinationSearchComponent = () => {
           placeholder='To?'
           ref={destinationAutocompleteRef}
           onPress={(data, details = null) => {
-            setDestinationPlace({data, details})
+            setDestinationPlace({data, details});
+            saveLastDestination(data.description || details.formatted_address);
           }}
           fetchDetails
           enablePoweredByContainer={false}

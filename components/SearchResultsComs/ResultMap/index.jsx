@@ -1,31 +1,33 @@
-import { View, useWindowDimensions, ActivityIndicator, Image } from 'react-native'
+import { View, useWindowDimensions, ActivityIndicator, Image, PermissionsAndroid, Platform, } from 'react-native'
 import React, {useState, useEffect} from 'react'
-import MapView, {Marker} from 'react-native-maps';
+import MapView, {Marker, PROVIDER_GOOGLE} from 'react-native-maps';
+import Geolocation from '@react-native-community/geolocation';
 import MapViewDirections from 'react-native-maps-directions';
 import {GOOGLE_API_KEY} from '../../../keys'
 import * as Location from 'expo-location';
 import { useLocationContext } from '@/providers/LocationProvider';
 import styles from './styles'
 import FontAwesome6 from '@expo/vector-icons/FontAwesome6';
+import holidays from '../../../assets/data/holiday'
 import TMediums from '../../../assets/data/TMediums'
 
 const ResultMap = ({
   setTotalMins,
   setTotalKm,
   setIsPeakHour,
-  setIsWeekend,
-  setIsHighTrafficArea,
-  setIsLongDistance,
-  setIsRushDelivery,
+  setIsWeekend, 
+//   setIsLongDistance,
+//   setIsRushDelivery,
   setIsNightTime,
   setIsHoliday,
-  setIsHeavyItem,
-  setIsFragileItem,
+//   setIsHighTrafficArea, //yet to add logic
+//   setIsHeavyItem, //yet to add logic
+//   setIsFragileItem, //yet to add logic
 }) => {
     const {width, height} = useWindowDimensions()
     const [location, setLocation] = useState(null);
     const [errorMsg, setErrorMsg] = useState(null);
-    const [currentHour, setCurrentHour] = useState(new Date().getHours());
+    const [currentDateTime, setCurrentDateTime] = useState(new Date());
 
     const {originPlace, destinationPlace} = useLocationContext()
 
@@ -39,14 +41,17 @@ const ResultMap = ({
     }
 
     const getImage=(type)=>{
-      if (type === 'BICYCLE'){
-          return require('../../../assets/atuaImages/Walk.png')
+      if (type === 'Bicycle'){
+          return require('../../../assets/atuaImages/Bicycle.png')
       }
       if (type === 'Bike'){
           return require('../../../assets/atuaImages/Bike.jpg')
       }
       if (type === 'Car'){
           return require('../../../assets/atuaImages/top-UberXL.png')
+      }
+      if (type === 'Group'){
+          return require('../../../assets/atuaImages/Deliverybicycle.png')
       }
       return require('../../../assets/atuaImages/Walk.png')
     }
@@ -60,102 +65,79 @@ const ResultMap = ({
     }
 
     const checkIfHoliday = (date) => {
-    // Implement your logic to check if today is a holiday
-    return false; // Example: return true if it's a holiday
+        const month = date.getMonth() + 1; // getMonth() returns 0-11
+        const day = date.getDate();
+        const formattedDate = `${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
+        return holidays.includes(formattedDate);
     };
 
-    const checkHighTrafficArea = (location) => {
-    // Implement your logic to check if the location is a high-traffic area
-    return false; // Example: return true if it's a high-traffic area
-    };
-
-    useEffect(() => {
-        const currentDay = new Date().getDay();
-
+    const updateTimeDependentStates = () => {
+        const currentHour = currentDateTime.getHours();
+        const currentDay = currentDateTime.getDay();
+        const today = new Date(currentDateTime);
+    
         // Detect peak hours (e.g., 5 PM to 8 PM)
         setIsPeakHour(currentHour >= 17 && currentHour <= 20);
-        setIsWeekend(currentDay === 0 || currentDay === 6);
         setIsNightTime(currentHour >= 22 || currentHour < 5);
-        setIsHoliday(checkIfHoliday(new Date()));
-        setIsHeavyItem(false); // Assuming itemWeight is available
-        setIsFragileItem(false); // Assuming this is determined from item properties
+        setIsWeekend(currentDay === 0 || currentDay === 6);
+        setIsHoliday(checkIfHoliday(today));
+    };
 
-        // Here you could add logic to detect if the user is in a high-traffic area
-        // You might use specific coordinates or a third-party service to check this
-
-        // const isHighTrafficArea = // Your logic to detect high-traffic area
-        // setIsHighTrafficArea(isHighTrafficArea);
-
-        // new surcharge
-        // setIsLongDistance(distance > 25);
-        // setIsRushDelivery(false); // e.g., based on user input
-    }, [location, currentHour]);
+    // const checkHighTrafficArea = (location) => {
+    // // Implement your logic to check if the location is a high-traffic area
+    // return false; // Example: return true if it's a high-traffic area
+    // };
 
     useEffect(() => {
-        let foregroundSubscription;
+        updateTimeDependentStates();
+    }, [currentDateTime]);
 
-        (async () => {
+    useEffect(() => {
+        let watchId;
+    
+        const requestLocationPermission = async () => {
             try {
-                let { status } = await Location.requestForegroundPermissionsAsync();
-                if (status !== 'granted') {
-                    setErrorMsg('Permission to access location was denied');
-                    return;
+                // For both iOS and Android
+                if (Platform.OS === 'ios' || Platform.OS === 'android') {
+                Geolocation.requestAuthorization(); // Request permission on iOS and Android
                 }
-
-                let currentLocation = await Location.getCurrentPositionAsync({});
-                console.log("Initial location:", currentLocation);
-
-                if (currentLocation && currentLocation.coords) {
-                    setLocation({
-                        coords: {
-                            latitude: currentLocation.coords.latitude,
-                            longitude: currentLocation.coords.longitude
-                        }
-                    });
-
-                    foregroundSubscription = await Location.watchPositionAsync(
-                        {
-                            accuracy: Location.Accuracy.High,
-                            distanceInterval: 500,
-                            timeInterval: 10000,
-                        },
-                        (updatedLocation) => {
-                            console.log("Updated location:", updatedLocation);
-
-                            if (updatedLocation && updatedLocation.coords) {
-                                setLocation({
-                                    coords: {
-                                        latitude: updatedLocation.coords.latitude,
-                                        longitude: updatedLocation.coords.longitude,
-                                    }
-                                });
-                            } else {
-                                console.error("Updated location is undefined or missing coords");
-                            }
-                        }
-                    );
-
-                    if (!foregroundSubscription) {
-                        console.error("Location subscription failed.");
-                    }
-                } else {
-                    console.error("Initial location is undefined or missing coords");
+        
+                // Watch the user's location and update it continuously
+                watchId = Geolocation.watchPosition(
+                (position) => {
+                    const { latitude, longitude } = position.coords;
+                    setLocation({ latitude, longitude });
+                    console.log('Updated Location:', position);
+                },
+                (error) => {
+                    console.error('Geolocation error:', error);
+                    setErrorMsg('Error fetching location');
+                },
+                {
+                    enableHighAccuracy: true,
+                    timeout: 20000,
+                    maximumAge: 1000,
+                    distanceFilter: 500, // Update based on distance (e.g., every 500 meters)
                 }
+                );
             } catch (error) {
-                console.error("Error fetching location:", error);
-                setErrorMsg("Error fetching location. Please try again.");
+                console.error('Location permission error:', error);
+                setErrorMsg('Failed to request location permission');
             }
-        })();
-
+        };
+    
+        requestLocationPermission();
+    
+        // Cleanup subscription when the component unmounts
         return () => {
-            if (foregroundSubscription) {
-                foregroundSubscription.remove();
-            }
+          if (watchId !== null) {
+            Geolocation.clearWatch(watchId);
+          }
         };
     }, []);
 
-    if (!location || !location.coords.latitude || !location.coords.longitude) {
-        return <ActivityIndicator style={{ marginTop: 30 }} size={"large"} />;
+    if (!location || !location.latitude || !location.longitude) {
+        return <ActivityIndicator style={{ marginTop: 30 }} size="large" />;
     }
 
 
@@ -163,6 +145,7 @@ const ResultMap = ({
     <View style={styles.container}>
       <MapView
       style={{width, height: height - 100}}
+      provider={PROVIDER_GOOGLE}
       initialRegion={{
         // latitude: 4.8089763,
         // longitude:  7.0220555,

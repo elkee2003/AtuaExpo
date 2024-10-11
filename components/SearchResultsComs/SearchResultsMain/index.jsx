@@ -20,10 +20,10 @@ const SearchResultComponent = () => {
     // Surcharges
     const [isPeakHour, setIsPeakHour] = useState(false);
     const [isWeekend, setIsWeekend] = useState(false);
-    const [isHighTrafficArea, setIsHighTrafficArea] = useState(false);
     const [isNightTime, setIsNightTime] = useState(false);
-    const [isHeavyItem, setIsHeavyItem] = useState(false);
-    const [isFragileItem, setIsFragileItem] = useState(false);
+    const [isHighTrafficArea, setIsHighTrafficArea] = useState(false); //yet to set the logic
+    const [isHeavyItem, setIsHeavyItem] = useState(false);//yet to set the logic
+    const [isFragileItem, setIsFragileItem] = useState(false);//yet to set the logic
     // const [isLongDistance, setIsLongDistance] = useState(false);
     // const [isRushDelivery, setIsRushDelivery] = useState(false);
     const [isHoliday, setIsHoliday] = useState(false);
@@ -38,13 +38,14 @@ const SearchResultComponent = () => {
         setTotalKm={setTotalKm}
         setIsPeakHour={setIsPeakHour}
         setIsWeekend={setIsWeekend}
-        setIsHighTrafficArea={setIsHighTrafficArea}
+        // setIsHighTrafficArea={setIsHighTrafficArea}
+        // setIsHeavyItem={setIsHeavyItem}
+        // setIsFragileItem={setIsFragileItem}
+
         // setIsLongDistance={setIsLongDistance}
         // setIsRushDelivery={setIsRushDelivery}
         setIsNightTime={setIsNightTime}
         setIsHoliday={setIsHoliday}
-        setIsHeavyItem={setIsHeavyItem}
-        setIsFragileItem={setIsFragileItem}
         />
 
         <Pressable onPress={()=>router.back()} style={styles.bckBtn}>
@@ -67,13 +68,13 @@ const SearchResultComponent = () => {
                 totalKm={totalKm}
                 isPeakHour={isPeakHour}
                 isWeekend={isWeekend}
-                isHighTrafficArea={isHighTrafficArea}
-                // isLongDistance={isLongDistance}
-                // isRushDelivery={isRushDelivery}
+                // isHighTrafficArea={isHighTrafficArea}
+                // isHeavyItem={isHeavyItem}
+                // isFragileItem={isFragileItem}
                 isNightTime={isNightTime}
                 isHoliday={isHoliday}
-                isHeavyItem={isHeavyItem}
-                isFragileItem={isFragileItem}
+                // isLongDistance={isLongDistance}
+                // isRushDelivery={isRushDelivery}
                 />
             </BottomSheetScrollView>
         </BottomSheet>
