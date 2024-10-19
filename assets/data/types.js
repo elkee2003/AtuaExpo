@@ -1,18 +1,23 @@
 export default [
   {
     id: '0',
-    type: 'BICYCLE',
+    type: 'Moto X',
   },
   {
     id: '1',
-    type: 'BIKE',
+    type: 'Moto Batch',
   },
   {
     id: '2',
-    type: 'CAR',
+    type: 'Micro X',
   },
   {
     id: '3',
-    type: 'GROUP',
+    type: 'Micro Batch',
   },
+  {
+    id: '4',
+    type: 'Maxi',
+  },
+
 ]

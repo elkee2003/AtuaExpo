@@ -1,6 +1,7 @@
-import { View, Text, Image, TouchableOpacity, ScrollView } from 'react-native'
+import { View, Text, Image, TouchableOpacity, ScrollView, ActivityIndicator, Alert } from 'react-native'
 import React from 'react'
 import styles from './styles'
+import { useOrderContext } from '@/providers/OrderProvider'
 import deliveryMediums from '../../../assets/data/types'
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { router } from 'expo-router';
@@ -24,14 +25,16 @@ const AtuaTypes = ({
   // isFragileItem,
 }) => {
 
+  const {setPrice, setTransportationType} = useOrderContext()
+
   const getImage=(medium)=>{
-      if (medium?.type === 'BICYCLE'){
+      if (medium?.type === 'Micro X'){
           return require('../../../assets/atuaImages/Walk.png')
       }
-      if (medium?.type === 'BIKE'){
+      if (medium?.type === 'Moto X'){
           return require('../../../assets/atuaImages/Bike.jpg')
       }
-      if (medium?.type === 'CAR'){
+      if (medium?.type === 'Maxi'){
           return require('../../../assets/atuaImages/UberXL.jpeg')
       }
       if (medium?.type === 'GROUP'){
@@ -40,20 +43,50 @@ const AtuaTypes = ({
       return require('../../../assets/atuaImages/UberXL.jpeg');
   }
 
+  // Function to show the alert based on the medium type
+const showInfoAlert = (type) => {
+  if (type === 'Moto X') {
+      Alert.alert('Moto X', 'Moto Express. This transportation method is suitable for faster, mid-sized deliveries that require speed and distance. This option includes Motorcycles, Mopeds, Car.');
+    } else if (type === 'Micro X') {
+      Alert.alert('Micro X', 'Micro Express. This transportation method option includes eco-friendly transport methods such as Bicycles, Scooters, Skates for quick, short-distance deliveries.');
+    } else if (type === 'Maxi') {
+      Alert.alert('Maxi', 'This transportation method is best for large or bulky items that need spacious transport. This option includes Vans, Moving Trucks, Cooling Van, Large Cargo vehicles.');
+    } else if (type === 'Moto Batch') {
+      Alert.alert('Moto Batch', 'Moto Batch. This transportation method is suitable for faster, mid-sized deliveries that require speed and distance. This option includes Motorcycles, Mopeds, Car.');
+    } else if (type === 'Micro Batch') {
+      Alert.alert('Micro Batch', 'This transportation method option includes eco-friendly transport methods such as Bicycles, Scooters, Skates for quick, short-distance deliveries.');
+    }
+  };
+  
   const onConfirm = (medium) =>{
     setSelectedType(medium?.type)
-    // router.push('/screens/revieworder')
+    setTransportationType(medium.type)
     console.log(medium.type)
-  }
+    const calculatedCost = calculatePrice(medium.type, totalKm);
+
+    if(totalKm > 0){
+
+      // Setting the price from orderContext
+      setPrice(calculatedCost)
+
+      if (medium.type === 'Maxi') {
+        router.push('/screens/searchresults/maxitypes');
+      }else {
+        router.push('/screens/checkout');
+      }
+    }else{
+      Alert.alert('Patience', 'Calculating Price...')
+    }
+  };
 
   const calculatePrice = (type, distance,) => {
     const serviceFee = 300; // service fee added to all calculations
     
     // Flat rates for distances less than 3km
     if (distance <= 2.7) {
-      if (type === 'BICYCLE') return 300 + serviceFee; // 300 flat rate + 300 service fee
+      if (type === 'Micro X') return 300 + serviceFee; // 300 flat rate + 300 service fee
         if (type === 'BIKE') return 500 + serviceFee; // 500 flat rate + 300 service fee
-        if (type === 'CAR') return 700 + serviceFee; // 700 flat rate + 300 service fee
+        // if (type === 'Maxi') return 700 + serviceFee; // 700 flat rate + 300 service fee
         if (type === 'GROUP') return 250 + serviceFee; // 250 flat rate + 300 service fee
     } 
 
@@ -64,47 +97,47 @@ const AtuaTypes = ({
     if (distance <= 5){
       // Base charge and price per km for distances between 3.01km and 5km
       baseCharge = 50; // Mild base charge for this range
-      if (type === 'BICYCLE') pricePerKm = 185;
-      if (type === 'BIKE') pricePerKm = 220;
-      if (type === 'CAR') pricePerKm = 250;
+      if (type === 'Micro X') pricePerKm = 185;
+      if (type === 'Moto X') pricePerKm = 220;
+      // if (type === 'Maxi') pricePerKm = 250;
       if (type === 'GROUP') pricePerKm = 170;
     } else if (distance <= 10) {
       // Base charge and price per km for distances between 5.01km and 10km
       baseCharge = 75; // Mild base charge for this range
-      if (type === 'BICYCLE') pricePerKm = 180;
-      if (type === 'BIKE') pricePerKm = 210;
-      if (type === 'CAR') pricePerKm = 240;
+      if (type === 'Micro X') pricePerKm = 180;
+      if (type === 'Moto X') pricePerKm = 210;
+      // if (type === 'Maxi') pricePerKm = 240;
       if (type === 'GROUP') pricePerKm = 150;
     } else if (distance <= 15) {
       // Base charge and price per km for distances between 10.01km and 15km
       baseCharge = 100; // Mild base charge for this range
-      if (type === 'BICYCLE') pricePerKm = 175;
-      if (type === 'BIKE') pricePerKm = 200;
-      if (type === 'CAR') pricePerKm = 230;
+      if (type === 'Micro X') pricePerKm = 175;
+      if (type === 'Moto X') pricePerKm = 200;
+      // if (type === 'Maxi') pricePerKm = 230;
       if (type === 'GROUP') pricePerKm = 140;
     }else if (distance <= 20) {
       baseCharge = 125; // Base charge for this range
-      if (type === 'BICYCLE') pricePerKm = 170;
-      if (type === 'BIKE') pricePerKm = 190;
-      if (type === 'CAR') pricePerKm = 220;
+      if (type === 'Micro X') pricePerKm = 170;
+      if (type === 'Moto X') pricePerKm = 190;
+      // if (type === 'Maxi') pricePerKm = 220;
       if (type === 'GROUP') pricePerKm = 130;
     } else if (distance <= 25) {
       baseCharge = 150; // Base charge for this range
-      if (type === 'BICYCLE') pricePerKm = 165;
-      if (type === 'BIKE') pricePerKm = 185;
-      if (type === 'CAR') pricePerKm = 210;
+      if (type === 'Micro X') pricePerKm = 165;
+      if (type === 'Moto X') pricePerKm = 185;
+      // if (type === 'Maxi') pricePerKm = 210;
       if (type === 'GROUP') pricePerKm = 125;
     } else if (distance <= 30) {
       baseCharge = 175; // Base charge for this range
-      if (type === 'BICYCLE') pricePerKm = 160;
-      if (type === 'BIKE') pricePerKm = 180;
-      if (type === 'CAR') pricePerKm = 200;
+      if (type === 'Micro X') pricePerKm = 160;
+      if (type === 'Moto X') pricePerKm = 180;
+      // if (type === 'Maxi') pricePerKm = 200;
       if (type === 'GROUP') pricePerKm = 120;
     } else if (distance > 30) {
       baseCharge = 250; // Higher base charge for 40km and above
-      if (type === 'BICYCLE') pricePerKm = 150;
-      if (type === 'BIKE') pricePerKm = 175;
-      if (type === 'CAR') pricePerKm = 190;
+      if (type === 'Micro X') pricePerKm = 150;
+      if (type === 'Moto X') pricePerKm = 175;
+      // if (type === 'Maxi') pricePerKm = 190;
       if (type === 'GROUP') pricePerKm = 110;
     }
   
@@ -165,7 +198,7 @@ const AtuaTypes = ({
 
   // Filter out BICYCLE option if distance > 13km
   const filteredDeliveryMediums = deliveryMediums.filter(medium => {
-    return !(medium.type === 'BICYCLE' && totalKm > 13);
+    return !(medium.type === 'Micro X' && totalKm > 13);
   });
 
   return (
@@ -187,26 +220,36 @@ const AtuaTypes = ({
 
             {/* Middle Container with AtuaMedium and duration */}
             <View style={styles.middleContainer}>
-              <Text style={styles.type}>
-                  {medium.type} {''}
-                  <Ionicons name={'person'} size={17}/>
-                  3
-              </Text>
+              <View style={styles.typeInfoRow}>
+                <Text style={styles.type}>
+                    {medium.type}
+                </Text>
+                <TouchableOpacity onPress={() => showInfoAlert(medium.type)}>
+                  <Ionicons name={'information-circle-outline'} style={styles.infoIcon} />
+                </TouchableOpacity>
+              </View>
               <Text style={styles.time}>{totalKm} km | {totalMins} mins</Text>
             </View>
 
             {/* Price */}
             <View style={styles.rightContainer}>
               <Ionicons name={'pricetag'} size={18} color={'#42d742'}/>
-              <Text style={styles.price}>est. ₦{calculatedCost}</Text>
+              {totalKm > 0 ? (
+                // Hide price for Maxi type
+                medium.type !== 'Maxi' ? (
+                  <Text style={styles.price}>est. ₦{calculatedCost}</Text>
+                ) : null
+              ) : (
+                <ActivityIndicator size={'small'}/>
+              )}
             </View>
           </TouchableOpacity>
         );
       
       })}
-      <TouchableOpacity style={styles.confirmBtn}>
+      {/* <TouchableOpacity style={styles.confirmBtn}>
         <Text style={styles.confirmTxt}>Confirm</Text>
-      </TouchableOpacity>
+      </TouchableOpacity> */}
     </ScrollView>
   )
 }

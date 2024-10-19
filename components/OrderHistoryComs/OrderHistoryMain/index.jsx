@@ -1,9 +1,30 @@
 import { View, Text, FlatList, TouchableOpacity, Pressable } from 'react-native'
-import React from 'react'
+import React, {useState, useEffect} from 'react'
 import orders from '../../../assets/data/orders.json'
+import OrderHistoryList from '../OrderHistoryList'
+import { useAuthContext } from '@/providers/AuthProvider';
+import { DataStore } from 'aws-amplify/datastore';
+import { Order } from '../../../src/models';
 import styles from './styles'
 
 const OrderHistoryMain = () => {
+
+  const {dbUser} = useAuthContext()
+  const [orders, setOrders] = useState([]);
+
+  const fetchOrders = async () => {
+    try{
+      const userOrders = await DataStore.query(Order, (order)=> order.userID.eq(dbUser.id));
+      setOrders(userOrders)
+    }catch(e){
+      console.error('Error fetching orders', e)
+    }
+  }
+
+  useEffect(()=>{
+    fetchOrders();
+  }, [])
+
   return (
     <View style={styles.container}>
       
@@ -13,24 +34,16 @@ const OrderHistoryMain = () => {
       </View>
 
       <FlatList
-      data={orders}
-      renderItem={({item})=>(
-        <Pressable style={styles.page}>
-          <View>
-            {/* Name of Courier */}
-            <Text style={styles.name}>Courier name: {item.Courier.name}</Text>
-
-            {/* Price of Logistics */}
-            <Text style={styles.price}>₦1700.69</Text>
-         
-            {/* Content of Parcel */}
-            <Text>Food</Text>
-
-            {/* Number of days ago */}
-            <Text>2 days ago</Text>
-          </View>
-        </Pressable>
-      )}
+        data={orders}
+        keyExtractor={(item)=>item.id}
+        showsVerticalScrollIndicator={false}
+        renderItem={({item})=> <OrderHistoryList order={item}/>}
+        ListEmptyComponent={
+          <View style={styles.noOrderFoundCon}>
+            <Text style={styles.noOrderFound}>
+              No orders found
+            </Text>
+          </View>}
       />
     </View>
   )

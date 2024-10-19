@@ -16,6 +16,12 @@ const WriteOrder = () => {
 
     const {originPlace, destinationPlace} = useLocationContext()
 
+    console.log('orgin lat:', originPlace.details.geometry.location.lat, 'orgin lng:',originPlace.details.geometry.location.lng,)
+    console.log('destination lat:', destinationPlace.details.geometry.location.lat, 'destination lng:',destinationPlace.details.geometry.location.lng,)
+    console.log('This is details origin?:', originPlace.data?.description || details?.formatted_address)
+    console.log('This is details destination?:', destinationPlace.data?.description || details?.formatted_address)
+
+
     const [recipientNameError, setRecipientNameError] = useState('');
     const [recipientNumberError, setRecipientNumberError] = useState('');
 

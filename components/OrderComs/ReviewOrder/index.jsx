@@ -10,7 +10,7 @@ import { router } from 'expo-router';
 
 const ReviewOrder = () => {
 
-  const {recipientName, recipientNumber, orderDetails, setRecipientName, setRecipientNumber, setOrderDetails, createOrder} = useOrderContext()
+  const {recipientName, recipientNumber, orderDetails, createOrder} = useOrderContext()
 
   const {originPlace, destinationPlace,setOriginPlace, setDestinationPlace} = useLocationContext()
 
@@ -53,23 +53,23 @@ const ReviewOrder = () => {
 
         {/* Origin Of Parcel */}
         <View style={styles.txtRow}>
-            <Text style={styles.txtTitle}>From:{" "}</Text>
-            <Text style={styles.txt}>{originPlace.data?.description || details?.formatted_address}</Text>
-          </View>
+          <Text style={styles.txtTitle}>From:{" "}</Text>
+          <Text style={styles.txt}>{originPlace.data?.description || details?.formatted_address}</Text>
+        </View>
 
-          {/* Destination Of Parcel */}
-          <View style={styles.txtRow}>
-            <Text style={styles.txtTitle}>To:{" "}</Text>
-            <Text style={styles.txt}>{destinationPlace.data?.description || details?.formatted_address}</Text>
-          </View>
+        {/* Destination Of Parcel */}
+        <View style={styles.txtRow}>
+          <Text style={styles.txtTitle}>To:{" "}</Text>
+          <Text style={styles.txt}>{destinationPlace.data?.description || details?.formatted_address}</Text>
+        </View>
 
-          {/* Review Order Guidelines */}
-          <ReviewOrderGuidelines/>
+        {/* Review Order Guidelines */}
+        <ReviewOrderGuidelines/>
 
-          {/* Back Button */}
-          <Pressable onPress={()=>router.back()} style={styles.bckBtn}>
-                <Ionicons name={'arrow-back'} style={styles.bckBtnIcon}/>
-          </Pressable>
+        {/* Back Button */}
+        <Pressable onPress={()=>router.back()} style={styles.bckBtn}>
+              <Ionicons name={'arrow-back'} style={styles.bckBtnIcon}/>
+        </Pressable>
       </ScrollView>
       
       {/* Order Button */}

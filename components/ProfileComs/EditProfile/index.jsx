@@ -1,22 +1,18 @@
-import { View, Text, TextInput,Pressable, Alert, ScrollView, Image, TouchableOpacity} from 'react-native'
-import React, {useState, useRef} from 'react'
+import { View, Text, TextInput, Alert, ScrollView, Image, TouchableOpacity} from 'react-native'
+import React from 'react'
 import * as ImagePicker from 'expo-image-picker';
-import { GooglePlacesAutocomplete } from 'react-native-google-places-autocomplete';
-import { GOOGLE_API_KEY } from '@/keys';
 import styles from './styles'
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { router } from 'expo-router'
-import { Ionicons } from '@expo/vector-icons';
+import { signOut } from 'aws-amplify/auth';
 import { AntDesign } from '@expo/vector-icons';
 import { useProfileContext } from '../../../providers/ProfileProvider';
 
 
 const EditProfile = () => {
 
-    const [isFocused, setIsFocused] = useState(false);
 
-    const autocompleteRef = useRef(null)
-
-    const {firstName,setFirstName, lastName, setLastName, profilePic, setProfilePic, address, setAddress, lat, setLat, lng, setLng, phoneNumber, setPhoneNumber, errorMessage, onValidateInput,} = useProfileContext()
+    const {firstName,setFirstName, lastName, setLastName, profilePic, setProfilePic, phoneNumber, setPhoneNumber, errorMessage, onValidateInput,} = useProfileContext()
 
     const pickImage = async () => {
       // No permissions request is necessary for launching the image library
@@ -31,39 +27,39 @@ const EditProfile = () => {
     };
     
     // Navigation Function
-    const handleSave = () => {
+    const goToAddressPage = () => {
       if (onValidateInput()) {
-          router.push('/profile'); // Navigate to the profile screen upon successful validation
+          router.push('/profile/address'); // Navigate to the profile screen upon successful validation
       }
     };
 
-    // function to handle focus
-    const handleFocusChange = (focused) => {
-      setIsFocused(focused);
-    };
 
-    // Start Of GooglePlacesAutoComplete function
-    const handlePlaceSelect = (data, details = null) => {
-      // Extract the address from the selected place
-      const selectedAddress = data?.description || details?.formatted_address;
-
-      const selectedAddylat = JSON.stringify(details?.geometry?.location.lat) 
-
-      const selectedAddylng = JSON.stringify(details?.geometry?.location.lng) 
-
-      console.log(selectedAddylng, selectedAddylat)
-  
-      // Update the address state
-      setAddress(selectedAddress);
-      setLat(selectedAddylat)
-      setLng(selectedAddylng)
-  
-    };
-
-    // function to clear autocompleter
-    const handleClearAddress = () => {
-        autocompleteRef.current?.clear(); // Clear the autocomplete input
-        setAddress(null);
+    async function handleSignOut() {
+      try {
+        const res = await signOut();
+        console.log(res)
+      } catch (error) {
+        console.log('error signing out: ', error);
+      }
+    }
+    
+    const onSignout = ()=>{
+      Alert.alert(
+        'Sign Out',
+        'Are you sure you want to sign out? Click on YES, then refresh the App',
+        [
+          {
+            text: "Cancel",
+            style: "cancel",
+            
+          },
+          {
+            text: "Yes",
+            onPress: () => handleSignOut(),
+          },
+        ],
+        { cancelable: true }
+      )
     };
 
     return (
@@ -83,86 +79,41 @@ const EditProfile = () => {
       {/* <TouchableOpacity onPress={pickImage}>
         <AntDesign style={styles.plusIcon} name="pluscircle" size={30} color="#03033b" />
       </TouchableOpacity> */}
+
+      {/* Sign out button */}
+      <TouchableOpacity style={styles.signoutBtn} onPress={onSignout}>
+        <Text style={styles.signoutTxt}>Sign Out</Text>
+      </TouchableOpacity>
         
-
-      <TextInput 
-      value={firstName}
-      onChangeText={setFirstName}
-      placeholder='Name / Company name'
-      style={styles.input}
-      />
-      <TextInput 
-      value={lastName}
-      onChangeText={setLastName}
-      placeholder='Surname (Optional)'
-      style={styles.input}
-      />
-
-      {/* <TextInput 
-      value={address}
-      onChangeText={setAddress}
-      placeholder='Address'
-      style={{...styles.input, color: '#04df04'}}
-      /> */}
-
-      {/* Googleplaces autocomplete */}
-      <View style={isFocused ? styles.gContainerFocused : styles.gContainer}>
-        <GooglePlacesAutocomplete
-        fetchDetails
-        ref={autocompleteRef}
-        placeholder='Select Address From Here'
-        onPress={handlePlaceSelect}
-        textInputProps={{
-          onFocus:() => handleFocusChange(true),
-          onBlur:() => handleFocusChange(false),
-          
-        }} 
-        styles={{
-          textInput:styles.gTextInput,
-          textInputContainer:styles.gTextInputContainer,
-          listView:styles.glistView,
-          poweredContainer:styles.gPoweredContainer
-        }}
-        query={{
-          key: GOOGLE_API_KEY,
-          language: 'en',
-          components: 'country:ng',
-        }}
-        // renderRightButton={() => (
-        //   <TouchableOpacity onPress={handleClearAddress} style={styles.clearIconContainer}>
-        //     <Ionicons name='close-circle' style={styles.clearIcon}/>
-        //   </TouchableOpacity>
-        // )}
+      <ScrollView showsVerticalScrollIndicator={false}>
+        <TextInput 
+        value={firstName}
+        onChangeText={setFirstName}
+        placeholder='Name / Company name'
+        style={styles.input}
         />
-        <TouchableOpacity onPress={handleClearAddress} style={styles.clearIconContainer}>
-          <Ionicons name='close-circle' style={styles.clearIcon}/>
-        </TouchableOpacity>
-      </View>
-    
-      <TextInput
-      value={phoneNumber}
-      onChangeText={setPhoneNumber}
-      placeholder='Phone Number'
-      style={styles.input}
-      keyboardType='numeric'
-      />
+        <TextInput 
+        value={lastName}
+        onChangeText={setLastName}
+        placeholder='Surname (Optional)'
+        style={styles.input}
+        />
+      
+        <TextInput
+        value={phoneNumber}
+        onChangeText={setPhoneNumber}
+        placeholder='Phone Number'
+        style={styles.input}
+        keyboardType='numeric'
+        />
 
-      {/* Error Message */}
-      <Text style={styles.error}>{errorMessage}</Text>
+        {/* Error Message */}
+        <Text style={styles.error}>{errorMessage}</Text>
+      </ScrollView>
       
-      <View style={styles.scrnBtns}>
-          {/* <Link href={'/profile'} asChild> */}
-              <TouchableOpacity onPress={handleSave} style={styles.saveBtn}>
-              <Text style={styles.saveTxt}>Save</Text>
-              </TouchableOpacity>
-          {/* </Link> */}
-
-          <Pressable onPress={()=>console.warn('sign out')} style={styles.signoutBtn}>
-          <Text style={styles.signoutTxt}>Sign Out</Text>
-          </Pressable>
-      </View>
-      
-      
+      <TouchableOpacity onPress={goToAddressPage} style={styles.nxtBtn}>
+        <MaterialIcons name="navigate-next" style={styles.nxtBtnIcon} />
+      </TouchableOpacity>
     </View>
   )
 }

@@ -5,12 +5,22 @@ const styles = StyleSheet.create({
     container:{
         flex:1,
         marginTop:30,
+        marginHorizontal:10,
     },
     title: {
         fontSize: 30,
         fontWeight: "bold",
         textAlign: "center",
         margin: 10,
+    },
+    bckBtnCon:{
+        position:'absolute',
+        top:10,
+        left:10,
+    },
+    bckBtnIcon:{
+        fontSize:30,
+        color:'black'
     },
     profilePicContainer:{
         position:'relative',
@@ -43,7 +53,7 @@ const styles = StyleSheet.create({
         fontSize:60
     },
     input: {
-        margin: 10,
+        marginVertical: 10,
         backgroundColor: "white",
         padding: 15,
         borderRadius: 5,
@@ -51,40 +61,56 @@ const styles = StyleSheet.create({
     error:{
         color:'#d80b0b',
         fontSize:13,
-        marginTop:-10,
+        marginTop:-5,
         marginHorizontal:15,
         marginBottom:5,
     },
-    saveBackground:{
-        alignItems:'center',
-        backgroundColor:'#18b403',
-        padding: 15,
-    },
-    scrnBtns:{
-        marginTop:30,
+    // saveBackground:{
+    //     alignItems:'center',
+    //     backgroundColor:'#18b403',
+    //     padding: 15,
+    // },
+    // scrnBtns:{
+    //     marginTop:30,
+    //     marginBottom:10,
+    //     gap:15
+    // },
+    nxtBtn:{
+        backgroundColor:'#1a1b1a',
+        marginTop:10,
+        padding:2,
+        marginHorizontal:80,
         marginBottom:10,
-        gap:15
-    },
-    saveBtn:{
-        backgroundColor:'#0fcf0f',
-        padding:10,
-        marginHorizontal:40,
         alignItems:'center',
         borderRadius:30,
     },
-    saveTxt:{
-        fontSize:25,
+    nxtBtnIcon:{
+        fontSize:50,
+        color:'#ffffff'
+    },
+    addressNxtBtn:{
+        marginTop:'auto',
+        marginBottom:20,
+        backgroundColor:'#1a1b1a',
+        marginTop:10,
+        padding:2,
+        marginHorizontal:80,
+        marginBottom:10,
+        alignItems:'center',
+        borderRadius:30,
+    },
+    addressNxtBtnIcon:{
+        fontSize:50,
         color:'#ffffff'
     },
     signoutBtn:{
-        padding:10,
-        marginHorizontal:'auto',
-        alignItems:'center',
-        borderRadius:30,
+        position:'absolute',
+        top:10,
+        right:15,
     },
-        signoutTxt:{
-        fontSize:20,
-        color:'#c70707'
+    signoutTxt:{
+        fontSize:16,       
+        color:'#c90707',
     },
     gContainer:{
         position:'relative',
@@ -103,22 +129,58 @@ const styles = StyleSheet.create({
         color:'grey'
     }, 
     gContainerFocused: {
-        height: '30%', // Set the desired height when typing
+        height: '40%', // Set the desired height when typing
         zIndex: 2,
     },
     gTextInputContainer:{
-        paddingLeft:10,
-        paddingRight:10,
+        // paddingLeft:10,
+        // paddingRight:10,
     },
     gTextInput: {
         height: 60,
     },
-    glistView:{
-        paddingLeft:10,
-        paddingRight:10,
-    },
+
     gPoweredContainer:{
         display:'none'
+    },
+
+    // Review styles
+    subHeader:{
+        marginTop:15,
+        fontSize:15,
+        fontWeight:'bold',
+    },
+    inputReview:{
+        padding:5,
+        fontSize:18,
+        letterSpacing:0.5,
+        color:"white",
+        backgroundColor:'#3b3b3b',
+        borderRadius:20,
+    },
+    inputReviewLast:{
+        padding:5,
+        fontSize:18,
+        letterSpacing:0.5,
+        color:"white",
+        backgroundColor:'#3b3b3b',
+        borderRadius:20,
+        marginBottom:20,
+    },
+
+    saveBtn:{
+        backgroundColor:'#05c405',
+        marginTop:10,
+        padding:2,
+        marginHorizontal:80,
+        marginBottom:10,
+        alignItems:'center',
+        borderRadius:30,
+    },
+    saveBtnTxt:{
+        fontSize:30,
+        fontWeight:'bold',
+        color:'#e9e6e6'
     },
   
   })

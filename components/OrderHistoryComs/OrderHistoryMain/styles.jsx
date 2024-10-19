@@ -2,6 +2,7 @@ import { StyleSheet,} from 'react-native'
 
 const styles = StyleSheet.create({
     container:{
+        flex:1,
         marginTop:35,
         marginHorizontal:10,
     },
@@ -10,21 +11,15 @@ const styles = StyleSheet.create({
         fontWeight:'bold',
         textAlign:'center'
     },
-    page:{
-        flexDirection:'row',
-        alignItems:'center',
-        marginVertical:10,
-        backgroundColor:'#e4e2e2',
-        padding:10,
-        borderRadius:15,
-    },
-    name:{
-        fontWeight:'600',
-        fontSize:16,
-    },
-    price:{
-        marginVertical:5,
-    },
+    noOrderFoundCon:{
+        flex:1,
+    }, 
+    noOrderFound:{
+        fontSize:30,
+        fontWeight:'bold',
+        color:'#acacac',
+        textAlign:'center',
+    }
 })
 
 export default styles

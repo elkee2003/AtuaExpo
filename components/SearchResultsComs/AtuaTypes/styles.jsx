@@ -19,6 +19,16 @@ const styles = StyleSheet.create({
     middleContainer:{
         flex:1,
         marginHorizontal:10,
+        alignItems:'center',
+    },
+    typeInfoRow:{
+        flexDirection:'row',
+        justifyContent:'center',
+        alignItems:'center'
+    },
+    infoIcon:{
+        fontSize:20,
+        marginLeft:5,
     },
     rightContainer:{
         width:100,

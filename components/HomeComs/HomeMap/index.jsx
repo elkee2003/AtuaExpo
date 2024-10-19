@@ -12,17 +12,17 @@ const HomeMap = () => {
     const [errorMsg, setErrorMsg] = useState(null);
 
     const getImage=(type)=>{
-      if (type === 'BICYCLE'){
-          return require('../../../assets/atuaImages/Bicycle.png')
+      if (type === 'Micro X'){
+        return require('../../../assets/atuaImages/Bicycle.png')
       }
-      if (type === 'Bike'){
+      if (type === 'Moto X'){
           return require('../../../assets/atuaImages/Bike.jpg')
       }
-      if (type === 'Car'){
+      if (type === 'Maxi Batch'){
           return require('../../../assets/atuaImages/top-UberXL.png')
       }
-      if (type === 'Group'){
-        return require('../../../assets/atuaImages/Deliverybicycle.png')
+      if (type === 'Maxi'){
+          return require('../../../assets/atuaImages/Deliverybicycle.png')
       }
       return require('../../../assets/atuaImages/Walk.png')
     }

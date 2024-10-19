@@ -1,23 +1,20 @@
 import { StyleSheet,} from 'react-native'
 
 const styles = StyleSheet.create({
-    page:{
-        flexDirection:'row',
-        alignItems:'center',
-        margin:10
+    container:{
+        padding:10,
+        backgroundColor:'#dddbdb',
+        borderRadius:20,
+        marginBottom:15,
     },
-    image:{
-        width:80,
-        height:80,
-        marginRight:10
-    },
-    name:{
-        fontWeight:'600',
+    subHeading:{
         fontSize:16,
+        fontWeight:'bold'
     },
-    price:{
-        marginVertical:5,
+    detail:{
+        fontSize:15,
+        marginBottom:5,
     },
 })
 
-export default styles
+export default styles;

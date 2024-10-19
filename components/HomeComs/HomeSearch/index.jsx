@@ -2,6 +2,7 @@ import { View, Text, TouchableOpacity } from 'react-native'
 import React, {useEffect} from 'react'
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLocationContext } from '@/providers/LocationProvider';
+import { useProfileContext } from '@/providers/ProfileProvider';
 import styles from './styles'
 import FontAwesome5 from '@expo/vector-icons/FontAwesome5';
 import AntDesign from '@expo/vector-icons/AntDesign';
@@ -10,6 +11,8 @@ import { router } from 'expo-router';
 const HomeSearch = () => {
 
   const {lastDestination, setLastDestination} = useLocationContext()
+
+  const {address} = useProfileContext()
 
   useEffect(() => {
   // Function to retrieve the last destination from AsyncStorage
@@ -27,6 +30,26 @@ const HomeSearch = () => {
   getLastDestination();
   }, []);
 
+  // Function to get last destination to next page
+  const handleLastDestinationPress = () => {
+    // if (lastDestination) {
+    //   router.push({
+    //     pathname: '/screens/destinationsearch',
+    //     params: { lastDestination },
+    //   });
+    // }
+  };
+
+  // Function to get Home address to next page
+  const handleHomePress = () => {
+    // if (lastDestination) {
+    //   router.push({
+    //     pathname: '/screens/destinationsearch',
+    //     params: { address },
+    //   });
+    // }
+  };
+
   return (
     <View>
        {/* input box */}
@@ -40,21 +63,24 @@ const HomeSearch = () => {
         </TouchableOpacity>
 
         {/* previous destination */}
-        {lastDestination && (<View style={styles.row}>
+        {lastDestination && (
+          <TouchableOpacity style={styles.row} onPress={handleLastDestinationPress}>
             <View style={styles.iconContainer}>
-            <AntDesign name={'clockcircle'} size={16} color={'#535353'}/>
+              <AntDesign name={'clockcircle'} size={16} color={'#535353'}/>
             </View>
             <Text style={styles.destinationText }>{lastDestination.length > 25 ? `${lastDestination.substring(0,30)}...` : lastDestination}</Text>
-        </View>
+          </TouchableOpacity>
         )}
 
         {/* home destination */}
-        <View style={styles.row}>
+        {address && (
+          <TouchableOpacity style={styles.row} onPress={handleHomePress}>
             <View style={[styles.iconContainer,{backgroundColor:'#04a835'}]}>
             <AntDesign name="home" size={16} color="#535353" />
             </View>
-            <Text style={styles.destinationText }>'Home Address'</Text>
-        </View>
+            <Text style={styles.destinationText }>{address.length > 25 ? `${address.substring(0,30)}...` : address}</Text>
+          </TouchableOpacity>
+        )}
     </View>
   )
 }

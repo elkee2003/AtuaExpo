@@ -1,18 +1,3 @@
-enum OrderStatus {
-  READY_FOR_PICKUP
-  ACCEPTED
-  PICKEDUP
-  DELIVERED
-}
-
-type CompanyVehicle @model @auth(rules: [{allow: public}]) {
-  id: ID!
-  vehicleType: String
-  model: String
-  regNumber: String
-  couriercompanyID: ID! @index(name: "byCourierCompany")
-}
-
 type CourierCompany @model @auth(rules: [{allow: public}]) {
   id: ID!
   sub: String!
@@ -33,45 +18,19 @@ type CourierCompany @model @auth(rules: [{allow: public}]) {
   accountNumber: String
 }
 
-type User @model @auth(rules: [{allow: public}]) {
+type CompanyVehicle @model @auth(rules: [{allow: public}]) {
   id: ID!
-  sub: String!
-  firstName: String!
-  lastName: String
-  profilePic: String
-  address: String
-  lat: String
-  lng: String
-  Orders: [Order] @hasMany(indexName: "byUser", fields: ["id"])
+  vehicleType: String
+  model: String
+  plateNumber: String
+  couriercompanyID: ID! @index(name: "byCourierCompany")
 }
 
-type Courier @model @auth(rules: [{allow: public}]) {
-  id: ID!
-  sub: String!
-  firstName: String!
-  lastName: String
-  profilePic: String
-  address: String
-  landmark: String
-  phoneNumber: String
-  email: String
-  courierNIN: String
-  courierBVN: String
-  bankName: String
-  accountName: String
-  accountNumber: String
-  transportationType: String
-  guarantorName: [String]
-  guarantorLastName: [String]
-  guarantorProfession: String
-  guarantorNumber: String
-  guarantorRelationship: String
-  guarantorAddress: String
-  guarantorEmail: String
-  guarantorNIN: String
-  lat: Float
-  lng: Float
-  heading: Float
+enum OrderStatus {
+  READY_FOR_PICKUP
+  ACCEPTED
+  PICKEDUP
+  DELIVERED
 }
 
 type Order @model @auth(rules: [{allow: public}]) {
@@ -85,9 +44,56 @@ type Order @model @auth(rules: [{allow: public}]) {
   parcelDestination: String
   parcelDestinationLat: Float
   parcelDestinationLng: Float
+  transportationType: String
   status: OrderStatus
   price: Float
-  Courier: Courier @hasOne
   userID: ID! @index(name: "byUser")
+  Courier: Courier @hasOne
+}
+
+type Courier @model @auth(rules: [{allow: public}]) {
+  id: ID!
+  sub: String!
+  firstName: String!
+  lastName: String
+  profilePic: String
+  address: String
+  landMark: String
+  phoneNumber: String
+  email: String
+  courierNIN: String
+  courierBVN: String
+  bankName: String
+  accountName: String
+  accountNumber: String
+  transportationType: String
+  VehicleType: String
+  model: String
+  plateNumber: String
+  guarantorName: String
+  guarantorLastName: String
+  guarantorProfession: String
+  guarantorNumber: String
+  guarantorRelationship: String
+  guarantorAddress: String
+  guarantorEmail: String
+  guarantorNIN: String
+  lat: Float
+  lng: Float
+  heading: Float
+}
+
+type User @model @auth(rules: [{allow: public}]) {
+  id: ID!
+  sub: String!
+  firstName: String!
+  lastName: String
+  phoneNumber: String
+  profilePic: String
+  address: String
+  exactAddress: String
+  Orders: [Order] @hasMany(indexName: "byUser", fields: ["id"])
+  lat: Float
+  lng: Float
 }
  

@@ -9,7 +9,7 @@ import {GOOGLE_API_KEY} from '../../keys'
 import AntDesign from '@expo/vector-icons/AntDesign';
 import { useLocationContext } from '@/providers/LocationProvider';
 import { useProfileContext } from '@/providers/ProfileProvider';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 
 // const homePlace = {
 //     description: 'Home',
@@ -30,7 +30,9 @@ const DestinationSearchComponent = () => {
 
     // const {lat,lng} = useProfileContext()
 
-    const {originPlace, destinationPlace, setOriginPlace, setDestinationPlace} = useLocationContext()
+    const {lastDestination, address} = useLocalSearchParams()
+
+    const {originPlace, destinationPlace, setOriginPlace, setDestinationPlace, originPlaceLat, setOriginPlaceLat, originPlaceLng, setOriginPlaceLng,  destinationPlaceLat, setDestinationPlaceLat, destinationPlaceLng, setDestinationPlaceLng} = useLocationContext()
 
     const [loading, setLoading] = useState(false); // Loading state
 
@@ -68,6 +70,32 @@ const DestinationSearchComponent = () => {
         })
       }
     },[originPlace, destinationPlace])
+
+    // Pre-populate the "From" field with lastDestination if it exists
+    useEffect(() => {
+      if (lastDestination && originAutocompleteRef.current) {
+        originAutocompleteRef.current.setAddressText(lastDestination); // Prepopulate the input
+    
+        // Simulate a selection by manually triggering setOriginPlace
+        setOriginPlace({
+          data: { description: lastDestination },
+          details: null, // Add necessary details if you have them
+        });
+      }
+    }, [lastDestination]);
+
+    // Pre-populate the "From" field with home address if it exists
+    useEffect(() => {
+      if (address && originAutocompleteRef.current) {
+        originAutocompleteRef.current.setAddressText(address); // Prepopulate the input
+    
+        // Simulate a selection by manually triggering setOriginPlace
+        setOriginPlace({
+          data: { description: address },
+          details: null, // Add necessary details if you have them
+        });
+      }
+    }, [address]);
     
   
 
@@ -80,6 +108,16 @@ const DestinationSearchComponent = () => {
           ref={originAutocompleteRef}
           onPress={(data, details = null) => {
             setOriginPlace({data, details})
+            console.log('Origin data:', data, 'Origin details:', details)
+            // Use `details` directly here instead of `originPlace.details`
+    if (details && details.geometry && details.geometry.location) {
+      setOriginPlaceLat(details.geometry.location.lat);
+      setOriginPlaceLng(details.geometry.location.lng);
+
+      console.log('Origin lat:', details.geometry.location.lat, 'Origin lng:', details.geometry.location.lng);
+    } else {
+      console.log('No details available');
+    }
           }}
           fetchDetails
           enablePoweredByContainer={false}
@@ -89,6 +127,8 @@ const DestinationSearchComponent = () => {
               language: 'en',
               components: 'country:ng',
           }}
+          // currentLocation={true}
+          // currentLocationLabel='Current location'
           renderRow={(data)=> <PlaceRow data={data}/>
           }
           renderDescription={(data)=> data.description || data.vicinity
@@ -121,6 +161,16 @@ const DestinationSearchComponent = () => {
           ref={destinationAutocompleteRef}
           onPress={(data, details = null) => {
             setDestinationPlace({data, details});
+            console.log('destination data:', data, 'destination details:', details)
+            // Use `details` directly here instead of `originPlace.details`
+    if (details && details.geometry && details.geometry.location) {
+      setDestinationPlaceLat(details.geometry.location.lat);
+      setDestinationPlaceLng(details.geometry.location.lng)
+
+      console.log('Destination lat:', details.geometry.location.lat, 'Destination lng:', details.geometry.location.lng);
+    } else {
+      console.log('No details available');
+    }
             saveLastDestination(data.description || details.formatted_address);
           }}
           fetchDetails

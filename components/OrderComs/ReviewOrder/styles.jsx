@@ -45,7 +45,6 @@ const styles = StyleSheet.create({
         backgroundColor:'#0e0d0dd9',
         borderRadius:25,
         fontSize:19,
-
     },
     btnContainer:{
         position:'absolute',

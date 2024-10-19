@@ -31,5 +31,5 @@ const RootLayout = () => {
   );
 }
 
-// export default withAuthenticator(RootLayout);
+
 export default RootLayout;

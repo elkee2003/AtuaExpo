@@ -1,11 +1,11 @@
 import { View, useWindowDimensions, ActivityIndicator, Image, PermissionsAndroid, Platform, } from 'react-native'
-import React, {useState, useEffect} from 'react'
+import React, {useState, useEffect, useMemo, useCallback} from 'react'
 import MapView, {Marker, PROVIDER_GOOGLE} from 'react-native-maps';
 import Geolocation from '@react-native-community/geolocation';
 import MapViewDirections from 'react-native-maps-directions';
 import {GOOGLE_API_KEY} from '../../../keys'
 import * as Location from 'expo-location';
-import { useLocationContext } from '@/providers/LocationProvider';
+import { useLocationContext } from '../../../providers/LocationProvider'
 import styles from './styles'
 import FontAwesome6 from '@expo/vector-icons/FontAwesome6';
 import holidays from '../../../assets/data/holiday'
@@ -31,26 +31,30 @@ const ResultMap = ({
 
     const {originPlace, destinationPlace} = useLocationContext()
 
-    const originLoc = {
-        latitude:originPlace.details.geometry.location.lat,
-        longitude:originPlace.details.geometry.location.lng
-      }
-    const destinationLoc = {
-        latitude:destinationPlace.details.geometry.location.lat,
-        longitude:destinationPlace.details.geometry.location.lng
-    }
+    console.log('orgin lat main:', originPlace.details.geometry.location.lat, 'orgin lng main:',originPlace.details.geometry.location.lng,)
+    console.log('destination lat main:', destinationPlace.details.geometry.location.lat, 'destination lng main:',destinationPlace.details.geometry.location.lng,)
+
+    const originLoc = useMemo(() => ({
+      latitude: originPlace.details?.geometry?.location?.lat,
+      longitude: originPlace.details?.geometry?.location?.lng,
+    }), [originPlace]);
+  
+    const destinationLoc = useMemo(() => ({
+      latitude: destinationPlace.details?.geometry?.location?.lat,
+      longitude: destinationPlace.details?.geometry?.location?.lng,
+    }), [destinationPlace]);
 
     const getImage=(type)=>{
-      if (type === 'Bicycle'){
+      if (type === 'Micro X'){
           return require('../../../assets/atuaImages/Bicycle.png')
       }
-      if (type === 'Bike'){
+      if (type === 'Moto X'){
           return require('../../../assets/atuaImages/Bike.jpg')
       }
-      if (type === 'Car'){
+      if (type === 'Maxi Batch'){
           return require('../../../assets/atuaImages/top-UberXL.png')
       }
-      if (type === 'Group'){
+      if (type === 'Maxi'){
           return require('../../../assets/atuaImages/Deliverybicycle.png')
       }
       return require('../../../assets/atuaImages/Walk.png')
@@ -136,9 +140,9 @@ const ResultMap = ({
         };
     }, []);
 
-    if (!location || !location.latitude || !location.longitude) {
-        return <ActivityIndicator style={{ marginTop: 30 }} size="large" />;
-    }
+    // if (!location || !location.latitude || !location.longitude) {
+    //     return <ActivityIndicator style={{ marginTop: 30 }} size="large" />;
+    // }
 
 
   return (
@@ -149,6 +153,8 @@ const ResultMap = ({
       initialRegion={{
         // latitude: 4.8089763,
         // longitude:  7.0220555,
+        // latitude: location.latitude,
+        // longitude: location.longitude,
         latitude:originPlace.details.geometry.location.lat,
         longitude:originPlace.details.geometry.location.lng,
         latitudeDelta: 0.0922,

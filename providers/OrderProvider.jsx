@@ -8,14 +8,16 @@ const OrderProvider = ({children}) => {
     const [recipientName, setRecipientName]= useState('')
     const [recipientNumber, setRecipientNumber]= useState('')
     const [orderDetails, setOrderDetails]= useState('')
-    const [orders, setOrders]= useState([])
+    const [transportationType, setTransportationType]= useState('')
+    const [orders, setOrders]= useState(null)
+    const [price, setPrice] = useState('')
 
     const removeOrder = []
 
     const createOrder = []
 
   return (
-    <OrderContext.Provider value={{recipientName, recipientNumber, orderDetails, setRecipientName, setRecipientNumber, setOrderDetails, orders, setOrders, removeOrder, createOrder}}>
+    <OrderContext.Provider value={{recipientName, recipientNumber, orderDetails, setRecipientName, setRecipientNumber, setOrderDetails, transportationType, setTransportationType, orders, setOrders,price, setPrice, removeOrder, createOrder}}>
         {children}
     </OrderContext.Provider>
   )
