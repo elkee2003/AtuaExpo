@@ -3,23 +3,14 @@ import React, {useState} from 'react'
 import styles from './styles'
 import {useOrderContext} from '../../../providers/OrderProvider'
 import {useAuthContext} from '../../../providers/AuthProvider'
-import {useLocationContext} from '../../../providers/LocationProvider'
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { router } from 'expo-router'
-import { useLocalSearchParams } from 'expo-router'
 
 const WriteOrder = () => {
 
     const {recipientName, recipientNumber, orderDetails, setRecipientName, setRecipientNumber, setOrderDetails, orders, setOrders,} = useOrderContext()
 
     const {dbuser, sub}= useAuthContext()
-
-    const {originPlace, destinationPlace} = useLocationContext()
-
-    console.log('orgin lat:', originPlace.details.geometry.location.lat, 'orgin lng:',originPlace.details.geometry.location.lng,)
-    console.log('destination lat:', destinationPlace.details.geometry.location.lat, 'destination lng:',destinationPlace.details.geometry.location.lng,)
-    console.log('This is details origin?:', originPlace.data?.description || details?.formatted_address)
-    console.log('This is details destination?:', destinationPlace.data?.description || details?.formatted_address)
 
 
     const [recipientNameError, setRecipientNameError] = useState('');

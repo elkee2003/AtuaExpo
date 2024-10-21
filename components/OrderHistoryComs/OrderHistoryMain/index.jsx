@@ -1,4 +1,4 @@
-import { View, Text, FlatList, TouchableOpacity, Pressable } from 'react-native'
+import { View, Text, FlatList, TouchableOpacity, Pressable, ActivityIndicator } from 'react-native'
 import React, {useState, useEffect} from 'react'
 import orders from '../../../assets/data/orders.json'
 import OrderHistoryList from '../OrderHistoryList'
@@ -11,19 +11,28 @@ const OrderHistoryMain = () => {
 
   const {dbUser} = useAuthContext()
   const [orders, setOrders] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   const fetchOrders = async () => {
+    setLoading(true)
     try{
       const userOrders = await DataStore.query(Order, (order)=> order.userID.eq(dbUser.id));
-      setOrders(userOrders)
+      const sortedOrders = userOrders.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+      setOrders(sortedOrders);
     }catch(e){
       console.error('Error fetching orders', e)
+    }finally{
+      setLoading(false);
     }
   }
 
   useEffect(()=>{
     fetchOrders();
   }, [])
+
+  if(loading){
+    <ActivityIndicator size={'large'} style={styles.loading}/>
+  }
 
   return (
     <View style={styles.container}>

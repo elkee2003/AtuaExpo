@@ -18,8 +18,17 @@ const OrderHistoryList = ({order}) => {
         <Text style={styles.subHeading}>Destination:</Text>
         <Text  style={styles.detail}>{order.parcelDestination}</Text>
 
-        <Text style={styles.subHeading}>Price:</Text>
-        <Text  style={styles.detail}>₦{order.price.toLocaleString()}</Text>
+        <View style={styles.priceTypeRow}>
+          <View>
+            <Text style={styles.subHeading}>Price:</Text>
+            <Text  style={styles.priceType}>₦{order.price.toLocaleString()}</Text>
+          </View>
+          
+          <View>
+            <Text style={styles.subHeading}>Transport Type:</Text>
+            <Text  style={styles.priceType}>{order.transportationType}</Text>
+          </View>
+        </View>
       </View>
     </View>
   )

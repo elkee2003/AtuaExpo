@@ -1,5 +1,5 @@
 import { View, useWindowDimensions, ActivityIndicator, Image, PermissionsAndroid, Platform, } from 'react-native'
-import React, {useState, useEffect, useMemo, useCallback} from 'react'
+import React, {useState, useEffect, useCallback} from 'react'
 import MapView, {Marker, PROVIDER_GOOGLE} from 'react-native-maps';
 import Geolocation from '@react-native-community/geolocation';
 import MapViewDirections from 'react-native-maps-directions';
@@ -31,18 +31,15 @@ const ResultMap = ({
 
     const {originPlace, destinationPlace} = useLocationContext()
 
-    console.log('orgin lat main:', originPlace.details.geometry.location.lat, 'orgin lng main:',originPlace.details.geometry.location.lng,)
-    console.log('destination lat main:', destinationPlace.details.geometry.location.lat, 'destination lng main:',destinationPlace.details.geometry.location.lng,)
-
-    const originLoc = useMemo(() => ({
-      latitude: originPlace.details?.geometry?.location?.lat,
-      longitude: originPlace.details?.geometry?.location?.lng,
-    }), [originPlace]);
+    const originLoc = {
+      latitude: originPlace?.details?.geometry?.location?.lat || 4.8089763,
+      longitude: originPlace?.details?.geometry?.location?.lng || 7.0220555,
+    }
   
-    const destinationLoc = useMemo(() => ({
-      latitude: destinationPlace.details?.geometry?.location?.lat,
-      longitude: destinationPlace.details?.geometry?.location?.lng,
-    }), [destinationPlace]);
+    const destinationLoc ={
+      latitude: destinationPlace?.details?.geometry?.location?.lat || 6.5243793,
+      longitude: destinationPlace?.details?.geometry?.location?.lng || 3.3792057,
+    };
 
     const getImage=(type)=>{
       if (type === 'Micro X'){
@@ -155,8 +152,8 @@ const ResultMap = ({
         // longitude:  7.0220555,
         // latitude: location.latitude,
         // longitude: location.longitude,
-        latitude:originPlace.details.geometry.location.lat,
-        longitude:originPlace.details.geometry.location.lng,
+        latitude:originPlace?.details.geometry.location.lat || 4.8089763,
+        longitude:originPlace?.details.geometry.location.lng || 7.0220555,
         latitudeDelta: 0.0922,
         longitudeDelta: 0.0421,
       }}
@@ -175,7 +172,7 @@ const ResultMap = ({
         {/* Origin Marker */}
         <Marker
         title={'Origin'}
-        description={originPlace?.data?.description}
+        description={originPlace?.data?.description || 'Origin description not available'}
         coordinate={originLoc}
         >
           <FontAwesome6 name="location-dot" size={35} color="green" />
@@ -184,7 +181,7 @@ const ResultMap = ({
         {/* Destination Marker */}
         <Marker
         title={'Destination'}
-        description={destinationPlace?.data?.description}
+        description={destinationPlace?.data?.description || 'Destination description not available'}
         coordinate={destinationLoc}
         >
           <FontAwesome6 name="location-dot" size={35} color="darkgreen" />

@@ -47,7 +47,7 @@ const AuthProvider = ({children}) => {
       if(sub){
         dbCurrentUser()
       }
-    }, [])
+    }, [sub])
 
   return (
     <AuthContext.Provider value={{

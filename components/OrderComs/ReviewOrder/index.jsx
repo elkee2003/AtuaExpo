@@ -52,16 +52,20 @@ const ReviewOrder = () => {
         </View>  */}
 
         {/* Origin Of Parcel */}
-        <View style={styles.txtRow}>
-          <Text style={styles.txtTitle}>From:{" "}</Text>
-          <Text style={styles.txt}>{originPlace.data?.description || details?.formatted_address}</Text>
-        </View>
+        {originPlace && (
+          <View style={styles.txtRow}>
+            <Text style={styles.txtTitle}>From:{" "}</Text>
+            <Text style={styles.txt}>{originPlace.data?.description || details?.formatted_address}</Text>
+          </View>)
+        }
 
         {/* Destination Of Parcel */}
-        <View style={styles.txtRow}>
-          <Text style={styles.txtTitle}>To:{" "}</Text>
-          <Text style={styles.txt}>{destinationPlace.data?.description || details?.formatted_address}</Text>
-        </View>
+        {destinationPlace && (
+          <View style={styles.txtRow}>
+            <Text style={styles.txtTitle}>To:{" "}</Text>
+            <Text style={styles.txt}>{destinationPlace.data?.description || details?.formatted_address}</Text>
+          </View>)
+        }
 
         {/* Review Order Guidelines */}
         <ReviewOrderGuidelines/>

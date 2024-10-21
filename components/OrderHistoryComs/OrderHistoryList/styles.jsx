@@ -15,6 +15,14 @@ const styles = StyleSheet.create({
         fontSize:15,
         marginBottom:5,
     },
+    priceTypeRow:{
+        flexDirection:'row',
+        justifyContent:'space-between',
+        marginBottom:5,
+    },
+    priceType:{
+        fontSize:15,
+    },
 })
 
 export default styles;

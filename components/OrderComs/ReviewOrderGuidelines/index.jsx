@@ -1,14 +1,10 @@
 import { View, Text } from 'react-native'
 import React from 'react'
 import styles from './styles'
-import {useLocationContext} from '../../../providers/LocationProvider'
+
 
 const ReviewOrderGuidelines = () => {
 
-    const {originPlace, destinationPlace} = useLocationContext()
-
-    console.log('orgin lat review:', originPlace.details.geometry.location.lat, 'orgin lng review:',originPlace.details.geometry.location.lng,)
-    console.log('destination lat review:', destinationPlace.details.geometry.location.lat, 'destination lng review:',destinationPlace.details.geometry.location.lng,)
   return (
     <View style={styles.container}>
 

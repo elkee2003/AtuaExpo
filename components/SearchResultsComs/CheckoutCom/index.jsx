@@ -24,10 +24,10 @@ const Checkout = () => {
                 orderDetails,
                 transportationType,
                 price: parseFloat(price),
-                parcelOrigin: originPlace.data?.description || details?.formatted_address,
+                parcelOrigin: originPlace?.data?.description ,
                 parcelOriginLat: parseFloat(originPlaceLat),
                 parcelOriginLng: parseFloat(originPlaceLng),
-                parcelDestination: destinationPlace.data?.description || details?.formatted_address,
+                parcelDestination: destinationPlace?.data?.description ,
                 parcelDestinationLat: parseFloat(destinationPlaceLat),
                 parcelDestinationLng: parseFloat(destinationPlaceLng),
                 userID: dbUser.id,
@@ -35,18 +35,20 @@ const Checkout = () => {
             }))
             setOrders(order)
             Alert.alert("Successful", "Order was a success")
+            
+            setRecipientName('')
+            setRecipientNumber('')
+            setOrderDetails('')
+            setTransportationType('')
+            setPrice('')
+            setOriginPlace(null)
+            setOriginPlaceLat('')
+            setOriginPlaceLng('')
+            setDestinationPlace(null)
+            setDestinationPlaceLat('')
+            setDestinationPlaceLng('')
+
             router.push('/home')
-            // setRecipientName('')
-            // setRecipientNumber('')
-            // setOrderDetails('')
-            // setTransportationType('')
-            // setPrice('')
-            // setOriginPlace('')
-            // setOriginPlaceLat('')
-            // setOriginPlaceLng('')
-            // setDestinationPlace('')
-            // setDestinationPlaceLat('')
-            // setDestinationPlaceLng('')
         }catch(e){
             Alert.alert( 'Error', e.message)
         }
@@ -80,13 +82,13 @@ const Checkout = () => {
             {/* Origin Of Parcel */}
             <View style={styles.txtRow}>
                 <Text style={styles.txtTitle}>From:{" "}</Text>
-                <Text style={styles.txt}>{originPlace.data?.description || details?.formatted_address}</Text>
+                <Text style={styles.txt}>{originPlace?.data?.description }</Text>
             </View>
 
             {/* Destination Of Parcel */}
             <View style={styles.txtRow}>
                 <Text style={styles.txtTitle}>To:{" "}</Text>
-                <Text style={styles.txt}>{destinationPlace.data?.description || details?.formatted_address}</Text>
+                <Text style={styles.txt}>{destinationPlace?.data?.description }</Text>
             </View>
 
             <View style={styles.txtRow}>
