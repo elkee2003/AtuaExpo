@@ -23,6 +23,23 @@ const styles = StyleSheet.create({
     priceType:{
         fontSize:15,
     },
+    statusRow:{
+        flexDirection:'row',
+        alignItems:'center',
+        gap:10,
+    },
+    greenIcon:{
+        width:10,
+        height:10,
+        borderRadius:5,
+        backgroundColor:'#03eb03',
+    },
+    redIcon:{
+        width:10,
+        height:10,
+        borderRadius:5,
+        backgroundColor:'#eb1e03',
+    },
 })
 
 export default styles;

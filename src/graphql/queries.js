@@ -25,6 +25,7 @@ export const getCourierCompany = /* GraphQL */ `
         __typename
       }
       accountNumber
+      push_token
       createdAt
       updatedAt
       _version
@@ -62,6 +63,7 @@ export const listCourierCompanies = /* GraphQL */ `
         adminPhoneNumber
         bankName
         accountNumber
+        push_token
         createdAt
         updatedAt
         _version
@@ -105,6 +107,7 @@ export const syncCourierCompanies = /* GraphQL */ `
         adminPhoneNumber
         bankName
         accountNumber
+        push_token
         createdAt
         updatedAt
         _version
@@ -243,10 +246,11 @@ export const getOrder = /* GraphQL */ `
       transportationType
       status
       price
-      userID
+      courierFee
       Courier {
         id
         sub
+        isOnline
         firstName
         lastName
         profilePic
@@ -260,9 +264,11 @@ export const getOrder = /* GraphQL */ `
         accountName
         accountNumber
         transportationType
-        VehicleType
+        vehicleType
         model
         plateNumber
+        maxiImages
+        maxiTransportPrice
         guarantorName
         guarantorLastName
         guarantorProfession
@@ -274,6 +280,7 @@ export const getOrder = /* GraphQL */ `
         lat
         lng
         heading
+        push_token
         createdAt
         updatedAt
         _version
@@ -281,6 +288,7 @@ export const getOrder = /* GraphQL */ `
         _lastChangedAt
         __typename
       }
+      userID
       createdAt
       updatedAt
       _version
@@ -312,6 +320,7 @@ export const listOrders = /* GraphQL */ `
         transportationType
         status
         price
+        courierFee
         userID
         createdAt
         updatedAt
@@ -354,6 +363,7 @@ export const syncOrders = /* GraphQL */ `
         transportationType
         status
         price
+        courierFee
         userID
         createdAt
         updatedAt
@@ -398,6 +408,7 @@ export const ordersByUserID = /* GraphQL */ `
         transportationType
         status
         price
+        courierFee
         userID
         createdAt
         updatedAt
@@ -418,6 +429,7 @@ export const getCourier = /* GraphQL */ `
     getCourier(id: $id) {
       id
       sub
+      isOnline
       firstName
       lastName
       profilePic
@@ -431,9 +443,11 @@ export const getCourier = /* GraphQL */ `
       accountName
       accountNumber
       transportationType
-      VehicleType
+      vehicleType
       model
       plateNumber
+      maxiImages
+      maxiTransportPrice
       guarantorName
       guarantorLastName
       guarantorProfession
@@ -445,6 +459,7 @@ export const getCourier = /* GraphQL */ `
       lat
       lng
       heading
+      push_token
       createdAt
       updatedAt
       _version
@@ -464,6 +479,7 @@ export const listCouriers = /* GraphQL */ `
       items {
         id
         sub
+        isOnline
         firstName
         lastName
         profilePic
@@ -477,9 +493,11 @@ export const listCouriers = /* GraphQL */ `
         accountName
         accountNumber
         transportationType
-        VehicleType
+        vehicleType
         model
         plateNumber
+        maxiImages
+        maxiTransportPrice
         guarantorName
         guarantorLastName
         guarantorProfession
@@ -491,6 +509,7 @@ export const listCouriers = /* GraphQL */ `
         lat
         lng
         heading
+        push_token
         createdAt
         updatedAt
         _version
@@ -520,6 +539,7 @@ export const syncCouriers = /* GraphQL */ `
       items {
         id
         sub
+        isOnline
         firstName
         lastName
         profilePic
@@ -533,9 +553,11 @@ export const syncCouriers = /* GraphQL */ `
         accountName
         accountNumber
         transportationType
-        VehicleType
+        vehicleType
         model
         plateNumber
+        maxiImages
+        maxiTransportPrice
         guarantorName
         guarantorLastName
         guarantorProfession
@@ -547,6 +569,7 @@ export const syncCouriers = /* GraphQL */ `
         lat
         lng
         heading
+        push_token
         createdAt
         updatedAt
         _version
@@ -578,6 +601,7 @@ export const getUser = /* GraphQL */ `
       }
       lat
       lng
+      push_token
       createdAt
       updatedAt
       _version
@@ -605,6 +629,7 @@ export const listUsers = /* GraphQL */ `
         exactAddress
         lat
         lng
+        push_token
         createdAt
         updatedAt
         _version
@@ -642,6 +667,7 @@ export const syncUsers = /* GraphQL */ `
         exactAddress
         lat
         lng
+        push_token
         createdAt
         updatedAt
         _version

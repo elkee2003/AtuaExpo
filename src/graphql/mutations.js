@@ -28,6 +28,7 @@ export const createCourierCompany = /* GraphQL */ `
         __typename
       }
       accountNumber
+      push_token
       createdAt
       updatedAt
       _version
@@ -64,6 +65,7 @@ export const updateCourierCompany = /* GraphQL */ `
         __typename
       }
       accountNumber
+      push_token
       createdAt
       updatedAt
       _version
@@ -100,6 +102,7 @@ export const deleteCourierCompany = /* GraphQL */ `
         __typename
       }
       accountNumber
+      push_token
       createdAt
       updatedAt
       _version
@@ -188,10 +191,11 @@ export const createOrder = /* GraphQL */ `
       transportationType
       status
       price
-      userID
+      courierFee
       Courier {
         id
         sub
+        isOnline
         firstName
         lastName
         profilePic
@@ -205,9 +209,11 @@ export const createOrder = /* GraphQL */ `
         accountName
         accountNumber
         transportationType
-        VehicleType
+        vehicleType
         model
         plateNumber
+        maxiImages
+        maxiTransportPrice
         guarantorName
         guarantorLastName
         guarantorProfession
@@ -219,6 +225,7 @@ export const createOrder = /* GraphQL */ `
         lat
         lng
         heading
+        push_token
         createdAt
         updatedAt
         _version
@@ -226,6 +233,7 @@ export const createOrder = /* GraphQL */ `
         _lastChangedAt
         __typename
       }
+      userID
       createdAt
       updatedAt
       _version
@@ -255,10 +263,11 @@ export const updateOrder = /* GraphQL */ `
       transportationType
       status
       price
-      userID
+      courierFee
       Courier {
         id
         sub
+        isOnline
         firstName
         lastName
         profilePic
@@ -272,9 +281,11 @@ export const updateOrder = /* GraphQL */ `
         accountName
         accountNumber
         transportationType
-        VehicleType
+        vehicleType
         model
         plateNumber
+        maxiImages
+        maxiTransportPrice
         guarantorName
         guarantorLastName
         guarantorProfession
@@ -286,6 +297,7 @@ export const updateOrder = /* GraphQL */ `
         lat
         lng
         heading
+        push_token
         createdAt
         updatedAt
         _version
@@ -293,6 +305,7 @@ export const updateOrder = /* GraphQL */ `
         _lastChangedAt
         __typename
       }
+      userID
       createdAt
       updatedAt
       _version
@@ -322,10 +335,11 @@ export const deleteOrder = /* GraphQL */ `
       transportationType
       status
       price
-      userID
+      courierFee
       Courier {
         id
         sub
+        isOnline
         firstName
         lastName
         profilePic
@@ -339,9 +353,11 @@ export const deleteOrder = /* GraphQL */ `
         accountName
         accountNumber
         transportationType
-        VehicleType
+        vehicleType
         model
         plateNumber
+        maxiImages
+        maxiTransportPrice
         guarantorName
         guarantorLastName
         guarantorProfession
@@ -353,6 +369,7 @@ export const deleteOrder = /* GraphQL */ `
         lat
         lng
         heading
+        push_token
         createdAt
         updatedAt
         _version
@@ -360,6 +377,7 @@ export const deleteOrder = /* GraphQL */ `
         _lastChangedAt
         __typename
       }
+      userID
       createdAt
       updatedAt
       _version
@@ -378,6 +396,7 @@ export const createCourier = /* GraphQL */ `
     createCourier(input: $input, condition: $condition) {
       id
       sub
+      isOnline
       firstName
       lastName
       profilePic
@@ -391,9 +410,11 @@ export const createCourier = /* GraphQL */ `
       accountName
       accountNumber
       transportationType
-      VehicleType
+      vehicleType
       model
       plateNumber
+      maxiImages
+      maxiTransportPrice
       guarantorName
       guarantorLastName
       guarantorProfession
@@ -405,6 +426,7 @@ export const createCourier = /* GraphQL */ `
       lat
       lng
       heading
+      push_token
       createdAt
       updatedAt
       _version
@@ -422,6 +444,7 @@ export const updateCourier = /* GraphQL */ `
     updateCourier(input: $input, condition: $condition) {
       id
       sub
+      isOnline
       firstName
       lastName
       profilePic
@@ -435,9 +458,11 @@ export const updateCourier = /* GraphQL */ `
       accountName
       accountNumber
       transportationType
-      VehicleType
+      vehicleType
       model
       plateNumber
+      maxiImages
+      maxiTransportPrice
       guarantorName
       guarantorLastName
       guarantorProfession
@@ -449,6 +474,7 @@ export const updateCourier = /* GraphQL */ `
       lat
       lng
       heading
+      push_token
       createdAt
       updatedAt
       _version
@@ -466,6 +492,7 @@ export const deleteCourier = /* GraphQL */ `
     deleteCourier(input: $input, condition: $condition) {
       id
       sub
+      isOnline
       firstName
       lastName
       profilePic
@@ -479,9 +506,11 @@ export const deleteCourier = /* GraphQL */ `
       accountName
       accountNumber
       transportationType
-      VehicleType
+      vehicleType
       model
       plateNumber
+      maxiImages
+      maxiTransportPrice
       guarantorName
       guarantorLastName
       guarantorProfession
@@ -493,6 +522,7 @@ export const deleteCourier = /* GraphQL */ `
       lat
       lng
       heading
+      push_token
       createdAt
       updatedAt
       _version
@@ -523,6 +553,7 @@ export const createUser = /* GraphQL */ `
       }
       lat
       lng
+      push_token
       createdAt
       updatedAt
       _version
@@ -553,6 +584,7 @@ export const updateUser = /* GraphQL */ `
       }
       lat
       lng
+      push_token
       createdAt
       updatedAt
       _version
@@ -583,6 +615,7 @@ export const deleteUser = /* GraphQL */ `
       }
       lat
       lng
+      push_token
       createdAt
       updatedAt
       _version

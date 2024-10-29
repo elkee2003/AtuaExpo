@@ -39,6 +39,21 @@ const AuthProvider = ({children}) => {
         }
     }
 
+    // Set up a subscription to listen to changes on the current user's User instance
+    useEffect(() => {
+      if (!dbUser) return;
+  
+      const subscription = DataStore.observe(User, dbUser.id).subscribe(
+        ({ element, opType }) => {
+          if (opType === 'UPDATE') {
+            setDbUser(element);
+          }
+        }
+      );
+  
+      return () => subscription.unsubscribe();
+    }, [dbUser]);
+
     useEffect(()=>{
         currentAuthenticatedUser()
     },[sub])

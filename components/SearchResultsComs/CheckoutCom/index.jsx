@@ -12,7 +12,7 @@ const Checkout = () => {
 
     const {dbUser} = useAuthContext();
 
-    const {recipientName, recipientNumber, orderDetails, setRecipientName, setRecipientNumber, setOrderDetails, transportationType, setTransportationType, orders, setOrders,price, setPrice,} = useOrderContext();
+    const {recipientName, recipientNumber, orderDetails, setRecipientName, setRecipientNumber, setOrderDetails, transportationType, setTransportationType, orders, setOrders,price, setPrice, courierFee, setCourierFee} = useOrderContext();
 
     const {originPlace, setOriginPlace, destinationPlace, setDestinationPlace,originPlaceLat, setOriginPlaceLat,originPlaceLng, setOriginPlaceLng,destinationPlaceLat, setDestinationPlaceLat, destinationPlaceLng, setDestinationPlaceLng,} = useLocationContext();
 
@@ -24,6 +24,7 @@ const Checkout = () => {
                 orderDetails,
                 transportationType,
                 price: parseFloat(price),
+                courierFee: parseFloat(courierFee),
                 parcelOrigin: originPlace?.data?.description ,
                 parcelOriginLat: parseFloat(originPlaceLat),
                 parcelOriginLng: parseFloat(originPlaceLng),
@@ -41,6 +42,7 @@ const Checkout = () => {
             setOrderDetails('')
             setTransportationType('')
             setPrice('')
+            setCourierFee('')
             setOriginPlace(null)
             setOriginPlaceLat('')
             setOriginPlaceLng('')

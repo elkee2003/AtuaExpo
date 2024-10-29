@@ -11,21 +11,22 @@ const styles = StyleSheet.create({
         fontWeight:'bold',
         textAlign:'center'
     },
-    noOrderFoundCon:{
-        flex:1,
-    }, 
-    noOrderFound:{
-        fontSize:30,
-        fontWeight:'bold',
-        color:'#acacac',
-        textAlign:'center',
-    },
     loading:{
         flex:1,
         color:'#3cff00',
         justifyContent:'center',
         alignItems:'center',
     },
+    noOrdersCon:{
+        flex:1, 
+        justifyContent:'center', 
+        alignItems:'center',
+    },
+    noOrders:{
+        fontSize:30, 
+        fontWeight:'bold', 
+        color:'#afadad',
+    }
 })
 
 export default styles

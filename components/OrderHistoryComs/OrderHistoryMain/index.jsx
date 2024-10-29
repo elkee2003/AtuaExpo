@@ -20,7 +20,7 @@ const OrderHistoryMain = () => {
       const sortedOrders = userOrders.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
       setOrders(sortedOrders);
     }catch(e){
-      console.error('Error fetching orders', e)
+      console.error('Error fetching orders', e.message)
     }finally{
       setLoading(false);
     }
@@ -28,6 +28,14 @@ const OrderHistoryMain = () => {
 
   useEffect(()=>{
     fetchOrders();
+
+    const subscription = DataStore.observe(Order).subscribe(({opType})=>{
+      if(opType === 'INSERT' || opType === 'UPDATE' || opType === 'DELETE'){
+        fetchOrders();
+      }
+    });
+
+    return () => subscription.unsubscribe();
   }, [])
 
   if(loading){
@@ -42,18 +50,20 @@ const OrderHistoryMain = () => {
         <Text style={styles.header}>Order History</Text>
       </View>
 
-      <FlatList
-        data={orders}
-        keyExtractor={(item)=>item.id}
-        showsVerticalScrollIndicator={false}
-        renderItem={({item})=> <OrderHistoryList order={item}/>}
-        ListEmptyComponent={
-          <View style={styles.noOrderFoundCon}>
-            <Text style={styles.noOrderFound}>
-              No orders found
-            </Text>
-          </View>}
-      />
+      {orders.length === 0 ? (
+        <View style={styles.noOrdersCon}>
+          <Text style={styles.noOrders}>
+            No Orders
+          </Text>
+        </View>
+      ) :(
+        <FlatList
+          data={orders}
+          keyExtractor={(item)=>item.id}
+          showsVerticalScrollIndicator={false}
+          renderItem={({item})=> <OrderHistoryList order={item}/>}
+        />
+      )}
     </View>
   )
 }

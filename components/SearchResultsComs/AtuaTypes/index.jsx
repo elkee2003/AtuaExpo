@@ -25,7 +25,7 @@ const AtuaTypes = ({
   // isFragileItem,
 }) => {
 
-  const {setPrice, setTransportationType} = useOrderContext()
+  const {setPrice, setCourierFee, setTransportationType} = useOrderContext()
 
   const getImage=(medium)=>{
       if (medium?.type === 'Micro X'){
@@ -68,6 +68,16 @@ const showInfoAlert = (type) => {
 
       // Setting the price from orderContext
       setPrice(calculatedCost)
+
+       // Calculate and set the courier fee
+       let courierFee;
+      if (calculatedCost === 600) {
+        courierFee = (calculatedCost - 300).toFixed(2); // Only subtract 300 if the cost is exactly 600
+      } else {
+        const baseAmount = calculatedCost - 300;
+        courierFee = (baseAmount * 0.85).toFixed(2);
+      }
+      setCourierFee(courierFee);
 
       if (medium.type === 'Maxi') {
         router.push('/screens/searchresults/maxitypes');
@@ -196,9 +206,9 @@ const showInfoAlert = (type) => {
   //   return !( (medium.type === 'BICYCLE' || medium.type === 'BIKE') && totalKm > 13);
   // });
 
-  // Filter out BICYCLE option if distance > 13km
+  // Filter out Micro option if distance > 13km
   const filteredDeliveryMediums = deliveryMediums.filter(medium => {
-    return !(medium.type === 'Micro X' && totalKm > 13);
+    return !((medium.type === 'Micro X' || medium.type === 'Micro Batch') && totalKm > 13);
   });
 
   return (

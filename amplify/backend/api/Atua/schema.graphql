@@ -16,6 +16,7 @@ type CourierCompany @model @auth(rules: [{allow: public}]) {
   bankName: String
   CompanyVehicles: [CompanyVehicle] @hasMany(indexName: "byCourierCompany", fields: ["id"])
   accountNumber: String
+  push_token: String
 }
 
 type CompanyVehicle @model @auth(rules: [{allow: public}]) {
@@ -47,13 +48,15 @@ type Order @model @auth(rules: [{allow: public}]) {
   transportationType: String
   status: OrderStatus
   price: Float
-  userID: ID! @index(name: "byUser")
+  courierFee: Float
   Courier: Courier @hasOne
+  userID: ID! @index(name: "byUser")
 }
 
 type Courier @model @auth(rules: [{allow: public}]) {
   id: ID!
   sub: String!
+  isOnline: Boolean
   firstName: String!
   lastName: String
   profilePic: String
@@ -67,9 +70,11 @@ type Courier @model @auth(rules: [{allow: public}]) {
   accountName: String
   accountNumber: String
   transportationType: String
-  VehicleType: String
+  vehicleType: String
   model: String
   plateNumber: String
+  maxiImages: [String]
+  maxiTransportPrice: Float
   guarantorName: String
   guarantorLastName: String
   guarantorProfession: String
@@ -81,6 +86,7 @@ type Courier @model @auth(rules: [{allow: public}]) {
   lat: Float
   lng: Float
   heading: Float
+  push_token: String
 }
 
 type User @model @auth(rules: [{allow: public}]) {
@@ -95,5 +101,6 @@ type User @model @auth(rules: [{allow: public}]) {
   Orders: [Order] @hasMany(indexName: "byUser", fields: ["id"])
   lat: Float
   lng: Float
+  push_token: String
 }
  

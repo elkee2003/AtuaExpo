@@ -33,6 +33,7 @@ type EagerCourierCompany = {
   readonly bankName?: string | null;
   readonly CompanyVehicles?: (CompanyVehicle | null)[] | null;
   readonly accountNumber?: string | null;
+  readonly push_token?: string | null;
   readonly createdAt?: string | null;
   readonly updatedAt?: string | null;
 }
@@ -59,6 +60,7 @@ type LazyCourierCompany = {
   readonly bankName?: string | null;
   readonly CompanyVehicles: AsyncCollection<CompanyVehicle>;
   readonly accountNumber?: string | null;
+  readonly push_token?: string | null;
   readonly createdAt?: string | null;
   readonly updatedAt?: string | null;
 }
@@ -121,8 +123,9 @@ type EagerOrder = {
   readonly transportationType?: string | null;
   readonly status?: OrderStatus | keyof typeof OrderStatus | null;
   readonly price?: number | null;
-  readonly userID: string;
+  readonly courierFee?: number | null;
   readonly Courier?: Courier | null;
+  readonly userID: string;
   readonly createdAt?: string | null;
   readonly updatedAt?: string | null;
   readonly orderCourierId?: string | null;
@@ -146,8 +149,9 @@ type LazyOrder = {
   readonly transportationType?: string | null;
   readonly status?: OrderStatus | keyof typeof OrderStatus | null;
   readonly price?: number | null;
-  readonly userID: string;
+  readonly courierFee?: number | null;
   readonly Courier: AsyncItem<Courier | undefined>;
+  readonly userID: string;
   readonly createdAt?: string | null;
   readonly updatedAt?: string | null;
   readonly orderCourierId?: string | null;
@@ -166,6 +170,7 @@ type EagerCourier = {
   };
   readonly id: string;
   readonly sub: string;
+  readonly isOnline?: boolean | null;
   readonly firstName: string;
   readonly lastName?: string | null;
   readonly profilePic?: string | null;
@@ -179,9 +184,11 @@ type EagerCourier = {
   readonly accountName?: string | null;
   readonly accountNumber?: string | null;
   readonly transportationType?: string | null;
-  readonly VehicleType?: string | null;
+  readonly vehicleType?: string | null;
   readonly model?: string | null;
   readonly plateNumber?: string | null;
+  readonly maxiImages?: (string | null)[] | null;
+  readonly maxiTransportPrice?: number | null;
   readonly guarantorName?: string | null;
   readonly guarantorLastName?: string | null;
   readonly guarantorProfession?: string | null;
@@ -193,6 +200,7 @@ type EagerCourier = {
   readonly lat?: number | null;
   readonly lng?: number | null;
   readonly heading?: number | null;
+  readonly push_token?: string | null;
   readonly createdAt?: string | null;
   readonly updatedAt?: string | null;
 }
@@ -204,6 +212,7 @@ type LazyCourier = {
   };
   readonly id: string;
   readonly sub: string;
+  readonly isOnline?: boolean | null;
   readonly firstName: string;
   readonly lastName?: string | null;
   readonly profilePic?: string | null;
@@ -217,9 +226,11 @@ type LazyCourier = {
   readonly accountName?: string | null;
   readonly accountNumber?: string | null;
   readonly transportationType?: string | null;
-  readonly VehicleType?: string | null;
+  readonly vehicleType?: string | null;
   readonly model?: string | null;
   readonly plateNumber?: string | null;
+  readonly maxiImages?: (string | null)[] | null;
+  readonly maxiTransportPrice?: number | null;
   readonly guarantorName?: string | null;
   readonly guarantorLastName?: string | null;
   readonly guarantorProfession?: string | null;
@@ -231,6 +242,7 @@ type LazyCourier = {
   readonly lat?: number | null;
   readonly lng?: number | null;
   readonly heading?: number | null;
+  readonly push_token?: string | null;
   readonly createdAt?: string | null;
   readonly updatedAt?: string | null;
 }
@@ -257,6 +269,7 @@ type EagerUser = {
   readonly Orders?: (Order | null)[] | null;
   readonly lat?: number | null;
   readonly lng?: number | null;
+  readonly push_token?: string | null;
   readonly createdAt?: string | null;
   readonly updatedAt?: string | null;
 }
@@ -277,6 +290,7 @@ type LazyUser = {
   readonly Orders: AsyncCollection<Order>;
   readonly lat?: number | null;
   readonly lng?: number | null;
+  readonly push_token?: string | null;
   readonly createdAt?: string | null;
   readonly updatedAt?: string | null;
 }

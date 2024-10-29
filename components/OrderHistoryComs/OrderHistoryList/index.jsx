@@ -16,7 +16,32 @@ const OrderHistoryList = ({order}) => {
         <Text  style={styles.detail}>{order.orderDetails}</Text>
 
         <Text style={styles.subHeading}>Destination:</Text>
-        <Text  style={styles.detail}>{order.parcelDestination}</Text>
+        <Text  style={styles.detail}>
+          {order.parcelDestination.length > 20 
+            ? `${order.parcelDestination.substring(0, 30)}...` 
+            : order.parcelDestination
+          }
+        </Text>
+
+        <Text style={styles.subHeading}>Status:</Text>
+        <View style={styles.statusRow}>
+          {order.status === 'DELIVERED' ? (
+            <>
+              <Text  style={styles.detail}>
+                Completed
+              </Text>
+              <View style={styles.greenIcon}/>
+            </>
+            )
+            :(
+              <>
+                <Text  style={styles.detail}>
+                  Pending
+                </Text>
+                <View style={styles.redIcon}/>
+              </>
+          )}
+        </View>
 
         <View style={styles.priceTypeRow}>
           <View>
