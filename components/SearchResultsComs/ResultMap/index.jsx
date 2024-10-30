@@ -2,13 +2,15 @@ import { View, useWindowDimensions, ActivityIndicator, Image, PermissionsAndroid
 import React, {useState, useEffect, useCallback} from 'react'
 import MapView, {Marker, PROVIDER_GOOGLE} from 'react-native-maps';
 import MapViewDirections from 'react-native-maps-directions';
-import {GOOGLE_API_KEY} from '../../../keys'
+import {GOOGLE_API_KEY} from '../../../keys';
 import * as Location from 'expo-location';
-import { useLocationContext } from '../../../providers/LocationProvider'
-import styles from './styles'
+import { useLocationContext } from '../../../providers/LocationProvider';
+import styles from './styles';
 import FontAwesome6 from '@expo/vector-icons/FontAwesome6';
-import holidays from '../../../assets/data/holiday'
-import TMediums from '../../../assets/data/TMediums'
+import holidays from '../../../assets/data/holiday';
+import { DataStore } from 'aws-amplify/datastore';
+import {Courier} from '@/src/models';
+import TMediums from '../../../assets/data/TMediums';
 
 const ResultMap = ({
   setTotalMins,
@@ -24,6 +26,7 @@ const ResultMap = ({
 //   setIsFragileItem, //yet to add logic
 }) => {
     const {width, height} = useWindowDimensions()
+    const [couriers, setCouriers] = useState([]);
     const [location, setLocation] = useState(null);
     const [errorMsg, setErrorMsg] = useState(null);
     const [currentDateTime, setCurrentDateTime] = useState(new Date());
@@ -71,6 +74,15 @@ const ResultMap = ({
         return holidays.includes(formattedDate);
     };
 
+    const fetchCouriers = async () =>{
+      try{
+        const onlineCouriers = await DataStore.query(Courier, (c)=>c.isOnline.eq(true));
+        setCouriers(onlineCouriers);
+      }catch(e){
+        Alert.alert('Error', e.message)
+      }
+    };
+
     const updateTimeDependentStates = () => {
         const currentHour = currentDateTime.getHours();
         const currentDay = currentDateTime.getDay();
@@ -91,6 +103,19 @@ const ResultMap = ({
     useEffect(() => {
         updateTimeDependentStates();
     }, [currentDateTime]);
+
+    useEffect(()=>{
+      fetchCouriers()
+
+      const subscription = DataStore.observe(Courier).subscribe(({opType})=>{
+        if(opType === 'INSERT' || opType === 'UPDATE' || opType === 'DELETE'){
+          fetchCouriers();
+        }
+      });
+  
+      return () => subscription.unsubscribe();
+    },[])
+    
 
     useEffect(() => {
       (async () => {
@@ -164,18 +189,15 @@ const ResultMap = ({
         </Marker>
 
         {/* Courier Markers */}
-        {TMediums.map((TMedium)=>{
+        {couriers.map((courier)=>{
           return <Marker
-                key={TMedium.id}
-                coordinate={{ latitude : TMedium.latitude , longitude : TMedium.longitude }}>
+                key={courier.id}
+                coordinate={{ latitude : courier.lat , longitude : courier.lng }}>
                   <Image style={{width:50,
                   height:70,
                   resizeMode:'contain',
-                  transform:[{
-                  rotate:`${TMedium.heading}.deg`
-                  }]
                   }} 
-                 source={getImage(TMedium.type)}/>
+                 source={getImage(courier.transportationType)}/>
                 </Marker>
         })}
         
@@ -184,4 +206,4 @@ const ResultMap = ({
   )
 }
 
-export default ResultMap
+export default ResultMap;
