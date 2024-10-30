@@ -1,4 +1,4 @@
-import { View, Text, TouchableOpacity } from 'react-native'
+import { View, Text, TouchableOpacity, Pressable } from 'react-native'
 import React, {useEffect} from 'react'
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLocationContext } from '@/providers/LocationProvider';
@@ -64,22 +64,22 @@ const HomeSearch = () => {
 
         {/* previous destination */}
         {lastDestination && (
-          <TouchableOpacity style={styles.row} onPress={handleLastDestinationPress}>
+          <Pressable style={styles.row} onPress={handleLastDestinationPress}>
             <View style={styles.iconContainer}>
               <AntDesign name={'clockcircle'} size={16} color={'#535353'}/>
             </View>
             <Text style={styles.destinationText }>{lastDestination.length > 25 ? `${lastDestination.substring(0,30)}...` : lastDestination}</Text>
-          </TouchableOpacity>
+          </Pressable>
         )}
 
         {/* home destination */}
         {address && (
-          <TouchableOpacity style={styles.row} onPress={handleHomePress}>
+          <Pressable style={styles.row} onPress={handleHomePress}>
             <View style={[styles.iconContainer,{backgroundColor:'#04a835'}]}>
             <AntDesign name="home" size={16} color="#535353" />
             </View>
             <Text style={styles.destinationText }>{address.length > 25 ? `${address.substring(0,30)}...` : address}</Text>
-          </TouchableOpacity>
+          </Pressable>
         )}
     </View>
   )

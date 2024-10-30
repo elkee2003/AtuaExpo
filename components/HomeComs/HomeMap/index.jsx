@@ -5,7 +5,6 @@ import * as Location from 'expo-location';
 import styles from './styles'
 import { DataStore } from 'aws-amplify/datastore';
 import {Courier} from '@/src/models';
-import TMediums from '../../../assets/data/TMediums'
 
 const HomeMap = () => {
     const {width, height} = useWindowDimensions();
@@ -36,12 +35,18 @@ const HomeMap = () => {
       }catch(e){
         Alert.alert('Error', e.message)
       }
-      const fetchedCouriers = await DataStore.query(Courier);
-      setCouriers(fetchedCouriers)
-    }
+    };
 
     useEffect(()=>{
       fetchCouriers()
+
+      const subscription = DataStore.observe(Courier).subscribe(({opType})=>{
+        if(opType === 'INSERT' || opType === 'UPDATE' || opType === 'DELETE'){
+          fetchCouriers();
+        }
+      });
+  
+      return () => subscription.unsubscribe();
     },[])
 
     useEffect(() => {
@@ -82,7 +87,7 @@ const HomeMap = () => {
       }}
       showsUserLocation
       >
-        {/* {TMediums.map((TMedium)=>{ */}
+
         {couriers.map((courier)=>{
           return <Marker
                 key={courier.id}
@@ -90,9 +95,6 @@ const HomeMap = () => {
                   <Image style={{width:50,
                   height:70,
                   resizeMode:'contain',
-                  // transform:[{
-                  // rotate:`${TMedium.heading}.deg`
-                  // }]
                   }} 
                  source={getImage(courier.transportationType)}/>
                 </Marker>
