@@ -1,4 +1,4 @@
-import { View, useWindowDimensions, ActivityIndicator, Image, PermissionsAndroid, Platform, } from 'react-native'
+import { View, useWindowDimensions, ActivityIndicator, Image, Alert } from 'react-native'
 import React, {useState, useEffect} from 'react'
 import MapView, {Marker, PROVIDER_GOOGLE} from 'react-native-maps';
 import * as Location from 'expo-location';
@@ -8,7 +8,8 @@ import {Courier} from '@/src/models';
 import TMediums from '../../../assets/data/TMediums'
 
 const HomeMap = () => {
-    const {width, height} = useWindowDimensions()
+    const {width, height} = useWindowDimensions();
+    const [couriers, setCouriers] = useState([]);
     const [location, setLocation] = useState(null);
     const [errorMsg, setErrorMsg] = useState(null);
 
@@ -27,6 +28,21 @@ const HomeMap = () => {
       }
       return require('../../../assets/atuaImages/Walk.png')
     }
+
+    const fetchCouriers = async () =>{
+      try{
+        const onlineCouriers = await DataStore.query(Courier, (c)=>c.isOnline.eq(true));
+        setCouriers(onlineCouriers);
+      }catch(e){
+        Alert.alert('Error', e.message)
+      }
+      const fetchedCouriers = await DataStore.query(Courier);
+      setCouriers(fetchedCouriers)
+    }
+
+    useEffect(()=>{
+      fetchCouriers()
+    },[])
 
     useEffect(() => {
       (async () => {
@@ -66,18 +82,19 @@ const HomeMap = () => {
       }}
       showsUserLocation
       >
-        {TMediums.map((TMedium)=>{
+        {/* {TMediums.map((TMedium)=>{ */}
+        {couriers.map((courier)=>{
           return <Marker
-                key={TMedium.id}
-                coordinate={{ latitude : TMedium.latitude , longitude : TMedium.longitude }}>
+                key={courier.id}
+                coordinate={{ latitude : courier.lat , longitude : courier.lng }}>
                   <Image style={{width:50,
                   height:70,
                   resizeMode:'contain',
-                  transform:[{
-                  rotate:`${TMedium.heading}.deg`
-                  }]
+                  // transform:[{
+                  // rotate:`${TMedium.heading}.deg`
+                  // }]
                   }} 
-                 source={getImage(TMedium.type)}/>
+                 source={getImage(courier.transportationType)}/>
                 </Marker>
         })}
       </MapView>
