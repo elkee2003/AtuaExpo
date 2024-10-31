@@ -80,7 +80,8 @@ const showInfoAlert = (type) => {
       setCourierFee(courierFee);
 
       if (medium.type === 'Maxi') {
-        router.push('/screens/searchresults/maxitypes');
+        // router.push('/screens/searchresults/maxitypes');
+        Alert.alert('Envisage', 'Coming soon')
       }else {
         router.push('/screens/checkout');
       }

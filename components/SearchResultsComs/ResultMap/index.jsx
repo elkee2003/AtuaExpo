@@ -1,5 +1,5 @@
-import { View, useWindowDimensions, ActivityIndicator, Image, PermissionsAndroid, Platform, } from 'react-native'
-import React, {useState, useEffect, useCallback} from 'react'
+import { View, useWindowDimensions, ActivityIndicator, Image } from 'react-native';
+import React, {useState, useEffect} from 'react';
 import MapView, {Marker, PROVIDER_GOOGLE} from 'react-native-maps';
 import MapViewDirections from 'react-native-maps-directions';
 import {GOOGLE_API_KEY} from '../../../keys';
@@ -10,7 +10,6 @@ import FontAwesome6 from '@expo/vector-icons/FontAwesome6';
 import holidays from '../../../assets/data/holiday';
 import { DataStore } from 'aws-amplify/datastore';
 import {Courier} from '@/src/models';
-import TMediums from '../../../assets/data/TMediums';
 
 const ResultMap = ({
   setTotalMins,
