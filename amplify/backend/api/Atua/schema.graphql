@@ -1,3 +1,11 @@
+type CompanyVehicle @model @auth(rules: [{allow: public}]) {
+  id: ID!
+  vehicleType: String
+  model: String
+  plateNumber: String
+  couriercompanyID: ID! @index(name: "byCourierCompany")
+}
+
 type CourierCompany @model @auth(rules: [{allow: public}]) {
   id: ID!
   sub: String!
@@ -17,14 +25,6 @@ type CourierCompany @model @auth(rules: [{allow: public}]) {
   CompanyVehicles: [CompanyVehicle] @hasMany(indexName: "byCourierCompany", fields: ["id"])
   accountNumber: String
   push_token: String
-}
-
-type CompanyVehicle @model @auth(rules: [{allow: public}]) {
-  id: ID!
-  vehicleType: String
-  model: String
-  plateNumber: String
-  couriercompanyID: ID! @index(name: "byCourierCompany")
 }
 
 enum OrderStatus {
@@ -49,8 +49,8 @@ type Order @model @auth(rules: [{allow: public}]) {
   status: OrderStatus
   price: Float
   courierFee: Float
-  Courier: Courier @hasOne
   userID: ID! @index(name: "byUser")
+  courierID: ID! @index(name: "byCourier")
 }
 
 type Courier @model @auth(rules: [{allow: public}]) {
@@ -87,6 +87,7 @@ type Courier @model @auth(rules: [{allow: public}]) {
   lng: Float
   heading: Float
   push_token: String
+  Orders: [Order] @hasMany(indexName: "byCourier", fields: ["id"])
 }
 
 type User @model @auth(rules: [{allow: public}]) {
@@ -98,9 +99,9 @@ type User @model @auth(rules: [{allow: public}]) {
   profilePic: String
   address: String
   exactAddress: String
-  Orders: [Order] @hasMany(indexName: "byUser", fields: ["id"])
   lat: Float
   lng: Float
   push_token: String
+  Orders: [Order] @hasMany(indexName: "byUser", fields: ["id"])
 }
  

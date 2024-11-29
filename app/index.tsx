@@ -43,7 +43,7 @@ export default function Index() {
   if (loading) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-        <ActivityIndicator size="large" color="#0000ff" />
+        <ActivityIndicator size="large" color='#3cff00' />
         <Text>Loading...</Text>
       </View>
     );

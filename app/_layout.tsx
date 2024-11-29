@@ -1,4 +1,3 @@
-navigator.geolocation = require('@react-native-community/geolocation');
 import { Stack } from "expo-router";
 import AuthProvider from '../providers/AuthProvider'
 import OrderProvider from '../providers/OrderProvider'

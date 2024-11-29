@@ -1,6 +1,5 @@
 import { View, Text, FlatList, TouchableOpacity, Alert, ActivityIndicator } from 'react-native'
 import React, {useState, useEffect} from 'react'
-import orders from '../../../assets/data/orders.json'
 import OrderHistoryList from '../OrderHistoryList'
 import { useAuthContext } from '@/providers/AuthProvider';
 import { DataStore } from 'aws-amplify/datastore';

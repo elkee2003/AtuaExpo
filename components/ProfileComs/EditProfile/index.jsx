@@ -46,7 +46,7 @@ const EditProfile = () => {
     const onSignout = ()=>{
       Alert.alert(
         'Sign Out',
-        'Are you sure you want to sign out? Click on YES, then refresh the App',
+        'Are you sure you want to sign out?',
         [
           {
             text: "Cancel",
@@ -76,9 +76,6 @@ const EditProfile = () => {
           </TouchableOpacity>
         </View>
       </View>
-      {/* <TouchableOpacity onPress={pickImage}>
-        <AntDesign style={styles.plusIcon} name="pluscircle" size={30} color="#03033b" />
-      </TouchableOpacity> */}
 
       {/* Sign out button */}
       <TouchableOpacity style={styles.signoutBtn} onPress={onSignout}>
@@ -93,18 +90,18 @@ const EditProfile = () => {
         style={styles.input}
         />
         <TextInput 
-        value={lastName}
-        onChangeText={setLastName}
-        placeholder='Surname (Optional)'
-        style={styles.input}
+          value={lastName}
+          onChangeText={setLastName}
+          placeholder='Surname (Optional)'
+          style={styles.input}
         />
       
         <TextInput
-        value={phoneNumber}
-        onChangeText={setPhoneNumber}
-        placeholder='Phone Number'
-        style={styles.input}
-        keyboardType='numeric'
+          value={phoneNumber}
+          onChangeText={setPhoneNumber}
+          placeholder='Phone Number'
+          style={styles.input}
+          keyboardType='numeric'
         />
 
         {/* Error Message */}

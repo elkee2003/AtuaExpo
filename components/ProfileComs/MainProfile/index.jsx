@@ -1,15 +1,72 @@
 import { View, Text, Image, TouchableOpacity, Alert, ScrollView } from 'react-native'
-import React from 'react'
+import React, {useState, useEffect} from 'react'
 import { useProfileContext } from '../../../providers/ProfileProvider'
 import { Ionicons } from '@expo/vector-icons'
 import Placeholder from '../../../assets/images/placeholder.png'
+import {useAuthContext} from '@/providers/AuthProvider';
+import { DataStore } from 'aws-amplify/datastore';
+import {User} from '@/src/models';
+import { getUrl } from 'aws-amplify/storage';
 import styles from './styles'
 import { router } from 'expo-router'
 import { signOut } from 'aws-amplify/auth'
 
 const MainProfile = () => {
 
-    const {firstName, lastName, address, phoneNumber, profilePic} = useProfileContext()
+    const {firstName, lastName, address, phoneNumber, setProfilePic, profilePic} = useProfileContext()
+
+    const {dbUser} = useAuthContext();
+
+    const [loading, setLoading]= useState(true);
+
+    // Fetch signed URL for profile picture
+    const fetchImageUrl = async () => {
+      setLoading(true);
+
+      if (!dbUser?.profilePic) {
+        // If profilePic is not available, use the placeholder
+        setProfilePic(null);
+        setLoading(false);
+        return;
+      }
+      
+      try {
+        const result = await getUrl({
+          path: dbUser.profilePic,
+          options: {
+            validateObjectExistence: true, 
+            expiresIn: null, // No expiration limit
+          },
+        });
+
+        if (result.url) {
+          setProfilePic(result?.url.toString());
+        }else {
+          setProfilePic(null); // Fallback to null if no URL is returned
+        }
+      } catch (error) {
+        console.log('Error fetching profile pic URL:', error);
+        setProfilePic(null); 
+      }finally {
+        setLoading(false);
+      }
+    };
+
+    useEffect(() => {
+      if (!dbUser?.profilePic || dbUser.profilePic.trim() === "") {
+        return;
+      }
+  
+      fetchImageUrl();
+  
+      const subscription = DataStore.observe(User).subscribe(({opType})=>{
+        if(opType === 'INSERT' || opType === 'UPDATE' || opType === 'DELETE'){
+          fetchImageUrl();
+        }
+      });
+  
+      return () => subscription.unsubscribe();
+    }, [dbUser.profilePic]);
 
     async function handleSignOut() {
         try {
@@ -56,11 +113,20 @@ const MainProfile = () => {
 
         {/* Profile Picture */}
         <View style={styles.profilePicContainer}>
-            {profilePic ? (
-                <Image source={{ uri: profilePic }} style={styles.img} />
-            ) : (
-                <Image source={Placeholder} style={styles.img} />
-            )}
+          {loading || !profilePic  ? (
+            <Image 
+              source={Placeholder} 
+              style={styles.img}
+            /> // Show placeholder while loading
+          ) : (
+            <Image 
+              source={{ uri: profilePic }} 
+              style={styles.img} 
+              onError={() => setProfilePic(null)}
+              width={50}
+              height={50} 
+            />
+          )}
         </View>
 
         {/* Relevant Info Section */}

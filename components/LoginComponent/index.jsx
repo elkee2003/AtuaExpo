@@ -58,7 +58,7 @@ const index = () => {
         {/* Header */}
         <View style={styles.titleCon}>
             <Text style={styles.title}>
-                Sign In
+                Sign In (Client App)
             </Text>
         </View>
         <ScrollView showsVerticalScrollIndicator={false}>

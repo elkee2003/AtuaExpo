@@ -20,7 +20,7 @@
     <meta-data android:name="expo.modules.updates.ENABLED" android:value="true"/>
     <meta-data android:name="expo.modules.updates.EXPO_UPDATES_CHECK_ON_LAUNCH" android:value="ALWAYS"/>
     <meta-data android:name="expo.modules.updates.EXPO_UPDATES_LAUNCH_WAIT_MS" android:value="0"/>
-    <meta-data android:name="com.google.android.maps.v2.API_KEY" android:value="AIzaSyCpZgg6kdYXn8GD71Cfr3Hq3_F1IXH08dU"/>
+    <meta-data android:name="com.google.android.maps.v2.API_KEY" android:value="AIzaSyDkg6vZ_Rc8OsbiG-pfkNXLpR02vxP5kU0"/>
     <meta-data android:name="expo.modules.updates.EXPO_UPDATE_URL" android:value="https://u.expo.dev/fa1d36c2-3552-4396-b3f9-ae69a9ef87a7"/>
     <meta-data android:name="expo.modules.updates.EXPO_RUNTIME_VERSION" android:value="@string/expo_runtime_version"/>
     <activity android:name=".MainActivity" android:configChanges="keyboard|keyboardHidden|orientation|screenSize|screenLayout|uiMode" android:launchMode="singleTask" android:windowSoftInputMode="adjustResize" android:theme="@style/Theme.App.SplashScreen" android:exported="true" android:screenOrientation="portrait">

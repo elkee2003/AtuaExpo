@@ -23,19 +23,19 @@ const AddressPage = () => {
 
     // Start Of GooglePlacesAutoComplete function
     const handlePlaceSelect = (data, details = null) => {
-    // Extract the address from the selected place
-    const selectedAddress = data?.description || details?.formatted_address;
+        // Extract the address from the selected place
+        const selectedAddress = data?.description || details?.formatted_address;
 
-    const selectedAddylat = JSON.stringify(details?.geometry?.location.lat) 
+        const selectedAddylat = JSON.stringify(details?.geometry?.location.lat) 
 
-    const selectedAddylng = JSON.stringify(details?.geometry?.location.lng) 
+        const selectedAddylng = JSON.stringify(details?.geometry?.location.lng) 
 
-    console.log(selectedAddylng, selectedAddylat)
+        console.log(selectedAddylng, selectedAddylat)
 
-    // Update the address state
-    setAddress(selectedAddress);
-    setLat(selectedAddylat)
-    setLng(selectedAddylng)
+        // Update the address state
+        setAddress(selectedAddress);
+        setLat(selectedAddylat)
+        setLng(selectedAddylng)
 
     };
 

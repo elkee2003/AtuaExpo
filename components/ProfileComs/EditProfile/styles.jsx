@@ -40,6 +40,16 @@ const styles = StyleSheet.create({
         resizeMode:"contain",
         borderRadius:75,
     },
+    removeButtonContainer: {
+        position: 'absolute',
+        top:20, 
+        right: 90,
+        zIndex: 1,
+      },
+    removebtn:{
+        color: '#c70f0f',
+        fontSize:40,
+    },
     plusIconContainer: {
         position: 'absolute',
         top: '50%',
@@ -172,7 +182,7 @@ const styles = StyleSheet.create({
         backgroundColor:'#05c405',
         marginTop:10,
         padding:2,
-        marginHorizontal:80,
+        marginHorizontal:60,
         marginBottom:10,
         alignItems:'center',
         borderRadius:30,

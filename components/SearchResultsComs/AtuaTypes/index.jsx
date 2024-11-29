@@ -239,7 +239,8 @@ const showInfoAlert = (type) => {
                   <Ionicons name={'information-circle-outline'} style={styles.infoIcon} />
                 </TouchableOpacity>
               </View>
-              <Text style={styles.time}>{totalKm} km | {totalMins} mins</Text>
+              {/* <Text style={styles.time}>{totalKm} km | {totalMins} mins</Text> */}
+              <Text style={styles.time}>{totalKm} km </Text>
             </View>
 
             {/* Price */}

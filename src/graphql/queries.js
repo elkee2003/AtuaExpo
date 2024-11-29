@@ -1,6 +1,115 @@
 /* eslint-disable */
 // this is an auto generated file. This will be overwritten
 
+export const getCompanyVehicle = /* GraphQL */ `
+  query GetCompanyVehicle($id: ID!) {
+    getCompanyVehicle(id: $id) {
+      id
+      vehicleType
+      model
+      plateNumber
+      couriercompanyID
+      createdAt
+      updatedAt
+      _version
+      _deleted
+      _lastChangedAt
+      __typename
+    }
+  }
+`;
+export const listCompanyVehicles = /* GraphQL */ `
+  query ListCompanyVehicles(
+    $filter: ModelCompanyVehicleFilterInput
+    $limit: Int
+    $nextToken: String
+  ) {
+    listCompanyVehicles(filter: $filter, limit: $limit, nextToken: $nextToken) {
+      items {
+        id
+        vehicleType
+        model
+        plateNumber
+        couriercompanyID
+        createdAt
+        updatedAt
+        _version
+        _deleted
+        _lastChangedAt
+        __typename
+      }
+      nextToken
+      startedAt
+      __typename
+    }
+  }
+`;
+export const syncCompanyVehicles = /* GraphQL */ `
+  query SyncCompanyVehicles(
+    $filter: ModelCompanyVehicleFilterInput
+    $limit: Int
+    $nextToken: String
+    $lastSync: AWSTimestamp
+  ) {
+    syncCompanyVehicles(
+      filter: $filter
+      limit: $limit
+      nextToken: $nextToken
+      lastSync: $lastSync
+    ) {
+      items {
+        id
+        vehicleType
+        model
+        plateNumber
+        couriercompanyID
+        createdAt
+        updatedAt
+        _version
+        _deleted
+        _lastChangedAt
+        __typename
+      }
+      nextToken
+      startedAt
+      __typename
+    }
+  }
+`;
+export const companyVehiclesByCouriercompanyID = /* GraphQL */ `
+  query CompanyVehiclesByCouriercompanyID(
+    $couriercompanyID: ID!
+    $sortDirection: ModelSortDirection
+    $filter: ModelCompanyVehicleFilterInput
+    $limit: Int
+    $nextToken: String
+  ) {
+    companyVehiclesByCouriercompanyID(
+      couriercompanyID: $couriercompanyID
+      sortDirection: $sortDirection
+      filter: $filter
+      limit: $limit
+      nextToken: $nextToken
+    ) {
+      items {
+        id
+        vehicleType
+        model
+        plateNumber
+        couriercompanyID
+        createdAt
+        updatedAt
+        _version
+        _deleted
+        _lastChangedAt
+        __typename
+      }
+      nextToken
+      startedAt
+      __typename
+    }
+  }
+`;
 export const getCourierCompany = /* GraphQL */ `
   query GetCourierCompany($id: ID!) {
     getCourierCompany(id: $id) {
@@ -121,115 +230,6 @@ export const syncCourierCompanies = /* GraphQL */ `
     }
   }
 `;
-export const getCompanyVehicle = /* GraphQL */ `
-  query GetCompanyVehicle($id: ID!) {
-    getCompanyVehicle(id: $id) {
-      id
-      vehicleType
-      model
-      plateNumber
-      couriercompanyID
-      createdAt
-      updatedAt
-      _version
-      _deleted
-      _lastChangedAt
-      __typename
-    }
-  }
-`;
-export const listCompanyVehicles = /* GraphQL */ `
-  query ListCompanyVehicles(
-    $filter: ModelCompanyVehicleFilterInput
-    $limit: Int
-    $nextToken: String
-  ) {
-    listCompanyVehicles(filter: $filter, limit: $limit, nextToken: $nextToken) {
-      items {
-        id
-        vehicleType
-        model
-        plateNumber
-        couriercompanyID
-        createdAt
-        updatedAt
-        _version
-        _deleted
-        _lastChangedAt
-        __typename
-      }
-      nextToken
-      startedAt
-      __typename
-    }
-  }
-`;
-export const syncCompanyVehicles = /* GraphQL */ `
-  query SyncCompanyVehicles(
-    $filter: ModelCompanyVehicleFilterInput
-    $limit: Int
-    $nextToken: String
-    $lastSync: AWSTimestamp
-  ) {
-    syncCompanyVehicles(
-      filter: $filter
-      limit: $limit
-      nextToken: $nextToken
-      lastSync: $lastSync
-    ) {
-      items {
-        id
-        vehicleType
-        model
-        plateNumber
-        couriercompanyID
-        createdAt
-        updatedAt
-        _version
-        _deleted
-        _lastChangedAt
-        __typename
-      }
-      nextToken
-      startedAt
-      __typename
-    }
-  }
-`;
-export const companyVehiclesByCouriercompanyID = /* GraphQL */ `
-  query CompanyVehiclesByCouriercompanyID(
-    $couriercompanyID: ID!
-    $sortDirection: ModelSortDirection
-    $filter: ModelCompanyVehicleFilterInput
-    $limit: Int
-    $nextToken: String
-  ) {
-    companyVehiclesByCouriercompanyID(
-      couriercompanyID: $couriercompanyID
-      sortDirection: $sortDirection
-      filter: $filter
-      limit: $limit
-      nextToken: $nextToken
-    ) {
-      items {
-        id
-        vehicleType
-        model
-        plateNumber
-        couriercompanyID
-        createdAt
-        updatedAt
-        _version
-        _deleted
-        _lastChangedAt
-        __typename
-      }
-      nextToken
-      startedAt
-      __typename
-    }
-  }
-`;
 export const getOrder = /* GraphQL */ `
   query GetOrder($id: ID!) {
     getOrder(id: $id) {
@@ -247,54 +247,13 @@ export const getOrder = /* GraphQL */ `
       status
       price
       courierFee
-      Courier {
-        id
-        sub
-        isOnline
-        firstName
-        lastName
-        profilePic
-        address
-        landMark
-        phoneNumber
-        email
-        courierNIN
-        courierBVN
-        bankName
-        accountName
-        accountNumber
-        transportationType
-        vehicleType
-        model
-        plateNumber
-        maxiImages
-        maxiTransportPrice
-        guarantorName
-        guarantorLastName
-        guarantorProfession
-        guarantorNumber
-        guarantorRelationship
-        guarantorAddress
-        guarantorEmail
-        guarantorNIN
-        lat
-        lng
-        heading
-        push_token
-        createdAt
-        updatedAt
-        _version
-        _deleted
-        _lastChangedAt
-        __typename
-      }
       userID
+      courierID
       createdAt
       updatedAt
       _version
       _deleted
       _lastChangedAt
-      orderCourierId
       __typename
     }
   }
@@ -322,12 +281,12 @@ export const listOrders = /* GraphQL */ `
         price
         courierFee
         userID
+        courierID
         createdAt
         updatedAt
         _version
         _deleted
         _lastChangedAt
-        orderCourierId
         __typename
       }
       nextToken
@@ -365,12 +324,12 @@ export const syncOrders = /* GraphQL */ `
         price
         courierFee
         userID
+        courierID
         createdAt
         updatedAt
         _version
         _deleted
         _lastChangedAt
-        orderCourierId
         __typename
       }
       nextToken
@@ -410,12 +369,57 @@ export const ordersByUserID = /* GraphQL */ `
         price
         courierFee
         userID
+        courierID
         createdAt
         updatedAt
         _version
         _deleted
         _lastChangedAt
-        orderCourierId
+        __typename
+      }
+      nextToken
+      startedAt
+      __typename
+    }
+  }
+`;
+export const ordersByCourierID = /* GraphQL */ `
+  query OrdersByCourierID(
+    $courierID: ID!
+    $sortDirection: ModelSortDirection
+    $filter: ModelOrderFilterInput
+    $limit: Int
+    $nextToken: String
+  ) {
+    ordersByCourierID(
+      courierID: $courierID
+      sortDirection: $sortDirection
+      filter: $filter
+      limit: $limit
+      nextToken: $nextToken
+    ) {
+      items {
+        id
+        recipientName
+        recipientNumber
+        orderDetails
+        parcelOrigin
+        parcelOriginLat
+        parcelOriginLng
+        parcelDestination
+        parcelDestinationLat
+        parcelDestinationLng
+        transportationType
+        status
+        price
+        courierFee
+        userID
+        courierID
+        createdAt
+        updatedAt
+        _version
+        _deleted
+        _lastChangedAt
         __typename
       }
       nextToken
@@ -460,6 +464,11 @@ export const getCourier = /* GraphQL */ `
       lng
       heading
       push_token
+      Orders {
+        nextToken
+        startedAt
+        __typename
+      }
       createdAt
       updatedAt
       _version
@@ -594,14 +603,14 @@ export const getUser = /* GraphQL */ `
       profilePic
       address
       exactAddress
+      lat
+      lng
+      push_token
       Orders {
         nextToken
         startedAt
         __typename
       }
-      lat
-      lng
-      push_token
       createdAt
       updatedAt
       _version
