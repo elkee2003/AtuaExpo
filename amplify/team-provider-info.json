@@ -14,6 +14,9 @@
     "categories": {
       "auth": {
         "Atua": {}
+      },
+      "storage": {
+        "s3atuastorage10235b9d": {}
       }
     }
   }

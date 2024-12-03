@@ -65,6 +65,13 @@ const styles = StyleSheet.create({
     policyContainer:{
         marginTop:10,
         marginHorizontal:18,
+        width:300,
+    },
+    policyContainerSignUp:{
+        flexDirection:'row',
+        alignItems:'center',
+        marginTop:10,
+        alignSelf:'center',
     },
     policyTxt:{
         lineHeight:20,

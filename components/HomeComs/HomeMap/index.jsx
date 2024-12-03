@@ -60,8 +60,8 @@ const HomeMap = () => {
     
           let location = await Location.getCurrentPositionAsync({});
           setLocation({
-            latitude: location.coords.latitude,
-            longitude: location.coords.longitude,
+            latitude: location.coords?.latitude,
+            longitude: location.coords?.longitude,
           });
         } catch (error) {
           console.error('Error fetching location:', error);
@@ -88,17 +88,20 @@ const HomeMap = () => {
       showsUserLocation
       >
 
-        {couriers.map((courier)=>{
-          return <Marker
-                key={courier.id}
-                coordinate={{ latitude : courier.lat , longitude : courier.lng }}>
+        {couriers
+          .filter((courier) => courier?.lat != null && courier?.lng != null) // Filter couriers with valid coordinates
+          .map((courier) => (
+                <Marker
+                  key={courier.id}
+                  coordinate={{ latitude : courier?.lat , longitude : courier?.lng }}
+                >
                   <Image style={{width:50,
                   height:70,
                   resizeMode:'contain',
                   }} 
                  source={getImage(courier.transportationType)}/>
                 </Marker>
-        })}
+        ))}
       </MapView>
     </View>
   )

@@ -27,8 +27,8 @@ const index = () => {
         setLoading(true);
         try {
             const { isSignedIn, nextStep } = await signIn({ username: email, password });
-            // If sign-in is successful, navigate to the profile page
-            router.push('/profile');
+            // If sign-in is successful, navigate to home or profile page
+            router.push('/home');
 
           } catch (error) {
             Alert.alert('Oops', error.message);
@@ -106,9 +106,8 @@ const index = () => {
 
             {/* Policy */}
             <View style={styles.policyContainer}>
-                <Text style={styles.policyTxt}>Kindly review the <Text style={styles.policyLink}onPress={()=>router.push('/policies')}>Terms of Use </Text>and <Text style={styles.policyLink}onPress={()=>router.push('/policies')}>Privacy Policy</Text> before going further.</Text>
+                <Text style={styles.policyTxt}>Kindly review the <Text style={styles.policyLink}onPress={()=>router.push('/screens/termsandconditions')}>Terms of Use </Text>and <Text style={styles.policyLink}onPress={()=>router.push('/screens/privacypolicy')}>Privacy Policy</Text> before going further.</Text>
             </View>
-
             {/* Buttons */}
             <CustomButton 
                 text={loading ? 'Loading...' : 'Sign In'} 

@@ -50,7 +50,7 @@ type Order @model @auth(rules: [{allow: public}]) {
   price: Float
   courierFee: Float
   userID: ID! @index(name: "byUser")
-  courierID: ID! @index(name: "byCourier")
+  Courier: Courier @hasOne
 }
 
 type Courier @model @auth(rules: [{allow: public}]) {
@@ -87,7 +87,6 @@ type Courier @model @auth(rules: [{allow: public}]) {
   lng: Float
   heading: Float
   push_token: String
-  Orders: [Order] @hasMany(indexName: "byCourier", fields: ["id"])
 }
 
 type User @model @auth(rules: [{allow: public}]) {

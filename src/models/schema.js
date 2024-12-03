@@ -379,12 +379,23 @@ export const schema = {
                     "isRequired": true,
                     "attributes": []
                 },
-                "courierID": {
-                    "name": "courierID",
+                "Courier": {
+                    "name": "Courier",
                     "isArray": false,
-                    "type": "ID",
-                    "isRequired": true,
-                    "attributes": []
+                    "type": {
+                        "model": "Courier"
+                    },
+                    "isRequired": false,
+                    "attributes": [],
+                    "association": {
+                        "connectionType": "HAS_ONE",
+                        "associatedWith": [
+                            "id"
+                        ],
+                        "targetNames": [
+                            "orderCourierId"
+                        ]
+                    }
                 },
                 "createdAt": {
                     "name": "createdAt",
@@ -401,6 +412,13 @@ export const schema = {
                     "isRequired": false,
                     "attributes": [],
                     "isReadOnly": true
+                },
+                "orderCourierId": {
+                    "name": "orderCourierId",
+                    "isArray": false,
+                    "type": "ID",
+                    "isRequired": false,
+                    "attributes": []
                 }
             },
             "syncable": true,
@@ -416,15 +434,6 @@ export const schema = {
                         "name": "byUser",
                         "fields": [
                             "userID"
-                        ]
-                    }
-                },
-                {
-                    "type": "key",
-                    "properties": {
-                        "name": "byCourier",
-                        "fields": [
-                            "courierID"
                         ]
                     }
                 },
@@ -681,22 +690,6 @@ export const schema = {
                     "isRequired": false,
                     "attributes": []
                 },
-                "Orders": {
-                    "name": "Orders",
-                    "isArray": true,
-                    "type": {
-                        "model": "Order"
-                    },
-                    "isRequired": false,
-                    "attributes": [],
-                    "isArrayNullable": true,
-                    "association": {
-                        "connectionType": "HAS_MANY",
-                        "associatedWith": [
-                            "courierID"
-                        ]
-                    }
-                },
                 "createdAt": {
                     "name": "createdAt",
                     "isArray": false,
@@ -891,5 +884,5 @@ export const schema = {
     },
     "nonModels": {},
     "codegenVersion": "3.4.4",
-    "version": "ba40389619be3f4204fa6b94dc3b54f6"
+    "version": "3434900c7e63d7cbb9ceec44be23b816"
 };

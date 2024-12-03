@@ -1,6 +1,7 @@
-import { View, Text, TextInput, TouchableOpacity, Alert, ScrollView } from 'react-native'
-import React, {useState} from 'react'
-import styles from './styles'
+import { View, Text, TextInput, TouchableOpacity, Alert, ScrollView } from 'react-native';
+import React, {useState} from 'react';
+import styles from './styles';
+import CheckBox from '@react-native-community/checkbox';
 import { Ionicons } from '@expo/vector-icons'; 
 import { useForm, Controller } from 'react-hook-form';
 import SocialSigninButtons from './SocialSigninButtons';
@@ -11,6 +12,7 @@ import { signUp } from 'aws-amplify/auth';
 const SignupCom = () => {
 
     const [loading, setLoading] = useState(false);
+    const [toggleCheckBox, setToggleCheckBox] = useState(false); 
 
     const [isPasswordVisible, setIsPasswordVisible] = useState(false);
     const [isPasswordRepeatVisible, setIsPasswordRepeatVisible] = useState(false);
@@ -202,10 +204,28 @@ const SignupCom = () => {
             </View>
 
             {/* Policies */}
-            <View style={styles.policyContainer}>
-                <Text style={styles.policyTxt}>By registering you confirm that you accept our <Text style={styles.policyLink}onPress={()=>router.push('/policies')}>Terms of Use </Text>and <Text style={styles.policyLink}onPress={()=>router.push('/policies')}>Privacy Policy</Text></Text>
+            <View style={styles.policyContainerSignUp}>
+                <CheckBox
+                    disabled={false}
+                    value={toggleCheckBox}
+                    onValueChange={(newValue) => setToggleCheckBox(newValue)}
+                />
+                <Text style={styles.policyTxt}>
+                    I agree to the{' '}
+                    <Text style={styles.policyLink} onPress={() => router.push('/screens/termsandconditions')}>
+                        Terms of Service
+                    </Text>{' '}
+                    and{' '}
+                    <Text style={styles.policyLink} onPress={() => router.push('/screens/privacypolicy')}>
+                        Privacy Policy
+                    </Text>
+                </Text>
             </View>
-            <TouchableOpacity style={styles.btnCon} onPress={handleSubmit(onSignUp)}>
+            <TouchableOpacity 
+                style={styles.btnCon} 
+                onPress={handleSubmit(onSignUp)}
+                disabled={!toggleCheckBox || loading}
+            >
                 { loading ?
                     (<Text style={styles.btnTxt}>Signing Up...</Text>)
                     :

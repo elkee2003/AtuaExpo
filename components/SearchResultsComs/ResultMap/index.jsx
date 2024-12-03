@@ -188,17 +188,20 @@ const ResultMap = ({
         </Marker>
 
         {/* Courier Markers */}
-        {couriers.map((courier)=>{
-          return <Marker
-                key={courier.id}
-                coordinate={{ latitude : courier.lat , longitude : courier.lng }}>
+        {couriers
+          .filter((courier) => courier?.lat != null && courier?.lng != null) // Filter couriers with valid coordinates
+          .map((courier) => (
+                <Marker
+                  key={courier.id}
+                  coordinate={{ latitude : courier?.lat , longitude : courier?.lng }}
+                >
                   <Image style={{width:50,
                   height:70,
                   resizeMode:'contain',
                   }} 
                  source={getImage(courier.transportationType)}/>
                 </Marker>
-        })}
+        ))}
         
       </MapView>
     </View>

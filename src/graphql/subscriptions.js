@@ -184,12 +184,53 @@ export const onCreateOrder = /* GraphQL */ `
       price
       courierFee
       userID
-      courierID
+      Courier {
+        id
+        sub
+        isOnline
+        firstName
+        lastName
+        profilePic
+        address
+        landMark
+        phoneNumber
+        email
+        courierNIN
+        courierBVN
+        bankName
+        accountName
+        accountNumber
+        transportationType
+        vehicleType
+        model
+        plateNumber
+        maxiImages
+        maxiTransportPrice
+        guarantorName
+        guarantorLastName
+        guarantorProfession
+        guarantorNumber
+        guarantorRelationship
+        guarantorAddress
+        guarantorEmail
+        guarantorNIN
+        lat
+        lng
+        heading
+        push_token
+        createdAt
+        updatedAt
+        _version
+        _deleted
+        _lastChangedAt
+        __typename
+      }
       createdAt
       updatedAt
       _version
       _deleted
       _lastChangedAt
+      orderCourierId
       __typename
     }
   }
@@ -212,12 +253,53 @@ export const onUpdateOrder = /* GraphQL */ `
       price
       courierFee
       userID
-      courierID
+      Courier {
+        id
+        sub
+        isOnline
+        firstName
+        lastName
+        profilePic
+        address
+        landMark
+        phoneNumber
+        email
+        courierNIN
+        courierBVN
+        bankName
+        accountName
+        accountNumber
+        transportationType
+        vehicleType
+        model
+        plateNumber
+        maxiImages
+        maxiTransportPrice
+        guarantorName
+        guarantorLastName
+        guarantorProfession
+        guarantorNumber
+        guarantorRelationship
+        guarantorAddress
+        guarantorEmail
+        guarantorNIN
+        lat
+        lng
+        heading
+        push_token
+        createdAt
+        updatedAt
+        _version
+        _deleted
+        _lastChangedAt
+        __typename
+      }
       createdAt
       updatedAt
       _version
       _deleted
       _lastChangedAt
+      orderCourierId
       __typename
     }
   }
@@ -240,12 +322,53 @@ export const onDeleteOrder = /* GraphQL */ `
       price
       courierFee
       userID
-      courierID
+      Courier {
+        id
+        sub
+        isOnline
+        firstName
+        lastName
+        profilePic
+        address
+        landMark
+        phoneNumber
+        email
+        courierNIN
+        courierBVN
+        bankName
+        accountName
+        accountNumber
+        transportationType
+        vehicleType
+        model
+        plateNumber
+        maxiImages
+        maxiTransportPrice
+        guarantorName
+        guarantorLastName
+        guarantorProfession
+        guarantorNumber
+        guarantorRelationship
+        guarantorAddress
+        guarantorEmail
+        guarantorNIN
+        lat
+        lng
+        heading
+        push_token
+        createdAt
+        updatedAt
+        _version
+        _deleted
+        _lastChangedAt
+        __typename
+      }
       createdAt
       updatedAt
       _version
       _deleted
       _lastChangedAt
+      orderCourierId
       __typename
     }
   }
@@ -286,11 +409,6 @@ export const onCreateCourier = /* GraphQL */ `
       lng
       heading
       push_token
-      Orders {
-        nextToken
-        startedAt
-        __typename
-      }
       createdAt
       updatedAt
       _version
@@ -336,11 +454,6 @@ export const onUpdateCourier = /* GraphQL */ `
       lng
       heading
       push_token
-      Orders {
-        nextToken
-        startedAt
-        __typename
-      }
       createdAt
       updatedAt
       _version
@@ -386,11 +499,6 @@ export const onDeleteCourier = /* GraphQL */ `
       lng
       heading
       push_token
-      Orders {
-        nextToken
-        startedAt
-        __typename
-      }
       createdAt
       updatedAt
       _version
