@@ -1,167 +1,139 @@
-import { StyleSheet, useWindowDimensions} from 'react-native'
-
-// const {height} = useWindowDimensions();
+import { StyleSheet } from "react-native";
 
 const styles = StyleSheet.create({
-    container:{
-        flex:1,
-        marginHorizontal:10,
-        marginTop:40,
-    },
-    containerP:{
-        flex:1,
-        marginHorizontal:10,
-        marginBottom:30,
-        marginTop:50,
-    },
-    logoCon:{
-        height:'20%',
-        width:'70%',
-        maxWidth:120,
-        maxHeight:200,
-        alignItems:'center',
-        alignSelf:'center',
-        // backgroundColor:'red',
-    },
-    logo:{
-        width:'100%',
-        height:'100%',
-        resizeMode:"contain",
-    },
-    titleCon:{
-        flexDirection:'row',
-        width:300,
-        alignSelf:'center'
-    },
-    title:{
-        fontSize:22,
-        fontWeight:'bold'
-    },
-    inputSection:{
-        alignSelf:'center'
-    },
-    inputSub:{
-        marginTop:20,
-        marginBottom:5,
-        fontSize:18,
-    },
-    input:{
-        borderWidth:1,
-        fontSize:16,
-        padding:7,
-        width:300,
-        borderRadius:10,
-    },
-    passwordContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-    },
-    eyeIcon: {
-        position: 'absolute',
-        right: 10,
-        top: 15,  // Adjust as per your design
-    },
-    policyContainer:{
-        marginTop:10,
-        marginHorizontal:18,
-        width:300,
-    },
-    policyContainerSignUp:{
-        flexDirection:'row',
-        alignItems:'center',
-        marginTop:10,
-        alignSelf:'center',
-    },
-    policyTxt:{
-        lineHeight:20,
-    },
-    policyLink:{
-        color:'#c00d0d'
-    },
-    btnCon:{
-        width: 300,
-        padding:10,
-        justifyContent:'center',
-        alignItems:'center',
-        alignSelf:'center',
-        backgroundColor:'#045e04',
-        borderRadius:10,
-        marginTop:20,
-    },
-    btnTxt:{
-        fontSize:20,
-        fontWeight:'bold',
-        color:'white'
-    },
-    secBtn_Google:{
-        width: 300,
-        padding:10,
-        justifyContent:'center',
-        alignItems:'center',
-        alignSelf:'center',
-        backgroundColor:'#ce432b',
-        borderRadius:10,
-        marginTop:20,
-    },
-    text_Google:{
-        fontSize:20,
-        fontWeight:'bold',
-        color:'#d4d0d0'
-    },
-    secBtn_Apple:{
-        width: 300,
-        padding:10,
-        justifyContent:'center',
-        alignItems:'center',
-        alignSelf:'center',
-        backgroundColor:'#5a5857',
-        borderRadius:10,
-        marginTop:20,
-    },
-    text_Apple:{
-        fontSize:20,
-        fontWeight:'bold',
-        color:'#d4d0d0'
-    },
-    secBtnSection:{
-        flexDirection:'row',
-        alignItems:'center',
-        alignSelf:'center',
-        justifyContent:'space-between',
-        width:300,
-        marginTop:10,
-    },
-    secBtnCon:{
-        marginTop:15,
-        alignSelf:'center'
-    },
-    secBtnTxt:{
-        fontSize:18,
-        fontWeight:'bold',
-        color:'#058b05'
-    },
-    secBtn_SECONDARY:{
-        width: 150,
-        borderRadius:10,
-        marginTop:5,
-        padding:0,
-        backgroundColor:'transparent',
-    },
-    text_SECONDARY:{
-        fontSize:18,
-        fontWeight:'bold',
-        color:'#058b05',
-        marginBottom:20,
-    },
+  container: {
+    flex: 1,
+    backgroundColor: "#F1F5F9",
+    paddingHorizontal: 24,
+  },
 
-    errorText: {
-        color: 'red',
-        marginBottom: 10,
-    },
-    errorBorder: {
-        borderColor: 'red',
-    },
-})
+  scroll: {
+    flexGrow: 1,
+    justifyContent: "center",
+    paddingVertical: 40,
+  },
+
+  header: {
+    marginBottom: 32,
+  },
+
+  logo: {
+    width: 90,
+    height: 90,
+    resizeMode: "contain",
+    alignSelf: "center",
+    marginBottom: 24,
+  },
+
+  title: {
+    fontSize: 32,
+    fontWeight: "700",
+    color: "#0F172A",
+    textAlign: "center",
+  },
+
+  subtitle: {
+    fontSize: 15,
+    color: "#64748B",
+    textAlign: "center",
+    marginTop: 8,
+  },
+
+  formCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 24,
+    padding: 24,
+    shadowColor: "#000",
+    shadowOpacity: 0.06,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+
+  inputWrapper: {
+    marginBottom: 20,
+  },
+
+  inputLabel: {
+    fontSize: 14,
+    color: "#475569",
+    marginBottom: 6,
+  },
+
+  inputContainer: {
+    position: "relative",
+  },
+
+  input: {
+    height: 56,
+    borderRadius: 16,
+    backgroundColor: "#F8FAFC",
+    paddingHorizontal: 18,
+    fontSize: 16,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    color: "#0F172A",
+  },
+
+  errorBorder: {
+    borderColor: "#EF4444",
+  },
+
+  eyeIcon: {
+    position: "absolute",
+    right: 16,
+    top: 16,
+  },
+
+  errorText: {
+    color: "#EF4444",
+    fontSize: 13,
+    marginTop: 6,
+  },
+
+  primaryButton: {
+    height: 56,
+    borderRadius: 16,
+    backgroundColor: "#2563EB",
+    justifyContent: "center",
+    alignItems: "center",
+    marginTop: 10,
+    shadowColor: "#2563EB",
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    elevation: 6,
+  },
+
+  primaryButtonText: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontWeight: "600",
+  },
+
+  secondaryText: {
+    textAlign: "center",
+    marginTop: 18,
+    fontSize: 14,
+    color: "#2563EB",
+    fontWeight: "500",
+  },
+
+  linkRow: {
+    marginTop: 16,
+    alignItems: "center",
+  },
+
+  checkboxRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 10,
+  },
+
+  checkboxText: {
+    marginLeft: 8,
+    flex: 1,
+    fontSize: 13,
+    color: "#475569",
+  },
+});
 
 export default styles;

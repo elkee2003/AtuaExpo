@@ -1,156 +1,179 @@
-import { View, Text, Image, TouchableOpacity, Alert, ScrollView } from 'react-native'
-import React, {useState, useEffect} from 'react'
-import { useProfileContext } from '../../../providers/ProfileProvider'
-import { Ionicons } from '@expo/vector-icons'
-import Placeholder from '../../../assets/images/placeholder.png'
-import {useAuthContext} from '@/providers/AuthProvider';
-import { DataStore } from 'aws-amplify/datastore';
-import {User} from '@/src/models';
-import { getUrl } from 'aws-amplify/storage';
-import styles from './styles'
-import { router } from 'expo-router'
-import { signOut } from 'aws-amplify/auth'
+import { useAuthContext } from "@/providers/AuthProvider";
+import { User } from "@/src/models";
+import { Ionicons } from "@expo/vector-icons";
+import { signOut } from "aws-amplify/auth";
+import { DataStore } from "aws-amplify/datastore";
+import { getUrl } from "aws-amplify/storage";
+import { router } from "expo-router";
+import React, { useEffect, useState } from "react";
+import {
+  Alert,
+  Image,
+  ScrollView,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import Placeholder from "../../../assets/images/placeholder.png";
+import { useProfileContext } from "../../../providers/ProfileProvider";
+import styles from "./styles";
 
 const MainProfile = () => {
+  const {
+    firstName,
+    lastName,
+    address,
+    phoneNumber,
+    setProfilePic,
+    profilePic,
+  } = useProfileContext();
 
-    const {firstName, lastName, address, phoneNumber, setProfilePic, profilePic} = useProfileContext()
+  const { dbUser } = useAuthContext();
 
-    const {dbUser} = useAuthContext();
+  const [loading, setLoading] = useState(true);
 
-    const [loading, setLoading]= useState(true);
+  // Fetch signed URL for profile picture
+  const fetchImageUrl = async () => {
+    setLoading(true);
 
-    // Fetch signed URL for profile picture
-    const fetchImageUrl = async () => {
-      setLoading(true);
+    if (!dbUser?.profilePic) {
+      // If profilePic is not available, use the placeholder
+      setProfilePic(null);
+      setLoading(false);
+      return;
+    }
 
-      if (!dbUser?.profilePic) {
-        // If profilePic is not available, use the placeholder
-        setProfilePic(null);
-        setLoading(false);
-        return;
-      }
-      
-      try {
-        const result = await getUrl({
-          path: dbUser.profilePic,
-          options: {
-            validateObjectExistence: true, 
-            expiresIn: null, // No expiration limit
-          },
-        });
-
-        if (result.url) {
-          setProfilePic(result?.url.toString());
-        }else {
-          setProfilePic(null); // Fallback to null if no URL is returned
-        }
-      } catch (error) {
-        console.log('Error fetching profile pic URL:', error);
-        setProfilePic(null); 
-      }finally {
-        setLoading(false);
-      }
-    };
-
-    useEffect(() => {
-      if (!dbUser?.profilePic || dbUser.profilePic.trim() === "") {
-        return;
-      }
-  
-      fetchImageUrl();
-  
-      const subscription = DataStore.observe(User).subscribe(({opType})=>{
-        if(opType === 'INSERT' || opType === 'UPDATE' || opType === 'DELETE'){
-          fetchImageUrl();
-        }
+    try {
+      const result = await getUrl({
+        path: dbUser.profilePic,
+        options: {
+          validateObjectExistence: true,
+          expiresIn: null, // No expiration limit
+        },
       });
-  
-      return () => subscription.unsubscribe();
-    }, [dbUser.profilePic]);
 
-    async function handleSignOut() {
-        try {
-            await signOut();
-        } catch (error) {
-            console.log('error signing out: ', error);
-        }
+      if (result.url) {
+        setProfilePic(result?.url.toString());
+      } else {
+        setProfilePic(null); // Fallback to null if no URL is returned
+      }
+    } catch (error) {
+      console.log("Error fetching profile pic URL:", error);
+      setProfilePic(null);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!dbUser?.profilePic || dbUser.profilePic.trim() === "") {
+      return;
     }
 
-    const onSignout = ()=>{
-        Alert.alert(
-          'Sign Out',
-          'Are you sure you want to sign out?',
-          [
-            {
-              text: "Cancel",
-              style: "cancel",
-              
-            },
-            {
-              text: "Yes",
-              onPress: () => handleSignOut(),
-            },
-          ],
-          { cancelable: true }
-        )
+    fetchImageUrl();
+
+    const subscription = DataStore.observe(User).subscribe(({ opType }) => {
+      if (opType === "INSERT" || opType === "UPDATE" || opType === "DELETE") {
+        fetchImageUrl();
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, [dbUser.profilePic]);
+
+  async function handleSignOut() {
+    try {
+      await signOut();
+    } catch (error) {
+      console.log("error signing out: ", error);
     }
+  }
+
+  const onSignout = () => {
+    Alert.alert(
+      "Sign Out",
+      "Are you sure you want to sign out?",
+      [
+        {
+          text: "Cancel",
+          style: "cancel",
+        },
+        {
+          text: "Yes",
+          onPress: () => handleSignOut(),
+        },
+      ],
+      { cancelable: true },
+    );
+  };
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Profile</Text>
+      {/* Header */}
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => router.back()}>
+          <Ionicons name="arrow-back" size={26} color="#111" />
+        </TouchableOpacity>
 
-      {/* Back Button */}
-      <TouchableOpacity onPress={()=>router.back()} style={styles.bckBtnCon}>
-            <Ionicons name={'arrow-back'} style={styles.bckBtnIcon}/>
-      </TouchableOpacity>
+        <Text style={styles.headerTitle}>Profile</Text>
 
-      {/* Sign out button */}
-      <TouchableOpacity style={styles.signoutBtn} onPress={onSignout}>
-        <Text style={styles.signoutTxt}>Sign Out</Text>
-      </TouchableOpacity>
+        <TouchableOpacity onPress={onSignout}>
+          <Ionicons name="log-out-outline" size={26} color="#E53935" />
+        </TouchableOpacity>
+      </View>
 
-      <ScrollView contentContainerStyle={styles.centerCon} showsVerticalScrollIndicator={false}>
-
-        {/* Profile Picture */}
-        <View style={styles.profilePicContainer}>
-          {loading || !profilePic  ? (
-            <Image 
-              source={Placeholder} 
-              style={styles.img}
-            /> // Show placeholder while loading
-          ) : (
-            <Image 
-              source={{ uri: profilePic }} 
-              style={styles.img} 
-              onError={() => setProfilePic(null)}
-              width={50}
-              height={50} 
-            />
-          )}
-        </View>
-
-        {/* Relevant Info Section */}
-        <View>
-            <Text style={styles.details}>{firstName}</Text>
-            <Text style={styles.details}>{phoneNumber}</Text>
-            <Text style={styles.details}>{address}</Text>
-        </View>
-
-        {/* Button Section */}
-        <View>
-            <View style={styles.mainBtnsCard}>
-                <TouchableOpacity style={styles.viewInfo} onPress={()=>router.push('/profile/reviewinfo')}>
-                    <Text style={styles.viewInfoText}>View Info</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity style={styles.editProfile} onPress={()=>router.push('/profile/editprofile')}>
-                    <Text style={styles.editProfileTxt}>Edit Profile</Text>
-                </TouchableOpacity>
+      <ScrollView showsVerticalScrollIndicator={false}>
+        {/* Avatar Section */}
+        <View style={styles.avatarSection}>
+          <View style={styles.avatarWrapper}>
+            {loading || !profilePic ? (
+              <Image source={Placeholder} style={styles.avatar} />
+            ) : (
+              <Image
+                source={{ uri: profilePic }}
+                style={styles.avatar}
+                onError={() => setProfilePic(null)}
+              />
+            )}
           </View>
+
+          <Text style={styles.name}>
+            {firstName} {lastName}
+          </Text>
+        </View>
+
+        {/* Info Card */}
+        <View style={styles.infoCard}>
+          <View style={styles.infoRow}>
+            <Ionicons name="call-outline" size={20} color="#555" />
+            <Text style={styles.infoText}>{phoneNumber}</Text>
+          </View>
+
+          <View style={styles.infoRow}>
+            <Ionicons name="location-outline" size={20} color="#555" />
+            <Text style={styles.infoText}>{address}</Text>
+          </View>
+        </View>
+
+        {/* Buttons */}
+        <View style={styles.buttonContainer}>
+          <TouchableOpacity
+            style={styles.primaryButton}
+            onPress={() => router.push("/profile/editprofile")}
+          >
+            <Text style={styles.primaryButtonText}>Edit Profile</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.secondaryButton}
+            onPress={() => router.push("/profile/reviewinfo")}
+          >
+            <Text style={styles.secondaryButtonText}>View Information</Text>
+          </TouchableOpacity>
         </View>
       </ScrollView>
     </View>
-  )
-}
+  );
+};
 
-export default MainProfile
+export default MainProfile;

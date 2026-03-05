@@ -1,127 +1,138 @@
-import { View, Text,TouchableOpacity, Alert, } from 'react-native';
-import React from 'react';
-import * as Clipboard from 'expo-clipboard';
-import styles from './styles';
-import { router } from 'expo-router';
+import { DataStore } from "aws-amplify/datastore";
+import { router } from "expo-router";
+import { Alert, Text, TouchableOpacity, View } from "react-native";
+import { Order } from "../../../src/models";
+import styles from "./styles";
 
-const OrderHistoryList = ({order, onDelete, onCancel}) => {
+const OrderHistoryList = ({ order, refreshOrders }) => {
+  const isLive = order.status === "ACCEPTED" || order.status === "PICKEDUP";
 
-  const goToOrderLiveUpdate = () =>{
-    if(order.status === 'ACCEPTED'|| order.status === 'PICKEDUP'){
-      router.push(`/screens/orderliveupdate/${order.id}`)
-    }
-  }
+  const goToLive = () => {
+    // if (isLive) {
+    // router.push(`/screens/orderliveupdate/${order.id}`);
+    router.push(`/screens/orderTrackingScreen/${order.id}`);
+    // }
+  };
 
-  const handleCopyPhoneNumber = async () => {
-    if (order.courier && order.courier.phoneNumber) {
-      await Clipboard.setStringAsync(order.courier.phoneNumber);
-      Alert.alert('Phone Number Copied', 'You can paste it into the dialer to make a call.');
+  const deleteOrder = async () => {
+    try {
+      const orderToDelete = await DataStore.query(Order, order.id);
+      if (orderToDelete) {
+        await DataStore.delete(orderToDelete);
+        refreshOrders();
+      }
+    } catch (error) {
+      console.log("Delete error:", error);
     }
   };
 
-  const getStatusText = (status) => {
-    if (status === 'DELIVERED') return 'Completed';
-    if (status === 'ACCEPTED') return 'Accepted';
-    return 'Pending';
+  const cancelOrder = async () => {
+    try {
+      const orderToCancel = await DataStore.query(Order, order.id);
+      if (orderToCancel) {
+        await DataStore.save(
+          Order.copyOf(orderToCancel, (updated) => {
+            updated.status = "READY_FOR_PICKUP";
+            updated.orderCourierId = null;
+          }),
+        );
+        refreshOrders();
+      }
+    } catch (error) {
+      console.log("Cancel error:", error);
+    }
+  };
+
+  const getStatusStyle = () => {
+    switch (order.status) {
+      case "DELIVERED":
+        return styles.statusDelivered;
+      case "ACCEPTED":
+      case "PICKEDUP":
+        return styles.statusActive;
+      case "CANCELLED":
+        return styles.statusCancelled;
+      default:
+        return styles.statusPending;
+    }
   };
 
   return (
-    <View style={styles.container}>
-      <TouchableOpacity onPress={goToOrderLiveUpdate}>
-        <Text style={styles.subHeading}>Date:</Text>
-        <Text style={styles.detail}>
-          {order?.createdAt ? order?.createdAt.substring(0,10) : ''}
-        </Text>
+    <TouchableOpacity
+      activeOpacity={0.95}
+      style={[styles.card, isLive && styles.cardActive]}
+      onPress={goToLive}
+    >
+      {/* Top Row */}
+      <View style={styles.topRow}>
+        <Text style={styles.date}>{order?.createdAt?.substring(0, 10)}</Text>
 
-        <Text style={styles.subHeading}>Recipient Name:</Text>
-        <Text style={styles.detail}>{order.recipientName}</Text>
-
-        <Text style={styles.subHeading}>Item Sent:</Text>
-        <Text  style={styles.detail}>{order.orderDetails}</Text>
-
-        <Text style={styles.subHeading}>Destination:</Text>
-        <Text  style={styles.detail}>
-          {order?.parcelDestination 
-            ?
-              order?.parcelDestination.length > 20 
-              ? `${order.parcelDestination.substring(0, 30)}...` 
-              : order.parcelDestination
-            : ''
-          }
-        </Text>
-
-        <Text style={styles.subHeading}>Status:</Text>
-        <View style={styles.statusRow}>
-          <Text style={styles.detail}>
-            {getStatusText(order.status)}
-          </Text>
-          {(order.status === 'DELIVERED' ||order.status === 'ACCEPTED') ? (
-              <View style={styles.greenIcon}/>
-            ):(
-              <View style={styles.redIcon}/>
-          )}
+        <View style={[styles.statusBadge, getStatusStyle()]}>
+          <Text style={styles.statusText}>{order.status}</Text>
         </View>
+      </View>
 
-        {/* Conditionally render courier details if available and status is not delivered */}
-        {order.courier && order.status !== 'DELIVERED' && (
-          <View>
-            <Text style={styles.subHeading}>Courier Name:</Text>
-            <Text  style={styles.detail}>{order.courier.firstName}</Text>
-            <Text style={styles.subHeading}>Courier Phone number:</Text>
-            <TouchableOpacity onPress={handleCopyPhoneNumber}>
-              <Text style={styles.detail}>{order.courier.phoneNumber}</Text>
-            </TouchableOpacity>
-          </View>
-        )}
+      {/* Main Content */}
+      <Text style={styles.recipient}>{order.recipientName}</Text>
+      <Text style={styles.details} numberOfLines={2}>
+        {order.orderDetails}
+      </Text>
 
-        <View style={styles.priceTypeRow}>
-          <View>
-            <Text style={styles.subHeading}>Price:</Text>
-            <Text  style={styles.priceType}>₦{order?.price?.toLocaleString()}</Text>
-          </View>
-          
-          <View>
-            <Text style={styles.subHeading}>Transport Type:</Text>
-            <Text  style={styles.priceType}>{order?.transportationType}</Text>
-          </View>
-        </View>
+      <View style={styles.divider} />
 
-        {/* Conditionally render courier details if available and status is not delivered */}
-        {order.status === 'READY_FOR_PICKUP' && (
-          <TouchableOpacity style={styles.deleteButtonCon} onPress={()=>{
+      {/* Bottom Row */}
+      <View style={styles.bottomRow}>
+        <Text style={styles.price}>₦{order?.totalPrice?.toLocaleString()}</Text>
+        <Text style={styles.transport}>{order.transportationType}</Text>
+      </View>
+
+      {/* READY_FOR_PICKUP → Delete */}
+      {order.status === "READY_FOR_PICKUP" && (
+        <TouchableOpacity
+          style={styles.deleteButton}
+          onPress={() =>
             Alert.alert(
-              'Delete Order',
-              'Are you sure you want to delete this order',
+              "Delete Order",
+              "Are you sure you want to permanently delete this order?",
               [
-                {text:'Cancel', style:'cancel'},
-                {text: 'Delete', style:'destructive', onPress:onDelete}
-              ]
-            );
-          }} >
-            <Text style={styles.deleteButtonTxt} >Delete Order</Text>
-          </TouchableOpacity>
-        )}
+                { text: "Cancel" },
+                {
+                  text: "Delete",
+                  style: "destructive",
+                  onPress: deleteOrder,
+                },
+              ],
+            )
+          }
+        >
+          <Text style={styles.deleteText}>Delete Order</Text>
+        </TouchableOpacity>
+      )}
 
-        {order.status === 'ACCEPTED' && (
-          <TouchableOpacity 
-            style={styles.cancelButtonCon} 
-            onPress={() => {
-              Alert.alert(
-                'Cancel Order',
-                'Are you sure you want to cancel this order?',
-                [
-                  { text: 'No', style: 'cancel' },
-                  { text: 'Yes', style: 'destructive', onPress: onCancel }
-                ]
-              );
-            }}
-          >
-            <Text style={styles.cancelButtonTxt}>Cancel Order</Text>
-          </TouchableOpacity>
-        )}
-      </TouchableOpacity>
-    </View>
-  )
-}
+      {/* ACCEPTED → Cancel */}
+      {order.status === "ACCEPTED" && (
+        <TouchableOpacity
+          style={styles.cancelButton}
+          onPress={() =>
+            Alert.alert(
+              "Cancel Delivery",
+              "Do you want to cancel this delivery?",
+              [
+                { text: "No" },
+                {
+                  text: "Yes",
+                  style: "destructive",
+                  onPress: cancelOrder,
+                },
+              ],
+            )
+          }
+        >
+          <Text style={styles.cancelText}>Cancel Delivery</Text>
+        </TouchableOpacity>
+      )}
+    </TouchableOpacity>
+  );
+};
 
-export default OrderHistoryList
+export default OrderHistoryList;

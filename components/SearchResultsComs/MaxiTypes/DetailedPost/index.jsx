@@ -1,70 +1,151 @@
-import { View, Text, TouchableOpacity, Image, FlatList, ScrollView, Dimensions} from 'react-native'
-import React from 'react'
-import PaymentComponent from '../MaxiPayment';
-import styles from './styles'
+import { useOrderContext } from "@/providers/OrderProvider";
+import { router, useLocalSearchParams } from "expo-router";
+import { useEffect, useState } from "react";
+import {
+  Dimensions,
+  Image,
+  ScrollView,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import styles from "./styles";
 
-const { width } = Dimensions.get('window');
+// Later:
+// import { DataStore } from "aws-amplify";
+// import { Courier } from "../../../src/models";
 
-const DetailedPost = ({maxitype}) => {
-    
+const { width } = Dimensions.get("window");
+
+const dummyFreightData = [
+  {
+    id: "1",
+    firstName: "Ibrahim",
+    transportationType: "MAXI",
+    vehicleClass: "FLATBED_10T",
+    model: "10 Ton Flatbed",
+    plateNumber: "YEN3943",
+    maxiDescription:
+      "Heavy machinery, containers, oversized cargo. Suitable for interstate industrial logistics and construction transport.",
+    isApproved: true,
+    isOnline: true,
+    maxiImages: [
+      require("../../../../assets/dummyMaxiImages/flatbed.jpg"),
+      require("../../../../assets/dummyMaxiImages/flatbed1.jpg"),
+      require("../../../../assets/dummyMaxiImages/flatbed2.jpg"),
+    ],
+  },
+  {
+    id: "2",
+    firstName: "Chinedu",
+    transportationType: "MAXI",
+    vehicleClass: "TIPPER_20T",
+    model: "20 Ton Tipper",
+    plateNumber: "LAG3803",
+    maxiDescription:
+      "Sand, granite, construction materials transport. Hydraulic lift enabled for offloading aggregates.",
+    isApproved: true,
+    isOnline: false,
+    maxiImages: [
+      require("../../../../assets/dummyMaxiImages/tipper.jpg"),
+      require("../../../../assets/dummyMaxiImages/tipper1.jpeg"),
+      require("../../../../assets/dummyMaxiImages/tipper2.jpeg"),
+    ],
+  },
+];
+
+const DetailedVehicleScreen = () => {
+  const { setVehicleClass, setTransportationType } = useOrderContext();
+  const { id } = useLocalSearchParams();
+  const [vehicle, setVehicle] = useState(null);
+
+  useEffect(() => {
+    // Later:
+    // DataStore.query(Courier, id)
+    const found = dummyFreightData.find((v) => v.id === id);
+    setVehicle(found);
+  }, [id]);
+
+  if (!vehicle) return null;
+
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Detailed Transportation</Text>
-
-      {/* Images */}
-      
-        <FlatList
+    <SafeAreaView style={styles.screen}>
+      <ScrollView showsVerticalScrollIndicator={false}>
+        {/* Image Carousel */}
+        <ScrollView
           horizontal
           pagingEnabled
-          snapToInterval={width}
-          snapToAlignment="center"
-          decelerationRate="fast"
           showsHorizontalScrollIndicator={false}
-          keyExtractor={(item,index)=>index.toString()}
-          data={maxitype.image}
-          renderItem={({item})=>(
-            <View style={styles.imgConatiner}>
-              <Image source={{uri: item}} style={styles.img}/>
-            </View>
-          )}
-        />
-      
-      <ScrollView showsVerticalScrollIndicator={false} style={styles.scrollSec}>
-        <Text style={styles.subHeading}>
-          Type of Vehicle:
-        </Text>
-        <Text style={styles.detail}>
-          {maxitype.vehicleType}
-        </Text>
+        >
+          {vehicle.maxiImages.map((img, index) => (
+            <Image key={index} source={img} style={{ width, height: 260 }} />
+          ))}
+        </ScrollView>
 
-        <Text style={styles.subHeading}>
-          Model:
-        </Text>
-        <Text style={styles.detail}>
-          {maxitype.model}
-        </Text>
+        {/* Vehicle Info Card */}
+        <View style={styles.card}>
+          <View style={styles.headerRow}>
+            <Text style={styles.model}>{vehicle.model}</Text>
 
-        {/* <Text style={styles.subHeading}>
-          Plate Number:
-        </Text>
-        <Text style={styles.detail}>
-          {maxitype.plateNumber}
-        </Text> */}
+            {vehicle.isApproved && (
+              <Text style={styles.verified}>✔ Verified</Text>
+            )}
+          </View>
 
-        <View>
-          <Text style={styles.subHeading}>Price:</Text>
-          <Text style={styles.detail}>{maxitype.price}</Text>
+          <Text style={styles.vehicleClass}>{vehicle.vehicleClass}</Text>
+
+          <Text style={styles.plate}>Plate Number: {vehicle.plateNumber}</Text>
+
+          {/* Availability */}
+          <View style={styles.availabilityRow}>
+            <View
+              style={[
+                styles.statusDot,
+                {
+                  backgroundColor: vehicle.isOnline ? "#22c55e" : "#9ca3af",
+                },
+              ]}
+            />
+            <Text style={styles.statusText}>
+              {vehicle.isOnline ? "Currently Available" : "Currently Offline"}
+            </Text>
+          </View>
+
+          {/* Divider */}
+          <View style={styles.divider} />
+
+          {/* Description */}
+          <Text style={styles.sectionTitle}>Vehicle Description</Text>
+          <Text style={styles.description}>{vehicle.maxiDescription}</Text>
+
+          <View style={styles.divider} />
+
+          {/* Driver */}
+          <Text style={styles.sectionTitle}>Driver</Text>
+          <Text style={styles.driverName}>{vehicle.firstName}</Text>
         </View>
       </ScrollView>
 
-      {/* Btn */}
+      {/* Bottom CTA */}
+      <View style={styles.bottomBar}>
+        <TouchableOpacity
+          style={[styles.requestBtn, !vehicle.isOnline && styles.disabledBtn]}
+          disabled={!vehicle.isOnline}
+          onPress={() => {
+            setVehicleClass(vehicle.vehicleClass);
+            setTransportationType(vehicle.transportationType);
 
-      <PaymentComponent/>
-      {/* <TouchableOpacity style={styles.btnContainer} onPress={()=>console.warn('order')}>
-        <Text style={styles.btnTxt}>Paynow</Text>
-      </TouchableOpacity> */}
-    </View>
-  )
-}
+            router.push("/screens/searchresults/maxicargodetails");
+          }}
+        >
+          <Text style={styles.requestText}>
+            {vehicle.isOnline ? "Request Maxi Quote" : "Driver Offline"}
+          </Text>
+        </TouchableOpacity>
+      </View>
+    </SafeAreaView>
+  );
+};
 
-export default DetailedPost;
+export default DetailedVehicleScreen;

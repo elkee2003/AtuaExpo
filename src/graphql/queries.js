@@ -236,17 +236,71 @@ export const getOrder = /* GraphQL */ `
       id
       recipientName
       recipientNumber
+      recipientNumber2
       orderDetails
-      parcelOrigin
-      parcelOriginLat
-      parcelOriginLng
-      parcelDestination
-      parcelDestinationLat
-      parcelDestinationLng
+      originAddress
+      originState
+      originLat
+      originLng
+      destinationAddress
+      destinationState
+      destinationLat
+      destinationLng
+      tripType
+      distance
       transportationType
       status
-      price
-      courierFee
+      loadCategory
+      isInterState
+      estimatedMinPrice
+      estimatedMaxPrice
+      initialOfferPrice
+      currentOfferPrice
+      lastOfferBy
+      loadingFee
+      unloadingFee
+      totalPrice
+      courierEarnings
+      commissionAmount
+      platformFee
+      platformServiceRevenue
+      vatAmount
+      platformNetRevenue
+      deliveryVerificationCode
+      declaredWeightBracket
+      senderPreTransferPhotos
+      senderPreTransferVideo
+      senderPreTransferRecordedAt
+      courierPreTransferPhotos
+      courierPreTransferVideo
+      courierPreTransferRecordedAt
+      courierPostLoadingPhotos
+      courierPostLoadingVideo
+      dropoffArrivalPhotos
+      dropoffArrivalVideo
+      postDeliveryPhotos
+      postDeliveryVideo
+      pickupLoadingResponsibility
+      pickupFloorLevel
+      pickupFloorLevelPrice
+      pickupHasElevator
+      dropoffUnloadingResponsibility
+      dropoffFloorLevel
+      dropoffFloorLevelPrice
+      dropoffHasElevator
+      acceptedAt
+      arrivedPickupAt
+      loadingStartedAt
+      tripStartedAt
+      arrivedDropoffAt
+      unloadingCompletedAt
+      logisticsCompanyId
+      waybillNumber
+      waybillPhoto
+      logisticsTrackingCode
+      logisticsTrackingStatus
+      handedOverToLogisticsAt
+      logisticsIntakeConfirmedAt
       userID
       Courier {
         id
@@ -260,16 +314,17 @@ export const getOrder = /* GraphQL */ `
         phoneNumber
         email
         courierNIN
-        courierBVN
+        courierNINImage
+        bankCode
         bankName
         accountName
         accountNumber
         transportationType
-        vehicleType
+        vehicleClass
         model
         plateNumber
         maxiImages
-        maxiTransportPrice
+        maxiDescription
         guarantorName
         guarantorLastName
         guarantorProfession
@@ -278,10 +333,13 @@ export const getOrder = /* GraphQL */ `
         guarantorAddress
         guarantorEmail
         guarantorNIN
+        guarantorNINImage
         lat
         lng
         heading
         push_token
+        isApproved
+        approvedById
         createdAt
         updatedAt
         _version
@@ -310,17 +368,71 @@ export const listOrders = /* GraphQL */ `
         id
         recipientName
         recipientNumber
+        recipientNumber2
         orderDetails
-        parcelOrigin
-        parcelOriginLat
-        parcelOriginLng
-        parcelDestination
-        parcelDestinationLat
-        parcelDestinationLng
+        originAddress
+        originState
+        originLat
+        originLng
+        destinationAddress
+        destinationState
+        destinationLat
+        destinationLng
+        tripType
+        distance
         transportationType
         status
-        price
-        courierFee
+        loadCategory
+        isInterState
+        estimatedMinPrice
+        estimatedMaxPrice
+        initialOfferPrice
+        currentOfferPrice
+        lastOfferBy
+        loadingFee
+        unloadingFee
+        totalPrice
+        courierEarnings
+        commissionAmount
+        platformFee
+        platformServiceRevenue
+        vatAmount
+        platformNetRevenue
+        deliveryVerificationCode
+        declaredWeightBracket
+        senderPreTransferPhotos
+        senderPreTransferVideo
+        senderPreTransferRecordedAt
+        courierPreTransferPhotos
+        courierPreTransferVideo
+        courierPreTransferRecordedAt
+        courierPostLoadingPhotos
+        courierPostLoadingVideo
+        dropoffArrivalPhotos
+        dropoffArrivalVideo
+        postDeliveryPhotos
+        postDeliveryVideo
+        pickupLoadingResponsibility
+        pickupFloorLevel
+        pickupFloorLevelPrice
+        pickupHasElevator
+        dropoffUnloadingResponsibility
+        dropoffFloorLevel
+        dropoffFloorLevelPrice
+        dropoffHasElevator
+        acceptedAt
+        arrivedPickupAt
+        loadingStartedAt
+        tripStartedAt
+        arrivedDropoffAt
+        unloadingCompletedAt
+        logisticsCompanyId
+        waybillNumber
+        waybillPhoto
+        logisticsTrackingCode
+        logisticsTrackingStatus
+        handedOverToLogisticsAt
+        logisticsIntakeConfirmedAt
         userID
         createdAt
         updatedAt
@@ -353,17 +465,71 @@ export const syncOrders = /* GraphQL */ `
         id
         recipientName
         recipientNumber
+        recipientNumber2
         orderDetails
-        parcelOrigin
-        parcelOriginLat
-        parcelOriginLng
-        parcelDestination
-        parcelDestinationLat
-        parcelDestinationLng
+        originAddress
+        originState
+        originLat
+        originLng
+        destinationAddress
+        destinationState
+        destinationLat
+        destinationLng
+        tripType
+        distance
         transportationType
         status
-        price
-        courierFee
+        loadCategory
+        isInterState
+        estimatedMinPrice
+        estimatedMaxPrice
+        initialOfferPrice
+        currentOfferPrice
+        lastOfferBy
+        loadingFee
+        unloadingFee
+        totalPrice
+        courierEarnings
+        commissionAmount
+        platformFee
+        platformServiceRevenue
+        vatAmount
+        platformNetRevenue
+        deliveryVerificationCode
+        declaredWeightBracket
+        senderPreTransferPhotos
+        senderPreTransferVideo
+        senderPreTransferRecordedAt
+        courierPreTransferPhotos
+        courierPreTransferVideo
+        courierPreTransferRecordedAt
+        courierPostLoadingPhotos
+        courierPostLoadingVideo
+        dropoffArrivalPhotos
+        dropoffArrivalVideo
+        postDeliveryPhotos
+        postDeliveryVideo
+        pickupLoadingResponsibility
+        pickupFloorLevel
+        pickupFloorLevelPrice
+        pickupHasElevator
+        dropoffUnloadingResponsibility
+        dropoffFloorLevel
+        dropoffFloorLevelPrice
+        dropoffHasElevator
+        acceptedAt
+        arrivedPickupAt
+        loadingStartedAt
+        tripStartedAt
+        arrivedDropoffAt
+        unloadingCompletedAt
+        logisticsCompanyId
+        waybillNumber
+        waybillPhoto
+        logisticsTrackingCode
+        logisticsTrackingStatus
+        handedOverToLogisticsAt
+        logisticsIntakeConfirmedAt
         userID
         createdAt
         updatedAt
@@ -398,17 +564,71 @@ export const ordersByUserID = /* GraphQL */ `
         id
         recipientName
         recipientNumber
+        recipientNumber2
         orderDetails
-        parcelOrigin
-        parcelOriginLat
-        parcelOriginLng
-        parcelDestination
-        parcelDestinationLat
-        parcelDestinationLng
+        originAddress
+        originState
+        originLat
+        originLng
+        destinationAddress
+        destinationState
+        destinationLat
+        destinationLng
+        tripType
+        distance
         transportationType
         status
-        price
-        courierFee
+        loadCategory
+        isInterState
+        estimatedMinPrice
+        estimatedMaxPrice
+        initialOfferPrice
+        currentOfferPrice
+        lastOfferBy
+        loadingFee
+        unloadingFee
+        totalPrice
+        courierEarnings
+        commissionAmount
+        platformFee
+        platformServiceRevenue
+        vatAmount
+        platformNetRevenue
+        deliveryVerificationCode
+        declaredWeightBracket
+        senderPreTransferPhotos
+        senderPreTransferVideo
+        senderPreTransferRecordedAt
+        courierPreTransferPhotos
+        courierPreTransferVideo
+        courierPreTransferRecordedAt
+        courierPostLoadingPhotos
+        courierPostLoadingVideo
+        dropoffArrivalPhotos
+        dropoffArrivalVideo
+        postDeliveryPhotos
+        postDeliveryVideo
+        pickupLoadingResponsibility
+        pickupFloorLevel
+        pickupFloorLevelPrice
+        pickupHasElevator
+        dropoffUnloadingResponsibility
+        dropoffFloorLevel
+        dropoffFloorLevelPrice
+        dropoffHasElevator
+        acceptedAt
+        arrivedPickupAt
+        loadingStartedAt
+        tripStartedAt
+        arrivedDropoffAt
+        unloadingCompletedAt
+        logisticsCompanyId
+        waybillNumber
+        waybillPhoto
+        logisticsTrackingCode
+        logisticsTrackingStatus
+        handedOverToLogisticsAt
+        logisticsIntakeConfirmedAt
         userID
         createdAt
         updatedAt
@@ -438,16 +658,17 @@ export const getCourier = /* GraphQL */ `
       phoneNumber
       email
       courierNIN
-      courierBVN
+      courierNINImage
+      bankCode
       bankName
       accountName
       accountNumber
       transportationType
-      vehicleType
+      vehicleClass
       model
       plateNumber
       maxiImages
-      maxiTransportPrice
+      maxiDescription
       guarantorName
       guarantorLastName
       guarantorProfession
@@ -456,10 +677,13 @@ export const getCourier = /* GraphQL */ `
       guarantorAddress
       guarantorEmail
       guarantorNIN
+      guarantorNINImage
       lat
       lng
       heading
       push_token
+      isApproved
+      approvedById
       createdAt
       updatedAt
       _version
@@ -488,16 +712,17 @@ export const listCouriers = /* GraphQL */ `
         phoneNumber
         email
         courierNIN
-        courierBVN
+        courierNINImage
+        bankCode
         bankName
         accountName
         accountNumber
         transportationType
-        vehicleType
+        vehicleClass
         model
         plateNumber
         maxiImages
-        maxiTransportPrice
+        maxiDescription
         guarantorName
         guarantorLastName
         guarantorProfession
@@ -506,10 +731,13 @@ export const listCouriers = /* GraphQL */ `
         guarantorAddress
         guarantorEmail
         guarantorNIN
+        guarantorNINImage
         lat
         lng
         heading
         push_token
+        isApproved
+        approvedById
         createdAt
         updatedAt
         _version
@@ -548,16 +776,17 @@ export const syncCouriers = /* GraphQL */ `
         phoneNumber
         email
         courierNIN
-        courierBVN
+        courierNINImage
+        bankCode
         bankName
         accountName
         accountNumber
         transportationType
-        vehicleType
+        vehicleClass
         model
         plateNumber
         maxiImages
-        maxiTransportPrice
+        maxiDescription
         guarantorName
         guarantorLastName
         guarantorProfession
@@ -566,10 +795,13 @@ export const syncCouriers = /* GraphQL */ `
         guarantorAddress
         guarantorEmail
         guarantorNIN
+        guarantorNINImage
         lat
         lng
         heading
         push_token
+        isApproved
+        approvedById
         createdAt
         updatedAt
         _version
@@ -590,6 +822,7 @@ export const getUser = /* GraphQL */ `
       sub
       firstName
       lastName
+      email
       phoneNumber
       profilePic
       address
@@ -623,6 +856,7 @@ export const listUsers = /* GraphQL */ `
         sub
         firstName
         lastName
+        email
         phoneNumber
         profilePic
         address
@@ -661,6 +895,7 @@ export const syncUsers = /* GraphQL */ `
         sub
         firstName
         lastName
+        email
         phoneNumber
         profilePic
         address

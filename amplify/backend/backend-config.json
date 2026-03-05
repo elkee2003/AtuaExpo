@@ -23,26 +23,33 @@
     }
   },
   "auth": {
-    "Atua": {
+    "atuac06ab999c06ab999": {
       "customAuth": false,
-      "dependsOn": [],
+      "dependsOn": [
+        {
+          "attributes": [
+            "Arn",
+            "Name"
+          ],
+          "category": "function",
+          "resourceName": "atuac06ab999c06ab999PostConfirmation",
+          "triggerProvider": "Cognito"
+        }
+      ],
       "frontendAuthConfig": {
         "mfaConfiguration": "OFF",
         "mfaTypes": [
           "SMS"
         ],
         "passwordProtectionSettings": {
-          "passwordPolicyCharacters": [
-            "REQUIRES_LOWERCASE",
-            "REQUIRES_NUMBERS"
-          ],
+          "passwordPolicyCharacters": [],
           "passwordPolicyMinLength": 8
         },
-        "signupAttributes": [],
-        "socialProviders": [],
-        "usernameAttributes": [
+        "signupAttributes": [
           "EMAIL"
         ],
+        "socialProviders": [],
+        "usernameAttributes": [],
         "verificationMechanisms": [
           "EMAIL"
         ]
@@ -51,8 +58,63 @@
       "service": "Cognito"
     }
   },
+  "function": {
+    "atuac06ab999c06ab999PostConfirmation": {
+      "build": true,
+      "providerPlugin": "awscloudformation",
+      "service": "Lambda"
+    },
+    "checkUserGroup": {
+      "build": true,
+      "dependsOn": [
+        {
+          "attributes": [
+            "UserPoolId"
+          ],
+          "category": "auth",
+          "resourceName": "atuac06ab999c06ab999"
+        }
+      ],
+      "providerPlugin": "awscloudformation",
+      "service": "Lambda"
+    }
+  },
+  "parameters": {
+    "AMPLIFY_function_atuac06ab999c06ab999PostConfirmation_deploymentBucketName": {
+      "usedBy": [
+        {
+          "category": "function",
+          "resourceName": "atuac06ab999c06ab999PostConfirmation"
+        }
+      ]
+    },
+    "AMPLIFY_function_atuac06ab999c06ab999PostConfirmation_s3Key": {
+      "usedBy": [
+        {
+          "category": "function",
+          "resourceName": "atuac06ab999c06ab999PostConfirmation"
+        }
+      ]
+    },
+    "AMPLIFY_function_checkUserGroup_deploymentBucketName": {
+      "usedBy": [
+        {
+          "category": "function",
+          "resourceName": "checkUserGroup"
+        }
+      ]
+    },
+    "AMPLIFY_function_checkUserGroup_s3Key": {
+      "usedBy": [
+        {
+          "category": "function",
+          "resourceName": "checkUserGroup"
+        }
+      ]
+    }
+  },
   "storage": {
-    "s3atuastorage10235b9d": {
+    "atuaStorage": {
       "dependsOn": [],
       "providerPlugin": "awscloudformation",
       "service": "S3"

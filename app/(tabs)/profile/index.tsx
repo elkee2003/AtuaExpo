@@ -1,23 +1,18 @@
-import { View, Text } from 'react-native'
-import React from 'react'
-import EditProfile from '../../../components/ProfileComs/EditProfile'
-import MainProfile from '../../../components/ProfileComs/MainProfile'
-import { useAuthContext } from '@/providers/AuthProvider'
+import { useAuthContext } from "@/providers/AuthProvider";
+import React from "react";
+import { View } from "react-native";
+import EditProfile from "../../../components/ProfileComs/EditProfile";
+import MainProfile from "../../../components/ProfileComs/MainProfile";
 
 const ProfilePage = () => {
-
-  const {dbUser} = useAuthContext()
+  const { dbUser } = useAuthContext();
 
   return (
-    <View style={{flex:1}}>
+    <View style={{ flex: 1 }}>
       {/* Note that its mainprofile thats meant to be here */}
-      {dbUser ?
-        <MainProfile/>
-      :
-        <EditProfile/>
-      }
+      {dbUser ? <MainProfile /> : <EditProfile />}
     </View>
-  )
-}
+  );
+};
 
-export default ProfilePage
+export default ProfilePage;

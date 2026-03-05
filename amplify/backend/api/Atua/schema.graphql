@@ -1,4 +1,4 @@
-type CompanyVehicle @model @auth(rules: [{allow: public}]) {
+type CompanyVehicle @model @auth(rules: [{ allow: public }]) {
   id: ID!
   vehicleType: String
   model: String
@@ -6,7 +6,7 @@ type CompanyVehicle @model @auth(rules: [{allow: public}]) {
   couriercompanyID: ID! @index(name: "byCourierCompany")
 }
 
-type CourierCompany @model @auth(rules: [{allow: public}]) {
+type CourierCompany @model @auth(rules: [{ allow: public }]) {
   id: ID!
   sub: String!
   firstName: String!
@@ -22,38 +22,134 @@ type CourierCompany @model @auth(rules: [{allow: public}]) {
   adminLastName: String
   adminPhoneNumber: String
   bankName: String
-  CompanyVehicles: [CompanyVehicle] @hasMany(indexName: "byCourierCompany", fields: ["id"])
+  CompanyVehicles: [CompanyVehicle]
+    @hasMany(indexName: "byCourierCompany", fields: ["id"])
   accountNumber: String
   push_token: String
 }
 
 enum OrderStatus {
+  BIDDING
   READY_FOR_PICKUP
   ACCEPTED
-  PICKEDUP
+  ARRIVED_PICKUP
+  LOADING
+  IN_TRANSIT
+  ARRIVED_DROPOFF
+  UNLOADING
   DELIVERED
+  HANDOVER_TO_LOGISTICS
+  IN_LOGISTICS_TRANSIT
+  CANCELLED
+  DISPUTED
 }
 
-type Order @model @auth(rules: [{allow: public}]) {
+type Order @model @auth(rules: [{ allow: public }]) {
   id: ID!
+
+  # ---------------- BASIC INFO ----------------
   recipientName: String
   recipientNumber: String
+  recipientNumber2: String
   orderDetails: String
-  parcelOrigin: String
-  parcelOriginLat: Float
-  parcelOriginLng: Float
-  parcelDestination: String
-  parcelDestinationLat: Float
-  parcelDestinationLng: Float
+
+  originAddress: String
+  originState: String
+  originLat: Float
+  originLng: Float
+
+  destinationAddress: String
+  destinationState: String
+  destinationLat: Float
+  destinationLng: Float
+
+  tripType: String
+  distance: String
+
   transportationType: String
   status: OrderStatus
-  price: Float
-  courierFee: Float
+
+  # ---------------- PRICING ----------------
+  # ------- FOR MAXI -------
+  loadCategory: String
+  isInterState: Boolean
+  estimatedMinPrice: Float
+  estimatedMaxPrice: Float
+
+  initialOfferPrice: Float # first price user sends
+  currentOfferPrice: Float # latest active offer
+  lastOfferBy: String # "USER" or "COURIER"
+  loadingFee: Float
+  unloadingFee: Float
+
+  # ------- General -------
+  totalPrice: Float # final agreed price
+  courierEarnings: Float
+  commissionAmount: Float
+  platformFee: Float
+  platformServiceRevenue: Float # commissionAmount + platformFee
+  vatAmount: Float
+  platformNetRevenue: Float # platformServiceRevenue - vatAmount
+  # ---------------- VERIFICATION ----------------
+  deliveryVerificationCode: String
+
+  # ---------------- WEIGHT ----------------
+  declaredWeightBracket: String
+
+  # Interstate (Courier + Logistics Company Flow)
+
+  # ---------------- CUSTODY EVIDENCE ----------------
+  senderPreTransferPhotos: [String]
+  senderPreTransferVideo: String
+  senderPreTransferRecordedAt: AWSDateTime
+
+  courierPreTransferPhotos: [String]
+  courierPreTransferVideo: String
+  courierPreTransferRecordedAt: AWSDateTime
+
+  courierPostLoadingPhotos: [String]
+  courierPostLoadingVideo: String
+
+  dropoffArrivalPhotos: [String]
+  dropoffArrivalVideo: String
+
+  postDeliveryPhotos: [String]
+  postDeliveryVideo: String
+
+  # ---------------- LOADING DETAILS ----------------
+  pickupLoadingResponsibility: String
+  pickupFloorLevel: String
+  pickupFloorLevelPrice: Float
+  pickupHasElevator: Boolean
+
+  dropoffUnloadingResponsibility: String
+  dropoffFloorLevel: String
+  dropoffFloorLevelPrice: Float
+  dropoffHasElevator: Boolean
+
+  # ---------------- TIME EVENTS ----------------
+  acceptedAt: AWSDateTime
+  arrivedPickupAt: AWSDateTime
+  loadingStartedAt: AWSDateTime
+  tripStartedAt: AWSDateTime
+  arrivedDropoffAt: AWSDateTime
+  unloadingCompletedAt: AWSDateTime
+
+  # ---------------- LOGISTICS COMPANY (INTERSTATE) ----------------
+  logisticsCompanyId: ID
+  waybillNumber: String
+  waybillPhoto: String
+  logisticsTrackingCode: String
+  logisticsTrackingStatus: String
+  handedOverToLogisticsAt: AWSDateTime
+  logisticsIntakeConfirmedAt: AWSDateTime
+
+  # ---------------- RELATIONS ----------------
   userID: ID! @index(name: "byUser")
   Courier: Courier @hasOne
 }
 
-type Courier @model @auth(rules: [{allow: public}]) {
+type Courier @model @auth(rules: [{ allow: public }]) {
   id: ID!
   sub: String!
   isOnline: Boolean
@@ -65,16 +161,17 @@ type Courier @model @auth(rules: [{allow: public}]) {
   phoneNumber: String
   email: String
   courierNIN: String
-  courierBVN: String
+  courierNINImage: String
+  bankCode: String
   bankName: String
   accountName: String
   accountNumber: String
   transportationType: String
-  vehicleType: String
+  vehicleClass: String
   model: String
   plateNumber: String
   maxiImages: [String]
-  maxiTransportPrice: Float
+  maxiDescription: String
   guarantorName: String
   guarantorLastName: String
   guarantorProfession: String
@@ -83,17 +180,21 @@ type Courier @model @auth(rules: [{allow: public}]) {
   guarantorAddress: String
   guarantorEmail: String
   guarantorNIN: String
+  guarantorNINImage: String
   lat: Float
   lng: Float
   heading: Float
   push_token: String
+  isApproved: Boolean
+  approvedById: String
 }
 
-type User @model @auth(rules: [{allow: public}]) {
+type User @model @auth(rules: [{ allow: public }]) {
   id: ID!
   sub: String!
   firstName: String!
   lastName: String
+  email: String
   phoneNumber: String
   profilePic: String
   address: String
@@ -103,4 +204,3 @@ type User @model @auth(rules: [{allow: public}]) {
   push_token: String
   Orders: [Order] @hasMany(indexName: "byUser", fields: ["id"])
 }
- 

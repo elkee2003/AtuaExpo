@@ -19,6 +19,13 @@ web-build/
 expo-env.d.ts
 # @end expo-cli
 
+
+# google service
+/google-services.json
+
+# android folder
+/android
+
 # api key
 /keys.jsx
 
@@ -43,9 +50,3 @@ amplifytools.xcconfig
 .secret-*
 **.sample
 #amplify-do-not-edit-end
-
-# api key
-/keys.jsx
-
-# Google services
-./google-services.json

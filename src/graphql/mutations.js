@@ -181,17 +181,71 @@ export const createOrder = /* GraphQL */ `
       id
       recipientName
       recipientNumber
+      recipientNumber2
       orderDetails
-      parcelOrigin
-      parcelOriginLat
-      parcelOriginLng
-      parcelDestination
-      parcelDestinationLat
-      parcelDestinationLng
+      originAddress
+      originState
+      originLat
+      originLng
+      destinationAddress
+      destinationState
+      destinationLat
+      destinationLng
+      tripType
+      distance
       transportationType
       status
-      price
-      courierFee
+      loadCategory
+      isInterState
+      estimatedMinPrice
+      estimatedMaxPrice
+      initialOfferPrice
+      currentOfferPrice
+      lastOfferBy
+      loadingFee
+      unloadingFee
+      totalPrice
+      courierEarnings
+      commissionAmount
+      platformFee
+      platformServiceRevenue
+      vatAmount
+      platformNetRevenue
+      deliveryVerificationCode
+      declaredWeightBracket
+      senderPreTransferPhotos
+      senderPreTransferVideo
+      senderPreTransferRecordedAt
+      courierPreTransferPhotos
+      courierPreTransferVideo
+      courierPreTransferRecordedAt
+      courierPostLoadingPhotos
+      courierPostLoadingVideo
+      dropoffArrivalPhotos
+      dropoffArrivalVideo
+      postDeliveryPhotos
+      postDeliveryVideo
+      pickupLoadingResponsibility
+      pickupFloorLevel
+      pickupFloorLevelPrice
+      pickupHasElevator
+      dropoffUnloadingResponsibility
+      dropoffFloorLevel
+      dropoffFloorLevelPrice
+      dropoffHasElevator
+      acceptedAt
+      arrivedPickupAt
+      loadingStartedAt
+      tripStartedAt
+      arrivedDropoffAt
+      unloadingCompletedAt
+      logisticsCompanyId
+      waybillNumber
+      waybillPhoto
+      logisticsTrackingCode
+      logisticsTrackingStatus
+      handedOverToLogisticsAt
+      logisticsIntakeConfirmedAt
       userID
       Courier {
         id
@@ -205,16 +259,17 @@ export const createOrder = /* GraphQL */ `
         phoneNumber
         email
         courierNIN
-        courierBVN
+        courierNINImage
+        bankCode
         bankName
         accountName
         accountNumber
         transportationType
-        vehicleType
+        vehicleClass
         model
         plateNumber
         maxiImages
-        maxiTransportPrice
+        maxiDescription
         guarantorName
         guarantorLastName
         guarantorProfession
@@ -223,10 +278,13 @@ export const createOrder = /* GraphQL */ `
         guarantorAddress
         guarantorEmail
         guarantorNIN
+        guarantorNINImage
         lat
         lng
         heading
         push_token
+        isApproved
+        approvedById
         createdAt
         updatedAt
         _version
@@ -253,17 +311,71 @@ export const updateOrder = /* GraphQL */ `
       id
       recipientName
       recipientNumber
+      recipientNumber2
       orderDetails
-      parcelOrigin
-      parcelOriginLat
-      parcelOriginLng
-      parcelDestination
-      parcelDestinationLat
-      parcelDestinationLng
+      originAddress
+      originState
+      originLat
+      originLng
+      destinationAddress
+      destinationState
+      destinationLat
+      destinationLng
+      tripType
+      distance
       transportationType
       status
-      price
-      courierFee
+      loadCategory
+      isInterState
+      estimatedMinPrice
+      estimatedMaxPrice
+      initialOfferPrice
+      currentOfferPrice
+      lastOfferBy
+      loadingFee
+      unloadingFee
+      totalPrice
+      courierEarnings
+      commissionAmount
+      platformFee
+      platformServiceRevenue
+      vatAmount
+      platformNetRevenue
+      deliveryVerificationCode
+      declaredWeightBracket
+      senderPreTransferPhotos
+      senderPreTransferVideo
+      senderPreTransferRecordedAt
+      courierPreTransferPhotos
+      courierPreTransferVideo
+      courierPreTransferRecordedAt
+      courierPostLoadingPhotos
+      courierPostLoadingVideo
+      dropoffArrivalPhotos
+      dropoffArrivalVideo
+      postDeliveryPhotos
+      postDeliveryVideo
+      pickupLoadingResponsibility
+      pickupFloorLevel
+      pickupFloorLevelPrice
+      pickupHasElevator
+      dropoffUnloadingResponsibility
+      dropoffFloorLevel
+      dropoffFloorLevelPrice
+      dropoffHasElevator
+      acceptedAt
+      arrivedPickupAt
+      loadingStartedAt
+      tripStartedAt
+      arrivedDropoffAt
+      unloadingCompletedAt
+      logisticsCompanyId
+      waybillNumber
+      waybillPhoto
+      logisticsTrackingCode
+      logisticsTrackingStatus
+      handedOverToLogisticsAt
+      logisticsIntakeConfirmedAt
       userID
       Courier {
         id
@@ -277,16 +389,17 @@ export const updateOrder = /* GraphQL */ `
         phoneNumber
         email
         courierNIN
-        courierBVN
+        courierNINImage
+        bankCode
         bankName
         accountName
         accountNumber
         transportationType
-        vehicleType
+        vehicleClass
         model
         plateNumber
         maxiImages
-        maxiTransportPrice
+        maxiDescription
         guarantorName
         guarantorLastName
         guarantorProfession
@@ -295,10 +408,13 @@ export const updateOrder = /* GraphQL */ `
         guarantorAddress
         guarantorEmail
         guarantorNIN
+        guarantorNINImage
         lat
         lng
         heading
         push_token
+        isApproved
+        approvedById
         createdAt
         updatedAt
         _version
@@ -325,17 +441,71 @@ export const deleteOrder = /* GraphQL */ `
       id
       recipientName
       recipientNumber
+      recipientNumber2
       orderDetails
-      parcelOrigin
-      parcelOriginLat
-      parcelOriginLng
-      parcelDestination
-      parcelDestinationLat
-      parcelDestinationLng
+      originAddress
+      originState
+      originLat
+      originLng
+      destinationAddress
+      destinationState
+      destinationLat
+      destinationLng
+      tripType
+      distance
       transportationType
       status
-      price
-      courierFee
+      loadCategory
+      isInterState
+      estimatedMinPrice
+      estimatedMaxPrice
+      initialOfferPrice
+      currentOfferPrice
+      lastOfferBy
+      loadingFee
+      unloadingFee
+      totalPrice
+      courierEarnings
+      commissionAmount
+      platformFee
+      platformServiceRevenue
+      vatAmount
+      platformNetRevenue
+      deliveryVerificationCode
+      declaredWeightBracket
+      senderPreTransferPhotos
+      senderPreTransferVideo
+      senderPreTransferRecordedAt
+      courierPreTransferPhotos
+      courierPreTransferVideo
+      courierPreTransferRecordedAt
+      courierPostLoadingPhotos
+      courierPostLoadingVideo
+      dropoffArrivalPhotos
+      dropoffArrivalVideo
+      postDeliveryPhotos
+      postDeliveryVideo
+      pickupLoadingResponsibility
+      pickupFloorLevel
+      pickupFloorLevelPrice
+      pickupHasElevator
+      dropoffUnloadingResponsibility
+      dropoffFloorLevel
+      dropoffFloorLevelPrice
+      dropoffHasElevator
+      acceptedAt
+      arrivedPickupAt
+      loadingStartedAt
+      tripStartedAt
+      arrivedDropoffAt
+      unloadingCompletedAt
+      logisticsCompanyId
+      waybillNumber
+      waybillPhoto
+      logisticsTrackingCode
+      logisticsTrackingStatus
+      handedOverToLogisticsAt
+      logisticsIntakeConfirmedAt
       userID
       Courier {
         id
@@ -349,16 +519,17 @@ export const deleteOrder = /* GraphQL */ `
         phoneNumber
         email
         courierNIN
-        courierBVN
+        courierNINImage
+        bankCode
         bankName
         accountName
         accountNumber
         transportationType
-        vehicleType
+        vehicleClass
         model
         plateNumber
         maxiImages
-        maxiTransportPrice
+        maxiDescription
         guarantorName
         guarantorLastName
         guarantorProfession
@@ -367,10 +538,13 @@ export const deleteOrder = /* GraphQL */ `
         guarantorAddress
         guarantorEmail
         guarantorNIN
+        guarantorNINImage
         lat
         lng
         heading
         push_token
+        isApproved
+        approvedById
         createdAt
         updatedAt
         _version
@@ -405,16 +579,17 @@ export const createCourier = /* GraphQL */ `
       phoneNumber
       email
       courierNIN
-      courierBVN
+      courierNINImage
+      bankCode
       bankName
       accountName
       accountNumber
       transportationType
-      vehicleType
+      vehicleClass
       model
       plateNumber
       maxiImages
-      maxiTransportPrice
+      maxiDescription
       guarantorName
       guarantorLastName
       guarantorProfession
@@ -423,10 +598,13 @@ export const createCourier = /* GraphQL */ `
       guarantorAddress
       guarantorEmail
       guarantorNIN
+      guarantorNINImage
       lat
       lng
       heading
       push_token
+      isApproved
+      approvedById
       createdAt
       updatedAt
       _version
@@ -453,16 +631,17 @@ export const updateCourier = /* GraphQL */ `
       phoneNumber
       email
       courierNIN
-      courierBVN
+      courierNINImage
+      bankCode
       bankName
       accountName
       accountNumber
       transportationType
-      vehicleType
+      vehicleClass
       model
       plateNumber
       maxiImages
-      maxiTransportPrice
+      maxiDescription
       guarantorName
       guarantorLastName
       guarantorProfession
@@ -471,10 +650,13 @@ export const updateCourier = /* GraphQL */ `
       guarantorAddress
       guarantorEmail
       guarantorNIN
+      guarantorNINImage
       lat
       lng
       heading
       push_token
+      isApproved
+      approvedById
       createdAt
       updatedAt
       _version
@@ -501,16 +683,17 @@ export const deleteCourier = /* GraphQL */ `
       phoneNumber
       email
       courierNIN
-      courierBVN
+      courierNINImage
+      bankCode
       bankName
       accountName
       accountNumber
       transportationType
-      vehicleType
+      vehicleClass
       model
       plateNumber
       maxiImages
-      maxiTransportPrice
+      maxiDescription
       guarantorName
       guarantorLastName
       guarantorProfession
@@ -519,10 +702,13 @@ export const deleteCourier = /* GraphQL */ `
       guarantorAddress
       guarantorEmail
       guarantorNIN
+      guarantorNINImage
       lat
       lng
       heading
       push_token
+      isApproved
+      approvedById
       createdAt
       updatedAt
       _version
@@ -542,6 +728,7 @@ export const createUser = /* GraphQL */ `
       sub
       firstName
       lastName
+      email
       phoneNumber
       profilePic
       address
@@ -573,6 +760,7 @@ export const updateUser = /* GraphQL */ `
       sub
       firstName
       lastName
+      email
       phoneNumber
       profilePic
       address
@@ -604,6 +792,7 @@ export const deleteUser = /* GraphQL */ `
       sub
       firstName
       lastName
+      email
       phoneNumber
       profilePic
       address

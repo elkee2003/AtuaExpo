@@ -1,15 +1,15 @@
-import { View, Text, ActivityIndicator } from 'react-native'
-import React, {useRef, useEffect, useState} from 'react'
-import styles from './styles'
-import PlaceRow from './placeRow'
-import { GooglePlacesAutocomplete } from 'react-native-google-places-autocomplete';
-import * as Location from 'expo-location'; 
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import {GOOGLE_API_KEY} from '../../keys'
-import AntDesign from '@expo/vector-icons/AntDesign';
-import { useLocationContext } from '@/providers/LocationProvider';
-import { useProfileContext } from '@/providers/ProfileProvider';
-import { router, useLocalSearchParams } from 'expo-router';
+import { useLocationContext } from "@/providers/LocationProvider";
+import AntDesign from "@expo/vector-icons/AntDesign";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { router, useLocalSearchParams } from "expo-router";
+import React, { useEffect, useRef, useState } from "react";
+import { ActivityIndicator, View } from "react-native";
+import { GooglePlacesAutocomplete } from "react-native-google-places-autocomplete";
+import { GOOGLE_API_KEY } from "../../keys";
+import PlaceRow from "./placeRow";
+import styles from "./styles";
+
+// Remember to prepopulate the originAddress with user's location
 
 // const homePlace = {
 //     description: 'Home',
@@ -17,197 +17,241 @@ import { router, useLocalSearchParams } from 'expo-router';
 // };
 
 const workPlace = {
-    description: 'Work',
-    geometry: { location: { lat: 48.8496818, lng: 2.2940881 } },
+  description: "Work",
+  geometry: { location: { lat: 48.8496818, lng: 2.2940881 } },
 };
 
 const DestinationSearchComponent = () => {
+  // const homePlace = {
+  //     description: 'Home',
+  //     geometry: { location: { lat, lng} },
+  // };
 
-    // const homePlace = {
-    //     description: 'Home',
-    //     geometry: { location: { lat, lng} },
-    // };
+  // const {lat,lng} = useProfileContext()
 
-    // const {lat,lng} = useProfileContext()
+  const { lastDestination, address } = useLocalSearchParams();
 
-    const {lastDestination, address} = useLocalSearchParams()
+  const {
+    originAddress,
+    destinationAddress,
+    setOriginAddress,
+    setDestinationAddress,
+    originLat,
+    setOriginLat,
+    originLng,
+    setOriginLng,
+    destinationLat,
+    setDestinationLat,
+    destinationLng,
+    setDestinationLng,
+    originState,
+    setOriginState,
+    destinationState,
+    setDestinationState,
+    isInterState,
+    setIsInterState,
+  } = useLocationContext();
 
-    const {originPlace, destinationPlace, setOriginPlace, setDestinationPlace, originPlaceLat, setOriginPlaceLat, originPlaceLng, setOriginPlaceLng,  destinationPlaceLat, setDestinationPlaceLat, destinationPlaceLng, setDestinationPlaceLng} = useLocationContext()
+  const [loading, setLoading] = useState(false); // Loading state
 
-    const [loading, setLoading] = useState(false); // Loading state
+  const originAutocompleteRef = useRef(null);
+  const destinationAutocompleteRef = useRef(null);
 
-    const originAutocompleteRef = useRef(null);
-    const destinationAutocompleteRef = useRef(null);
+  const clearOriginInput = () => {
+    if (originAutocompleteRef.current) {
+      originAutocompleteRef.current.clear(); // Clear the input field
+    }
+    setOriginAddress(null); // Clear originAddress state
+  };
 
-    const clearOriginInput = () => {
-        if (originAutocompleteRef.current) {
-          originAutocompleteRef.current.clear(); // Clear the input field
-        }
-        setOriginPlace(null); // Clear originPlace state
-      };
-    
-      const clearDestinationInput = () => {
-        if (destinationAutocompleteRef.current) {
-          destinationAutocompleteRef.current.clear(); // Clear the input field
-        }
-        setDestinationPlace(null); // Clear destinationPlace state
-    };
+  const clearDestinationInput = () => {
+    if (destinationAutocompleteRef.current) {
+      destinationAutocompleteRef.current.clear(); // Clear the input field
+    }
+    setDestinationAddress(null); // Clear destinationAddress state
+  };
 
-    const saveLastDestination = async (destination) => {
-      try {
-        await AsyncStorage.setItem('lastDestination', destination);
-      } catch (error) {
-        console.error('Failed to save the last destination:', error);
-      }
-    };
+  // Function to save last destination
+  const saveLastDestination = async (destination) => {
+    try {
+      await AsyncStorage.setItem("lastDestination", destination);
+    } catch (error) {
+      console.error("Failed to save the last destination:", error);
+    }
+  };
 
+  // Function to extract state:
+  const extractState = (details) => {
+    if (!details?.address_components) return null;
 
-    useEffect(()=>{
-      if(originPlace && destinationPlace){
-        router.push({
-          pathname:'/screens/orders',
-          params:{originPlace, destinationPlace}
-        })
-      }
-    },[originPlace, destinationPlace])
+    const stateComponent = details.address_components.find((component) =>
+      component.types.includes("administrative_area_level_1"),
+    );
 
-    // Pre-populate the "From" field with lastDestination if it exists
-    useEffect(() => {
-      if (lastDestination && originAutocompleteRef.current) {
-        originAutocompleteRef.current.setAddressText(lastDestination); // Prepopulate the input
-    
-        // Simulate a selection by manually triggering setOriginPlace
-        setOriginPlace({
-          data: { description: lastDestination },
-          details: null, // Add necessary details if you have them
-        });
-      }
-    }, [lastDestination]);
+    return stateComponent?.long_name || null;
+  };
 
-    // Pre-populate the "From" field with home address if it exists
-    useEffect(() => {
-      if (address && originAutocompleteRef.current) {
-        originAutocompleteRef.current.setAddressText(address); // Prepopulate the input
-    
-        // Simulate a selection by manually triggering setOriginPlace
-        setOriginPlace({
-          data: { description: address },
-          details: null, // Add necessary details if you have them
-        });
-      }
-    }, [address]);
-    
-  
+  useEffect(() => {
+    if (originAddress && destinationAddress) {
+      router.push({
+        pathname: "/screens/searchresults",
+        // params: { originAddress, destinationAddress },
+      });
+    }
+  }, [originAddress, destinationAddress]);
+
+  // Pre-populate the "From" field with lastDestination if it exists
+  useEffect(() => {
+    if (lastDestination && originAutocompleteRef.current) {
+      originAutocompleteRef.current.setAddressText(lastDestination); // Prepopulate the input
+
+      // Simulate a selection by manually triggering setOriginAddress
+      setOriginAddress({
+        data: { description: lastDestination },
+        details: null, // Add necessary details if you have them
+      });
+    }
+  }, [lastDestination]);
+
+  // Pre-populate the "From" field with home address if it exists
+  useEffect(() => {
+    if (address && originAutocompleteRef.current) {
+      originAutocompleteRef.current.setAddressText(address); // Prepopulate the input
+
+      // Simulate a selection by manually triggering setOriginAddress
+      setOriginAddress({
+        data: { description: address },
+        details: null, // Add necessary details if you have them
+      });
+    }
+  }, [address]);
+
+  // useEffect to check if it is interstate
+  useEffect(() => {
+    if (originState && destinationState) {
+      setIsInterState(originState !== destinationState);
+    } else {
+      setIsInterState(false);
+    }
+  }, [originState, destinationState]);
 
   return (
     <View style={styles.container}>
+      {/* From? */}
+      <GooglePlacesAutocomplete
+        key="origin-autocomplete"
+        debounce={300}
+        placeholder="From?"
+        ref={originAutocompleteRef}
+        onPress={(data, details = null) => {
+          setOriginAddress({ data, details });
 
-        {/* From? */}
-        <GooglePlacesAutocomplete
-          placeholder='From?'
-          ref={originAutocompleteRef}
-          onPress={(data, details = null) => {
-            setOriginPlace({data, details})
-            console.log('Origin data:', data, 'Origin details:', details)
-            // Use `details` directly here instead of `originPlace.details`
-    if (details && details.geometry && details.geometry.location) {
-      setOriginPlaceLat(details.geometry.location.lat);
-      setOriginPlaceLng(details.geometry.location.lng);
+          // Use `details` directly here instead of `originAddress.details`
+          if (details && details.geometry && details.geometry.location) {
+            setOriginLat(details.geometry.location.lat);
+            setOriginLng(details.geometry.location.lng);
 
-      console.log('Origin lat:', details.geometry.location.lat, 'Origin lng:', details.geometry.location.lng);
-    } else {
-      console.log('No details available');
-    }
-          }}
-          fetchDetails
-          enablePoweredByContainer={false}
-          suppressDefaultStyles
-          query={{
-              key: GOOGLE_API_KEY,
-              language: 'en',
-              components: 'country:ng',
-          }}
-          // currentLocation={true}
-          // currentLocationLabel='Current location'
-          renderRow={(data)=> <PlaceRow data={data}/>
+            const state = extractState(details);
+
+            setOriginState(state);
+          } else {
+            console.log("No details available");
           }
-          renderDescription={(data)=> data.description || data.vicinity
+        }}
+        fetchDetails
+        enablePoweredByContainer={false}
+        suppressDefaultStyles
+        query={{
+          key: GOOGLE_API_KEY,
+          language: "en",
+          components: "country:ng",
+        }}
+        // currentLocation={true}
+        // currentLocationLabel='Current location'
+        renderRow={(data) => <PlaceRow data={data} />}
+        renderDescription={(data) => data.description || data.vicinity}
+        styles={{
+          textInput: styles.textInput,
+          container: styles.autocompleteContainer,
+          listView: styles.listView,
+          separator: styles.separator,
+          poweredContainer: styles.gPoweredContainer,
+        }}
+        renderRightButton={() => (
+          <AntDesign
+            style={styles.topButton}
+            name="close-circle"
+            onPress={clearOriginInput}
+          />
+        )}
+        onFail={(error) => console.error(error)}
+        onNotFound={() => console.log("No results were found")}
+        isSearching={(isSearching) => setLoading(isSearching)} // Set loading state
+        // predefinedPlaces={[homePlace]}
+        // currentLocation={true}
+        // currentLocationLabel='Current location'
+      />
+
+      {/* To? */}
+      <GooglePlacesAutocomplete
+        key="destination-autocomplete"
+        debounce={300}
+        placeholder="To?"
+        ref={destinationAutocompleteRef}
+        onPress={(data, details = null) => {
+          setDestinationAddress({ data, details });
+
+          // Use `details` directly here instead of `originAddress.details`
+          if (details && details.geometry && details.geometry.location) {
+            setDestinationLat(details.geometry.location.lat);
+            setDestinationLng(details.geometry.location.lng);
+
+            const state = extractState(details);
+
+            setDestinationState(state);
+          } else {
+            console.log("No details available");
           }
-          styles={{
-              textInput:styles.textInput,
-              container: styles.autocompleteContainer,
-              listView:styles.listView,
-              separator:styles.separator,
-              poweredContainer: styles.gPoweredContainer
-          }}
-          renderRightButton={() => (
-            <AntDesign 
-              style={styles.topButton}
-              name="closecircle" 
-              onPress={clearOriginInput} 
-            />
-          )}
-          onFail={(error) => console.error(error)}
-          onNotFound={() => console.log('No results were found')}
-          isSearching={(isSearching) => setLoading(isSearching)} // Set loading state
-          // predefinedPlaces={[homePlace]}
-          // currentLocation={true}
-          // currentLocationLabel='Current location'
+          saveLastDestination(data.description || details.formatted_address);
+        }}
+        fetchDetails
+        enablePoweredByContainer={false}
+        suppressDefaultStyles
+        query={{
+          key: GOOGLE_API_KEY,
+          language: "en",
+          components: "country:ng",
+        }}
+        renderRow={(data) => <PlaceRow data={data} />}
+        renderDescription={(data) => data.description || data.vicinity}
+        styles={{
+          textInput: styles.textInput,
+          container: { ...styles.autocompleteContainer, top: 55 },
+          separator: styles.separator,
+          poweredContainer: styles.gPoweredContainer,
+        }}
+        renderRightButton={() => (
+          <AntDesign
+            style={styles.bottomButton}
+            name="close-circle"
+            onPress={clearDestinationInput}
+          />
+        )}
+        onFail={(error) => console.error(error)}
+        onNotFound={() => console.log("No results were found")}
+        isSearching={(isSearching) => setLoading(isSearching)} // Set loading state
+        // predefinedPlaces={[homePlace]}
+      />
+      {/* Activity Indicator */}
+      {loading && (
+        <ActivityIndicator
+          size="large"
+          color="#0000ff"
+          style={styles.activityIndicator}
         />
-
-        {/* To? */}
-        <GooglePlacesAutocomplete
-          placeholder='To?'
-          ref={destinationAutocompleteRef}
-          onPress={(data, details = null) => {
-            setDestinationPlace({data, details});
-            console.log('destination data:', data, 'destination details:', details)
-            // Use `details` directly here instead of `originPlace.details`
-    if (details && details.geometry && details.geometry.location) {
-      setDestinationPlaceLat(details.geometry.location.lat);
-      setDestinationPlaceLng(details.geometry.location.lng)
-
-      console.log('Destination lat:', details.geometry.location.lat, 'Destination lng:', details.geometry.location.lng);
-    } else {
-      console.log('No details available');
-    }
-            saveLastDestination(data.description || details.formatted_address);
-          }}
-          fetchDetails
-          enablePoweredByContainer={false}
-          suppressDefaultStyles
-          query={{
-              key: GOOGLE_API_KEY,
-              language: 'en',
-              components: 'country:ng',
-          }}
-          renderRow={(data)=> <PlaceRow data={data}/>
-          }
-          renderDescription={(data)=> data.description || data.vicinity
-          }
-          styles={{
-              textInput:styles.textInput,
-              container:{...styles.autocompleteContainer,top:55
-              },
-              separator:styles.separator,
-              poweredContainer: styles.gPoweredContainer
-          }}
-          renderRightButton={() => (
-            <AntDesign
-              style={styles.bottomButton} 
-              name="closecircle" 
-              onPress={clearDestinationInput} 
-            />
-          )}
-          onFail={(error) => console.error(error)}
-          onNotFound={() => console.log('No results were found')}
-          isSearching={(isSearching) => setLoading(isSearching)} // Set loading state
-          // predefinedPlaces={[homePlace]}
-        />
-        {/* Activity Indicator */}
-        {loading && <ActivityIndicator size="large" color="#0000ff" style={styles.activityIndicator} />}
+      )}
     </View>
-  )
-}
+  );
+};
 
-export default DestinationSearchComponent
+export default DestinationSearchComponent;

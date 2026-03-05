@@ -1,0 +1,14 @@
+{
+  "resourceName": "atuaStorage",
+  "policyUUID": "43e2d614",
+  "bucketName": "atuade6980b88bce4788a6a62bf5dd166c92",
+  "storageAccess": "auth",
+  "guestAccess": [],
+  "authAccess": [
+    "CREATE_AND_UPDATE",
+    "READ",
+    "DELETE"
+  ],
+  "triggerFunction": "NONE",
+  "groupAccess": {}
+}

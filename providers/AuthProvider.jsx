@@ -1,6 +1,6 @@
 import { View, Text } from 'react-native'
 import React, {useState, useEffect, useContext, createContext} from 'react';
-import { getCurrentUser } from 'aws-amplify/auth';
+import { getCurrentUser, signOut } from 'aws-amplify/auth';
 import { Hub } from 'aws-amplify/utils';
 import { router } from 'expo-router';
 import { DataStore, Predicates } from 'aws-amplify/datastore'
@@ -14,18 +14,48 @@ const AuthProvider = ({children}) => {
     const [authUser, setAuthUser] = useState(null);
     const [dbUser, setDbUser] = useState(null);
     const [sub, setSub] = useState(null);
+    const [userMail, setUserMail] = useState(null);
+
+    // ✅ Function to handle full logout and cleanup
+    const handleUserDeleted = async () => {
+      console.log('User deleted from Cognito — clearing session...');
+      try {
+        await signOut({ global: true }); // clears all sessions
+        await DataStore.clear(); // clears cached data
+        await DataStore.start(); 
+      } catch (err) {
+        console.log('Error clearing session:', err);
+      } finally {
+        setAuthUser(null);
+        setDbUser(null);
+        setSub(null);
+        router.push('/login'); // navigate back to login
+      }
+    };
 
     // Functions for useEffect
     const currentAuthenticatedUser = async () =>{
         try {
           const user = await getCurrentUser();
           setAuthUser(user)
-          const subId = authUser?.userId;
-          setSub(subId);
+          // const subId = authUser?.userId;
+          // setSub(subId);
+          setSub(user.userId);
+          const email = authUser?.signInDetails?.loginId;
+          setUserMail(email);
         } catch (err) {
-          console.log(err);
+          console.log('Auth check failed:', err.name);
+
+          // Handle deleted / invalid / expired user session
+          if (
+            err.name === 'UserNotFoundException' ||
+            err.name === 'NotAuthorizedException' ||
+            err.name === 'InvalidSignatureException'
+          ) {
+            await handleUserDeleted();
+          }
         }
-    }
+    };
 
     const dbCurrentUser = async () =>{
       if(!sub) return; // Ensure sub is available before querying DataStore
@@ -101,8 +131,9 @@ const AuthProvider = ({children}) => {
     
       // Observe for deletion of the Realtor record
       const deleteSubscription = DataStore.observe(User).subscribe(
-        ({ element, opType }) => {
+        async ({ element, opType }) => {
           if (opType === 'DELETE' && element.id === dbUser.id) {
+            await DataStore.clear();
             setDbUser(null); // Clear dbUser when the record is deleted
           }
         }

@@ -293,6 +293,13 @@ export const schema = {
                     "isRequired": false,
                     "attributes": []
                 },
+                "recipientNumber2": {
+                    "name": "recipientNumber2",
+                    "isArray": false,
+                    "type": "String",
+                    "isRequired": false,
+                    "attributes": []
+                },
                 "orderDetails": {
                     "name": "orderDetails",
                     "isArray": false,
@@ -300,45 +307,73 @@ export const schema = {
                     "isRequired": false,
                     "attributes": []
                 },
-                "parcelOrigin": {
-                    "name": "parcelOrigin",
+                "originAddress": {
+                    "name": "originAddress",
                     "isArray": false,
                     "type": "String",
                     "isRequired": false,
                     "attributes": []
                 },
-                "parcelOriginLat": {
-                    "name": "parcelOriginLat",
-                    "isArray": false,
-                    "type": "Float",
-                    "isRequired": false,
-                    "attributes": []
-                },
-                "parcelOriginLng": {
-                    "name": "parcelOriginLng",
-                    "isArray": false,
-                    "type": "Float",
-                    "isRequired": false,
-                    "attributes": []
-                },
-                "parcelDestination": {
-                    "name": "parcelDestination",
+                "originState": {
+                    "name": "originState",
                     "isArray": false,
                     "type": "String",
                     "isRequired": false,
                     "attributes": []
                 },
-                "parcelDestinationLat": {
-                    "name": "parcelDestinationLat",
+                "originLat": {
+                    "name": "originLat",
                     "isArray": false,
                     "type": "Float",
                     "isRequired": false,
                     "attributes": []
                 },
-                "parcelDestinationLng": {
-                    "name": "parcelDestinationLng",
+                "originLng": {
+                    "name": "originLng",
                     "isArray": false,
                     "type": "Float",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "destinationAddress": {
+                    "name": "destinationAddress",
+                    "isArray": false,
+                    "type": "String",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "destinationState": {
+                    "name": "destinationState",
+                    "isArray": false,
+                    "type": "String",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "destinationLat": {
+                    "name": "destinationLat",
+                    "isArray": false,
+                    "type": "Float",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "destinationLng": {
+                    "name": "destinationLng",
+                    "isArray": false,
+                    "type": "Float",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "tripType": {
+                    "name": "tripType",
+                    "isArray": false,
+                    "type": "String",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "distance": {
+                    "name": "distance",
+                    "isArray": false,
+                    "type": "String",
                     "isRequired": false,
                     "attributes": []
                 },
@@ -358,17 +393,365 @@ export const schema = {
                     "isRequired": false,
                     "attributes": []
                 },
-                "price": {
-                    "name": "price",
+                "loadCategory": {
+                    "name": "loadCategory",
+                    "isArray": false,
+                    "type": "String",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "isInterState": {
+                    "name": "isInterState",
+                    "isArray": false,
+                    "type": "Boolean",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "estimatedMinPrice": {
+                    "name": "estimatedMinPrice",
                     "isArray": false,
                     "type": "Float",
                     "isRequired": false,
                     "attributes": []
                 },
-                "courierFee": {
-                    "name": "courierFee",
+                "estimatedMaxPrice": {
+                    "name": "estimatedMaxPrice",
                     "isArray": false,
                     "type": "Float",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "initialOfferPrice": {
+                    "name": "initialOfferPrice",
+                    "isArray": false,
+                    "type": "Float",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "currentOfferPrice": {
+                    "name": "currentOfferPrice",
+                    "isArray": false,
+                    "type": "Float",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "lastOfferBy": {
+                    "name": "lastOfferBy",
+                    "isArray": false,
+                    "type": "String",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "loadingFee": {
+                    "name": "loadingFee",
+                    "isArray": false,
+                    "type": "Float",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "unloadingFee": {
+                    "name": "unloadingFee",
+                    "isArray": false,
+                    "type": "Float",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "totalPrice": {
+                    "name": "totalPrice",
+                    "isArray": false,
+                    "type": "Float",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "courierEarnings": {
+                    "name": "courierEarnings",
+                    "isArray": false,
+                    "type": "Float",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "commissionAmount": {
+                    "name": "commissionAmount",
+                    "isArray": false,
+                    "type": "Float",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "platformFee": {
+                    "name": "platformFee",
+                    "isArray": false,
+                    "type": "Float",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "platformServiceRevenue": {
+                    "name": "platformServiceRevenue",
+                    "isArray": false,
+                    "type": "Float",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "vatAmount": {
+                    "name": "vatAmount",
+                    "isArray": false,
+                    "type": "Float",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "platformNetRevenue": {
+                    "name": "platformNetRevenue",
+                    "isArray": false,
+                    "type": "Float",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "deliveryVerificationCode": {
+                    "name": "deliveryVerificationCode",
+                    "isArray": false,
+                    "type": "String",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "declaredWeightBracket": {
+                    "name": "declaredWeightBracket",
+                    "isArray": false,
+                    "type": "String",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "senderPreTransferPhotos": {
+                    "name": "senderPreTransferPhotos",
+                    "isArray": true,
+                    "type": "String",
+                    "isRequired": false,
+                    "attributes": [],
+                    "isArrayNullable": true
+                },
+                "senderPreTransferVideo": {
+                    "name": "senderPreTransferVideo",
+                    "isArray": false,
+                    "type": "String",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "senderPreTransferRecordedAt": {
+                    "name": "senderPreTransferRecordedAt",
+                    "isArray": false,
+                    "type": "AWSDateTime",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "courierPreTransferPhotos": {
+                    "name": "courierPreTransferPhotos",
+                    "isArray": true,
+                    "type": "String",
+                    "isRequired": false,
+                    "attributes": [],
+                    "isArrayNullable": true
+                },
+                "courierPreTransferVideo": {
+                    "name": "courierPreTransferVideo",
+                    "isArray": false,
+                    "type": "String",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "courierPreTransferRecordedAt": {
+                    "name": "courierPreTransferRecordedAt",
+                    "isArray": false,
+                    "type": "AWSDateTime",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "courierPostLoadingPhotos": {
+                    "name": "courierPostLoadingPhotos",
+                    "isArray": true,
+                    "type": "String",
+                    "isRequired": false,
+                    "attributes": [],
+                    "isArrayNullable": true
+                },
+                "courierPostLoadingVideo": {
+                    "name": "courierPostLoadingVideo",
+                    "isArray": false,
+                    "type": "String",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "dropoffArrivalPhotos": {
+                    "name": "dropoffArrivalPhotos",
+                    "isArray": true,
+                    "type": "String",
+                    "isRequired": false,
+                    "attributes": [],
+                    "isArrayNullable": true
+                },
+                "dropoffArrivalVideo": {
+                    "name": "dropoffArrivalVideo",
+                    "isArray": false,
+                    "type": "String",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "postDeliveryPhotos": {
+                    "name": "postDeliveryPhotos",
+                    "isArray": true,
+                    "type": "String",
+                    "isRequired": false,
+                    "attributes": [],
+                    "isArrayNullable": true
+                },
+                "postDeliveryVideo": {
+                    "name": "postDeliveryVideo",
+                    "isArray": false,
+                    "type": "String",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "pickupLoadingResponsibility": {
+                    "name": "pickupLoadingResponsibility",
+                    "isArray": false,
+                    "type": "String",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "pickupFloorLevel": {
+                    "name": "pickupFloorLevel",
+                    "isArray": false,
+                    "type": "String",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "pickupFloorLevelPrice": {
+                    "name": "pickupFloorLevelPrice",
+                    "isArray": false,
+                    "type": "Float",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "pickupHasElevator": {
+                    "name": "pickupHasElevator",
+                    "isArray": false,
+                    "type": "Boolean",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "dropoffUnloadingResponsibility": {
+                    "name": "dropoffUnloadingResponsibility",
+                    "isArray": false,
+                    "type": "String",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "dropoffFloorLevel": {
+                    "name": "dropoffFloorLevel",
+                    "isArray": false,
+                    "type": "String",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "dropoffFloorLevelPrice": {
+                    "name": "dropoffFloorLevelPrice",
+                    "isArray": false,
+                    "type": "Float",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "dropoffHasElevator": {
+                    "name": "dropoffHasElevator",
+                    "isArray": false,
+                    "type": "Boolean",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "acceptedAt": {
+                    "name": "acceptedAt",
+                    "isArray": false,
+                    "type": "AWSDateTime",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "arrivedPickupAt": {
+                    "name": "arrivedPickupAt",
+                    "isArray": false,
+                    "type": "AWSDateTime",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "loadingStartedAt": {
+                    "name": "loadingStartedAt",
+                    "isArray": false,
+                    "type": "AWSDateTime",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "tripStartedAt": {
+                    "name": "tripStartedAt",
+                    "isArray": false,
+                    "type": "AWSDateTime",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "arrivedDropoffAt": {
+                    "name": "arrivedDropoffAt",
+                    "isArray": false,
+                    "type": "AWSDateTime",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "unloadingCompletedAt": {
+                    "name": "unloadingCompletedAt",
+                    "isArray": false,
+                    "type": "AWSDateTime",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "logisticsCompanyId": {
+                    "name": "logisticsCompanyId",
+                    "isArray": false,
+                    "type": "ID",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "waybillNumber": {
+                    "name": "waybillNumber",
+                    "isArray": false,
+                    "type": "String",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "waybillPhoto": {
+                    "name": "waybillPhoto",
+                    "isArray": false,
+                    "type": "String",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "logisticsTrackingCode": {
+                    "name": "logisticsTrackingCode",
+                    "isArray": false,
+                    "type": "String",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "logisticsTrackingStatus": {
+                    "name": "logisticsTrackingStatus",
+                    "isArray": false,
+                    "type": "String",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "handedOverToLogisticsAt": {
+                    "name": "handedOverToLogisticsAt",
+                    "isArray": false,
+                    "type": "AWSDateTime",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "logisticsIntakeConfirmedAt": {
+                    "name": "logisticsIntakeConfirmedAt",
+                    "isArray": false,
+                    "type": "AWSDateTime",
                     "isRequired": false,
                     "attributes": []
                 },
@@ -535,8 +918,15 @@ export const schema = {
                     "isRequired": false,
                     "attributes": []
                 },
-                "courierBVN": {
-                    "name": "courierBVN",
+                "courierNINImage": {
+                    "name": "courierNINImage",
+                    "isArray": false,
+                    "type": "String",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "bankCode": {
+                    "name": "bankCode",
                     "isArray": false,
                     "type": "String",
                     "isRequired": false,
@@ -570,8 +960,8 @@ export const schema = {
                     "isRequired": false,
                     "attributes": []
                 },
-                "vehicleType": {
-                    "name": "vehicleType",
+                "vehicleClass": {
+                    "name": "vehicleClass",
                     "isArray": false,
                     "type": "String",
                     "isRequired": false,
@@ -599,10 +989,10 @@ export const schema = {
                     "attributes": [],
                     "isArrayNullable": true
                 },
-                "maxiTransportPrice": {
-                    "name": "maxiTransportPrice",
+                "maxiDescription": {
+                    "name": "maxiDescription",
                     "isArray": false,
-                    "type": "Float",
+                    "type": "String",
                     "isRequired": false,
                     "attributes": []
                 },
@@ -662,6 +1052,13 @@ export const schema = {
                     "isRequired": false,
                     "attributes": []
                 },
+                "guarantorNINImage": {
+                    "name": "guarantorNINImage",
+                    "isArray": false,
+                    "type": "String",
+                    "isRequired": false,
+                    "attributes": []
+                },
                 "lat": {
                     "name": "lat",
                     "isArray": false,
@@ -685,6 +1082,20 @@ export const schema = {
                 },
                 "push_token": {
                     "name": "push_token",
+                    "isArray": false,
+                    "type": "String",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "isApproved": {
+                    "name": "isApproved",
+                    "isArray": false,
+                    "type": "Boolean",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "approvedById": {
+                    "name": "approvedById",
                     "isArray": false,
                     "type": "String",
                     "isRequired": false,
@@ -758,6 +1169,13 @@ export const schema = {
                 },
                 "lastName": {
                     "name": "lastName",
+                    "isArray": false,
+                    "type": "String",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "email": {
+                    "name": "email",
                     "isArray": false,
                     "type": "String",
                     "isRequired": false,
@@ -875,14 +1293,23 @@ export const schema = {
         "OrderStatus": {
             "name": "OrderStatus",
             "values": [
+                "BIDDING",
                 "READY_FOR_PICKUP",
                 "ACCEPTED",
-                "PICKEDUP",
-                "DELIVERED"
+                "ARRIVED_PICKUP",
+                "LOADING",
+                "IN_TRANSIT",
+                "ARRIVED_DROPOFF",
+                "UNLOADING",
+                "DELIVERED",
+                "HANDOVER_TO_LOGISTICS",
+                "IN_LOGISTICS_TRANSIT",
+                "CANCELLED",
+                "DISPUTED"
             ]
         }
     },
     "nonModels": {},
     "codegenVersion": "3.4.4",
-    "version": "3434900c7e63d7cbb9ceec44be23b816"
+    "version": "8e204461a887d2d38252948ed8d5eae1"
 };

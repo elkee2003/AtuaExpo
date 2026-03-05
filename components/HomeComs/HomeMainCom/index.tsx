@@ -1,32 +1,27 @@
-import { View, Text,  } from 'react-native'
-import React, {useRef, useMemo} from 'react'
-import HomeMap from '../HomeMap'
-import HomeSearch from '../HomeSearch';
-import BottomSheet, { BottomSheetScrollView,} from '@gorhom/bottom-sheet';
-import { GestureHandlerRootView } from 'react-native-gesture-handler'
-import styles from './styles'
+import BottomSheet, { BottomSheetScrollView } from "@gorhom/bottom-sheet";
+import React, { useMemo, useRef } from "react";
+import { SafeAreaView } from "react-native-safe-area-context";
+import HomeMap from "../HomeMap";
+import HomeSearch from "../HomeSearch";
+import styles from "./styles";
 
 const HomeComponent = () => {
-    const bottomSheetRef = useRef(null)
-    const snapPoints = useMemo(()=>['25%', '37%'], [])
+  const bottomSheetRef = useRef(null);
+  const snapPoints = useMemo(() => ["25%", "37%"], []);
   return (
-    <GestureHandlerRootView style={styles.container}>
+    // Normally I would have wrapped this in a GestureHandlerRootView here, but instead I wrapped my whole project in the root (where AuthProvider, OrderProvider etc are), so I can just use BottomSheet
+    <SafeAreaView style={styles.container}>
+      {/* Map */}
+      <HomeMap />
 
-        {/* Map */}
-        <HomeMap/>
+      {/* BottomSheet */}
+      <BottomSheet ref={bottomSheetRef} snapPoints={snapPoints} topInset={1}>
+        <BottomSheetScrollView>
+          <HomeSearch />
+        </BottomSheetScrollView>
+      </BottomSheet>
+    </SafeAreaView>
+  );
+};
 
-        {/* BottomSheet */}
-        <BottomSheet
-        ref={bottomSheetRef}
-        snapPoints={snapPoints}
-        topInset={1}
-        >
-            <BottomSheetScrollView>
-                <HomeSearch/>
-            </BottomSheetScrollView>
-        </BottomSheet>
-    </GestureHandlerRootView>
-  )
-}
-
-export default HomeComponent
+export default HomeComponent;

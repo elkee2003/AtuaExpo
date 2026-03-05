@@ -1,269 +1,251 @@
-import { View, Text, Image, TouchableOpacity, ScrollView, ActivityIndicator, Alert } from 'react-native'
-import React from 'react'
-import styles from './styles'
-import { useOrderContext } from '@/providers/OrderProvider'
-import deliveryMediums from '../../../assets/data/types'
-import Ionicons from '@expo/vector-icons/Ionicons';
-import { router } from 'expo-router';
+import { useLocationContext } from "@/providers/LocationProvider";
+import { useOrderContext } from "@/providers/OrderProvider";
+import Ionicons from "@expo/vector-icons/Ionicons";
+import { router } from "expo-router";
+import React from "react";
+import {
+  Alert,
+  Image,
+  ScrollView,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
-const AtuaTypes = ({
-  selectedType, 
-  setSelectedType, 
-  calculatedPrice,
-  setCalculatedPrice, 
-  totalKm,
-  totalMins,
-  isPeakHour,
-  isWeekend,
-  isNightTime,
-  isHoliday,
-  // isLongDistance, 
-  // isRushDelivery,
+import { TRANSPORT_TYPES } from "@/constants/transportTypes";
+import { pricingEngine } from "@/modules/pricingEngine";
+import { formatCurrency } from "@/utils/formatCurrency";
+import { getAvailableServices } from "@/utils/getAvailableServices";
+import deliveryMediums from "../../../assets/data/types";
+import styles from "./styles";
 
-  // isHighTrafficArea,
-  // isHeavyItem,
-  // isFragileItem,
-}) => {
+const AtuaTypes = ({ selectedType, setSelectedType }) => {
+  const {
+    setTotalPrice,
+    setCourierEarnings,
+    setPlatformFee,
+    setCommissionAmount,
+    setPlatformServiceRevenue,
+    setVatAmount,
+    setPlatformNetRevenue,
+    setTransportationType,
+    resetOrderByTransportType,
+  } = useOrderContext();
 
-  const {setPrice, setCourierFee, setTransportationType} = useOrderContext()
+  const { totalKm, totalMins } = useLocationContext();
 
-  const getImage=(medium)=>{
-      if (medium?.type === 'Micro X'){
-          return require('../../../assets/atuaImages/Walk.png')
-      }
-      if (medium?.type === 'Moto X'){
-          return require('../../../assets/atuaImages/Bike.jpg')
-      }
-      if (medium?.type === 'Maxi'){
-          return require('../../../assets/atuaImages/UberXL.jpeg')
-      }
-      if (medium?.type === 'GROUP'){
-          return require('../../../assets/atuaImages/Deliverybicycle.png')
-      }
-      return require('../../../assets/atuaImages/UberXL.jpeg');
-  }
+  // Filter allowed services by distance rules
+  const availableServiceTypes = getAvailableServices(totalKm);
 
-  // Function to show the alert based on the medium type
-const showInfoAlert = (type) => {
-  if (type === 'Moto X') {
-      Alert.alert('Moto X', 'Moto Express. This transportation method is suitable for faster, mid-sized deliveries that require speed and distance. This option includes Motorcycles, Mopeds, Car.');
-    } else if (type === 'Micro X') {
-      Alert.alert('Micro X', 'Micro Express. This transportation method option includes eco-friendly transport methods such as Bicycles, Scooters, Skates for quick, short-distance deliveries.');
-    } else if (type === 'Maxi') {
-      Alert.alert('Maxi', 'This transportation method is best for large or bulky items that need spacious transport. This option includes Vans, Moving Trucks, Cooling Van, Large Cargo vehicles.');
-    } else if (type === 'Moto Batch') {
-      Alert.alert('Moto Batch', 'Moto Batch. This transportation method is suitable for faster, mid-sized deliveries that require speed and distance. This option includes Motorcycles, Mopeds, Car.');
-    } else if (type === 'Micro Batch') {
-      Alert.alert('Micro Batch', 'This transportation method option includes eco-friendly transport methods such as Bicycles, Scooters, Skates for quick, short-distance deliveries.');
-    }
-  };
-  
-  const onConfirm = (medium) =>{
-    setSelectedType(medium?.type)
-    setTransportationType(medium.type)
-    console.log(medium.type)
-    const calculatedCost = calculatePrice(medium.type, totalKm);
+  const filteredDeliveryMediums = deliveryMediums.filter((medium) =>
+    availableServiceTypes.includes(medium.type),
+  );
 
-    if(totalKm > 0){
+  const getImage = (type) => {
+    switch (type) {
+      case TRANSPORT_TYPES.MICRO_EXPRESS:
+        return require("../../../assets/atuaImages/Walk.png");
 
-      // Setting the price from orderContext
-      setPrice(calculatedCost)
+      case TRANSPORT_TYPES.MICRO_BATCH:
+        return require("../../../assets/atuaImages/Deliverybicycle.png");
 
-       // Calculate and set the courier fee
-       let courierFee;
-      if (calculatedCost === 600) {
-        courierFee = (calculatedCost - 300).toFixed(2); // Only subtract 300 if the cost is exactly 600
-      } else {
-        const baseAmount = calculatedCost - 300;
-        courierFee = (baseAmount * 0.85).toFixed(2);
-      }
-      setCourierFee(courierFee);
+      case TRANSPORT_TYPES.MOTO_EXPRESS:
+        return require("../../../assets/atuaImages/Bike.jpg");
 
-      if (medium.type === 'Maxi') {
-        // router.push('/screens/searchresults/maxitypes');
-        Alert.alert('Envisage', 'Coming soon')
-      }else {
-        router.push('/screens/checkout');
-      }
-    }else{
-      Alert.alert('Patience', 'Calculating Price...')
+      case TRANSPORT_TYPES.MOTO_BATCH:
+        return require("../../../assets/atuaImages/Deliverybicycle.png");
+
+      case TRANSPORT_TYPES.MAXI:
+        return require("../../../assets/atuaImages/UberXL.jpeg");
+
+      default:
+        return require("../../../assets/atuaImages/UberXL.jpeg");
     }
   };
 
-  const calculatePrice = (type, distance,) => {
-    const serviceFee = 300; // service fee added to all calculations
-    
-    // Flat rates for distances less than 3km
-    if (distance <= 2.7) {
-      if (type === 'Micro X') return 300 + serviceFee; // 300 flat rate + 300 service fee
-        if (type === 'BIKE') return 500 + serviceFee; // 500 flat rate + 300 service fee
-        // if (type === 'Maxi') return 700 + serviceFee; // 700 flat rate + 300 service fee
-        if (type === 'GROUP') return 250 + serviceFee; // 250 flat rate + 300 service fee
-    } 
+  const showInfoAlert = (type) => {
+    switch (type) {
+      case TRANSPORT_TYPES.MOTO_EXPRESS:
+        Alert.alert(
+          "Moto Express",
+          "Fast delivery using motorcycles or cars. Ideal for medium-distance urgent deliveries.",
+        );
+        break;
 
-    let pricePerKm;
-    let baseCharge;
+      case TRANSPORT_TYPES.MICRO_EXPRESS:
+        Alert.alert(
+          "Micro Express",
+          "Eco-friendly delivery using bicycles or scooters. Best for short distances.",
+        );
+        break;
 
-     // Distance ranges with base charges and per km rates
-    if (distance <= 5){
-      // Base charge and price per km for distances between 3.01km and 5km
-      baseCharge = 50; // Mild base charge for this range
-      if (type === 'Micro X') pricePerKm = 185;
-      if (type === 'Moto X') pricePerKm = 220;
-      // if (type === 'Maxi') pricePerKm = 250;
-      if (type === 'GROUP') pricePerKm = 170;
-    } else if (distance <= 10) {
-      // Base charge and price per km for distances between 5.01km and 10km
-      baseCharge = 75; // Mild base charge for this range
-      if (type === 'Micro X') pricePerKm = 180;
-      if (type === 'Moto X') pricePerKm = 210;
-      // if (type === 'Maxi') pricePerKm = 240;
-      if (type === 'GROUP') pricePerKm = 150;
-    } else if (distance <= 15) {
-      // Base charge and price per km for distances between 10.01km and 15km
-      baseCharge = 100; // Mild base charge for this range
-      if (type === 'Micro X') pricePerKm = 175;
-      if (type === 'Moto X') pricePerKm = 200;
-      // if (type === 'Maxi') pricePerKm = 230;
-      if (type === 'GROUP') pricePerKm = 140;
-    }else if (distance <= 20) {
-      baseCharge = 125; // Base charge for this range
-      if (type === 'Micro X') pricePerKm = 170;
-      if (type === 'Moto X') pricePerKm = 190;
-      // if (type === 'Maxi') pricePerKm = 220;
-      if (type === 'GROUP') pricePerKm = 130;
-    } else if (distance <= 25) {
-      baseCharge = 150; // Base charge for this range
-      if (type === 'Micro X') pricePerKm = 165;
-      if (type === 'Moto X') pricePerKm = 185;
-      // if (type === 'Maxi') pricePerKm = 210;
-      if (type === 'GROUP') pricePerKm = 125;
-    } else if (distance <= 30) {
-      baseCharge = 175; // Base charge for this range
-      if (type === 'Micro X') pricePerKm = 160;
-      if (type === 'Moto X') pricePerKm = 180;
-      // if (type === 'Maxi') pricePerKm = 200;
-      if (type === 'GROUP') pricePerKm = 120;
-    } else if (distance > 30) {
-      baseCharge = 250; // Higher base charge for 40km and above
-      if (type === 'Micro X') pricePerKm = 150;
-      if (type === 'Moto X') pricePerKm = 175;
-      // if (type === 'Maxi') pricePerKm = 190;
-      if (type === 'GROUP') pricePerKm = 110;
+      case TRANSPORT_TYPES.MAXI:
+        Alert.alert(
+          "Freight / Van",
+          "Best for bulky or large items. Drivers will bid for your delivery.",
+        );
+        break;
+
+      case TRANSPORT_TYPES.MOTO_BATCH:
+        Alert.alert("Moto Batch", "Lower cost delivery with grouped orders.");
+        break;
+
+      case TRANSPORT_TYPES.MICRO_BATCH:
+        Alert.alert(
+          "Micro Batch",
+          "Budget-friendly eco delivery grouped with other orders.",
+        );
+        break;
     }
-  
-    // Calculate the price by multiplying the distance by pricePerKm, adding the base charge and service fee
-    let estimatedPrice = baseCharge + (distance * pricePerKm) + serviceFee;
-
-
-    // Let's say you want to add the following surcharges:
-    // Peak Hours Surcharge: 20% increase during peak hours (e.g., 5 PM to 8 PM).
-    // Weekend Surcharge: Fixed NGN 100 extra for weekend deliveries.
-    // Location Surcharge: NGN 50 extra for certain high-traffic areas.
-    
-    // Apply surcharges
-    if (isPeakHour) {
-      estimatedPrice *= 1.2; // 20% surcharge for peak hours
-    }
-
-    if (isNightTime) {
-      estimatedPrice += 150; // NGN 150 surcharge for night deliveries
-    }
-
-    if (isWeekend) {
-      estimatedPrice += 100; // NGN 100 surcharge for weekends
-    }
-
-    if (isHoliday) {
-      estimatedPrice += 200; // NGN 200 surcharge for deliveries on holidays
-    }
-
-    // 4. Long-Distance Surcharge (if distance > 25 km)
-    if ( distance > 45) {
-      estimatedPrice += 250; 
-    }
-    // if (isHighTrafficArea) {
-    //   estimatedPrice += 50; // NGN 50 surcharge for high-traffic areas
-    // }
-    // if (isHeavyItem) {
-    //   estimatedPrice += 300; // NGN 300 surcharge for heavy items
-    // }
-  
-    // // 9. Fragile Item Surcharge
-    // if (isFragileItem) {
-    //   estimatedPrice += 100; // NGN 100 surcharge for fragile items
-    // }
-
-    return estimatedPrice.toFixed(2); // Rounds the price to 2 decimal places
   };
 
-  // Filter out BICYCLE if distance > 13km and BIKE if distance > 30km (two different distances)
-  // const filteredDeliveryMediums = deliveryMediums.filter(medium => {
-  //   return !((medium.type === 'BICYCLE' && totalKm > 13) || (medium.type === 'BIKE' && totalKm > 30));
-  // });
+  const onConfirm = (medium) => {
+    resetOrderByTransportType(medium.type);
+    setTransportationType(medium.type);
 
-  // Filter out BICYCLE and BIKE options if distance > 13km (same distance)
-  // const filteredDeliveryMediums = deliveryMediums.filter(medium => {
-  //   return !( (medium.type === 'BICYCLE' || medium.type === 'BIKE') && totalKm > 13);
-  // });
+    // Freight → bidding flow
+    if (medium.type === TRANSPORT_TYPES.MAXI) {
+      router.push("/screens/searchresults/maxitypes");
+      return;
+    }
 
-  // Filter out Micro option if distance > 13km
-  const filteredDeliveryMediums = deliveryMediums.filter(medium => {
-    return !((medium.type === 'Micro X' || medium.type === 'Micro Batch') && totalKm > 13);
-  });
+    // Instant services → pricing engine
+    const priceData = pricingEngine({
+      type: medium.type,
+      distanceKm: totalKm,
+    });
+
+    if (!priceData) {
+      Alert.alert("Error", "Unable to calculate price.");
+      return;
+    }
+
+    setTotalPrice(priceData.customerPrice);
+    setCourierEarnings(priceData.courierEarnings);
+    setPlatformFee(priceData.platformFee);
+    setCommissionAmount(priceData.commissionAmount);
+    setPlatformServiceRevenue(priceData.platformServiceRevenue);
+    setVatAmount(priceData.vatAmount);
+    setPlatformNetRevenue(priceData.platformNetRevenue);
+
+    router.push("/screens/orders");
+  };
 
   return (
-    <ScrollView>
-      {/* note it was previous deliverymediums.map() */}
-      {filteredDeliveryMediums.map(medium =>{
-        const calculatedCost = calculatePrice(medium.type, totalKm);
-        return(
-          <TouchableOpacity
-          onPress={()=>onConfirm(medium)} 
-          key={medium.id} 
-          style={[
-            styles.container,
-            selectedType === medium.type && styles.selectedContainer // Properly applying the selected style
-          ]}>
-            
-            {/* image */}
-            <Image style={styles.image} source={getImage(medium)}/>
+    <SafeAreaView style={styles.screen}>
+      <View style={styles.header}>
+        <Text style={styles.distanceText}>
+          {totalKm} km • {totalMins} mins
+        </Text>
+      </View>
 
-            {/* Middle Container with AtuaMedium and duration */}
-            <View style={styles.middleContainer}>
-              <View style={styles.typeInfoRow}>
-                <Text style={styles.type}>
-                    {medium.type}
-                </Text>
-                <TouchableOpacity onPress={() => showInfoAlert(medium.type)}>
-                  <Ionicons name={'information-circle-outline'} style={styles.infoIcon} />
-                </TouchableOpacity>
+      <ScrollView contentContainerStyle={styles.listContainer}>
+        {filteredDeliveryMediums.map((medium) => {
+          const isMaxi = medium.type === TRANSPORT_TYPES.MAXI;
+
+          const priceData = !isMaxi
+            ? pricingEngine({
+                type: medium.type,
+                distanceKm: totalKm,
+              })
+            : null;
+
+          const isSelected = selectedType === medium.type;
+
+          return (
+            <TouchableOpacity
+              key={medium.id}
+              activeOpacity={0.85}
+              onPress={() => setSelectedType(medium.type)}
+              style={[styles.card, isSelected && styles.selectedCard]}
+            >
+              <Image style={styles.image} source={getImage(medium.type)} />
+
+              <View style={styles.content}>
+                <View style={styles.titleRow}>
+                  <Text style={styles.type}>{medium.label}</Text>
+                  <TouchableOpacity onPress={() => showInfoAlert(medium.type)}>
+                    <Ionicons
+                      name="information-circle-outline"
+                      size={18}
+                      color="#6b7280"
+                      style={styles.infoIcon}
+                    />
+                  </TouchableOpacity>
+                </View>
+
+                <Text style={styles.subtitle}>Fast • Reliable • Secure</Text>
               </View>
-              {/* <Text style={styles.time}>{totalKm} km | {totalMins} mins</Text> */}
-              <Text style={styles.time}>{totalKm} km </Text>
-            </View>
 
-            {/* Price */}
-            <View style={styles.rightContainer}>
-              <Ionicons name={'pricetag'} size={18} color={'#42d742'}/>
-              {totalKm > 0 ? (
-                // Hide price for Maxi type
-                medium.type !== 'Maxi' ? (
-                  <Text style={styles.price}>est. ₦{calculatedCost}</Text>
-                ) : null
-              ) : (
-                <ActivityIndicator size={'small'}/>
-              )}
-            </View>
-          </TouchableOpacity>
-        );
-      
-      })}
-      {/* <TouchableOpacity style={styles.confirmBtn}>
-        <Text style={styles.confirmTxt}>Confirm</Text>
-      </TouchableOpacity> */}
-    </ScrollView>
-  )
-}
+              <View style={styles.priceContainer}>
+                <Text style={styles.price}>
+                  {priceData
+                    ? formatCurrency(priceData.customerPrice)
+                    : "Get Quotes"}
+                </Text>
+                <Text style={styles.tag}>est.</Text>
+              </View>
+            </TouchableOpacity>
+          );
+        })}
+      </ScrollView>
 
-export default AtuaTypes
+      <View style={styles.bottomBar}>
+        <TouchableOpacity
+          disabled={!selectedType}
+          onPress={() => {
+            const selectedMedium = filteredDeliveryMediums.find(
+              (m) => m.type === selectedType,
+            );
+
+            if (!selectedMedium) return;
+
+            onConfirm(selectedMedium);
+          }}
+          style={[
+            styles.confirmBtn,
+            !selectedType && styles.confirmBtnDisabled,
+          ]}
+        >
+          <Text style={styles.confirmTxt}>
+            {selectedType ? "Continue" : "Select a Service"}
+          </Text>
+        </TouchableOpacity>
+      </View>
+    </SafeAreaView>
+  );
+};
+
+export default AtuaTypes;
+
+// Folder structure here:
+
+// /assets
+
+// /constants
+//     transportTypes.js
+
+// /config
+//     pricingConfig.js
+//     serviceRules.js
+
+// /utils
+//     getAvailableServices.js
+//     formatCurrency.js
+
+// /modules
+//     pricingEngine.js
+//     surgeEngine.js
+//     biddingEngine.js
+
+// /features
+//     instantDelivery/
+//     freight/
+
+// Type	Meaning
+// constants	vocabulary
+// config	business parameters
+// utils	small helpers
+// modules	business engines
+// features	UI flows

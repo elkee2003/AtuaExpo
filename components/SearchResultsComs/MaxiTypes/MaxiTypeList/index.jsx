@@ -1,93 +1,129 @@
-import { View, Text, FlatList, Image, TextInput, TouchableOpacity } from 'react-native';
-import React,{useEffect, useState} from 'react';
-import styles from './styles';
-import maxitypess from '../../../../assets/data/maxitypes'
-import { router } from 'expo-router';
-import { DataStore } from 'aws-amplify/datastore';
-import {Courier} from '../../../../src/models'
+import { router } from "expo-router";
+import { useEffect, useState } from "react";
+import {
+  ActivityIndicator,
+  FlatList,
+  Image,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import styles from "./styles";
 
-const MaxiTypes = () => {
+// Later:
+// import { DataStore } from "aws-amplify";
+// import { Courier } from "../../../src/models";
 
-    const [searchQuery, setSearchQuery] = useState('')  
-    const [maxitypes, setMaxitypes] = useState(maxitypess);
-    const [filteredData, setFilteredData] = useState([]);
+const dummyFreightData = [
+  {
+    id: "1",
+    firstName: "Ibrahim",
+    transportationType: "MAXI",
+    vehicleClass: "FLATBED_10T",
+    model: "10 Ton Flatbed",
+    plateNumber: "YEN3943",
+    maxiDescription:
+      "Heavy machinery, containers, oversized cargo. Suitable for interstate industrial logistics and construction transport.",
+    isApproved: true,
+    isOnline: true,
+    maxiImages: [
+      require("../../../../assets/dummyMaxiImages/flatbed.jpg"),
+      require("../../../../assets/dummyMaxiImages/flatbed1.jpg"),
+      require("../../../../assets/dummyMaxiImages/flatbed2.jpg"),
+    ],
+  },
+  {
+    id: "2",
+    firstName: "Chinedu",
+    transportationType: "MAXI",
+    vehicleClass: "TIPPER_20T",
+    model: "20 Ton Tipper",
+    plateNumber: "LAG3803",
+    maxiDescription:
+      "Sand, granite, construction materials transport. Hydraulic lift enabled for offloading aggregates.",
+    isApproved: true,
+    isOnline: false,
+    maxiImages: [
+      require("../../../../assets/dummyMaxiImages/tipper.jpg"),
+      require("../../../../assets/dummyMaxiImages/tipper1.jpeg"),
+      require("../../../../assets/dummyMaxiImages/tipper2.jpeg"),
+    ],
+  },
+];
 
-    const handleSearch = (query) => {
-      setSearchQuery(query);
+const MaxiTypeListScreen = () => {
+  const [loading, setLoading] = useState(true);
+  const [freightList, setFreightList] = useState([]);
 
-      // Wait until housePosts is populated before attempting to filter
-      if (maxitypes.length === 0) {
-        return; // Exit if housePosts is not yet populated
-      }
+  useEffect(() => {
+    // Later → DataStore.query(Courier, c => c.vehicleClass.ne(null))
+    setTimeout(() => {
+      setFreightList(dummyFreightData);
+      setLoading(false);
+    }, 800);
+  }, []);
 
-      // if query is empty, show all data
-      if(!query){
-        setFilteredData([])
-      }else{
-        const lowercasedQuery = query.toLowerCase();
+  const renderItem = ({ item }) => {
+    const coverImage = item.maxiImages?.[0];
 
-        const filtered = maxitypes.filter(item => {
-          const matchesMaxiVehicleName = item?.vehicleType?.toLowerCase().includes(lowercasedQuery);
+    return (
+      <TouchableOpacity
+        activeOpacity={0.9}
+        style={[styles.card, !item.isOnline && { opacity: 0.6 }]}
+        onPress={() => router.push(`/screens/searchresults/${item.id}`)}
+      >
+        <Image source={coverImage} style={styles.image} />
 
-          return matchesMaxiVehicleName ;
-        });
-        setFilteredData(filtered)
-      }
-    }
+        {/* Availability Badge */}
+        <View style={styles.badgeContainer}>
+          {item.isOnline && <View style={styles.onlineDot} />}
+          <Text style={styles.badgeText}>
+            {item.isOnline ? "Available Now" : "Offline"}
+          </Text>
+        </View>
 
-    const fetchMaxiType = async () => {
-      try{
-        const realtors = await DataStore.query(Courier);
+        <View style={styles.content}>
+          <View style={styles.headerRow}>
+            <Text style={styles.model}>{item.model}</Text>
+            {item.isApproved && <Text style={styles.verified}>✔ Verified</Text>}
+          </View>
 
-        // will write the rest of the code later
-      }catch(error){
-        console.error('This is the error from searchbar:', error)
-      }
-    };
+          <Text style={styles.vehicleClass}>{item.vehicleClass}</Text>
 
-    // useEffect(()=>{
-    //   fetchMaxiType()
-    // },[])
+          <Text style={styles.plate}>Plate: {item.plateNumber}</Text>
+
+          <Text numberOfLines={2} style={styles.description}>
+            {item.maxiDescription}
+          </Text>
+
+          <View style={styles.bottomRow}>
+            <Text style={styles.driver}>Driver: {item.firstName}</Text>
+
+            <Text style={styles.more}>View Details →</Text>
+          </View>
+        </View>
+      </TouchableOpacity>
+    );
+  };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Maxi Types</Text>
+    <SafeAreaView style={styles.screen}>
+      <Text style={styles.title}>Available Maxi Vehicles</Text>
 
-      <TextInput
-        style={styles.searchBar}
-        value={searchQuery}
-        onChangeText={handleSearch}
-        placeholder='Search...'
-      />
+      {loading ? (
+        <ActivityIndicator size="large" color="#111" />
+      ) : (
+        <FlatList
+          data={freightList}
+          keyExtractor={(item) => item.id}
+          renderItem={renderItem}
+          contentContainerStyle={{ paddingBottom: 50 }}
+          showsVerticalScrollIndicator={false}
+        />
+      )}
+    </SafeAreaView>
+  );
+};
 
-      <FlatList
-        showsVerticalScrollIndicator={false}
-        data={maxitypes}
-        renderItem={({item})=>(
-            <TouchableOpacity style={styles.row} onPress={()=>router.push(`/screens/searchresults/${item.id}`)}>
-                <View style={styles.imgContainer}>
-                    <Image source={{uri:item.image[0]}} style={styles.img}/>
-                </View>
-                <View style={styles.detailRow}>
-                    <Text style={styles.sub}>
-                      Name:
-                    </Text>
-                    <Text style={styles.detailFirst}>
-                      {item.vehicleType}
-                    </Text>
-
-                    <Text style={styles.sub}>
-                      Price:
-                    </Text>
-                    <Text style={styles.detail}>
-                      ₦{parseInt(item.price).toLocaleString()}
-                    </Text>
-                </View>
-            </TouchableOpacity>
-        )}
-      />
-    </View>
-  )
-}
-
-export default MaxiTypes;
+export default MaxiTypeListScreen;

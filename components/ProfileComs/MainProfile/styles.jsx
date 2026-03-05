@@ -1,125 +1,109 @@
-import { StyleSheet, } from 'react-native'
+import { StyleSheet } from "react-native";
 
 const styles = StyleSheet.create({
-    container:{
-        flex:1,
-        marginTop:30,
-        marginHorizontal:10,
-    },
-    title: {
-        fontSize: 30,
-        fontWeight: "bold",
-        textAlign: "center",
-        margin: 10,
-    },
-    bckBtnCon:{
-        position:'absolute',
-        top:10,
-    },
-    bckBtnIcon:{
-        fontSize:30,
-        color:'black'
-    },
-    signoutBtn:{
-        position:'absolute',
-        top:10,
-        right:10,
-    },
-    signoutTxt:{
-        fontSize:18,
-        fontWeight:'bold',
-        color:'#c90707',
-    },
-    centerCon:{
-        // top:'20%',
-        justifyContent:'center',
-    },
-    profilePicContainer:{
-        position:'relative',
-        height:150,
-        width:150,
-        borderRadius:75,
-        backgroundColor:'#a2a2a8',
-        justifyContent:'center',
-        alignSelf:'center',
-        justifyContent:'center',
-        alignItems:'center',
-        marginTop:10,
-        marginBottom:20,
-    },
-    img:{
-        width:'100%',
-        height:'100%',
-        resizeMode:"contain",
-        borderRadius:75,
-    },
-    details:{
-        textAlign:'center',
-        fontWeight:'bold',
-        fontSize:17,
-    },
-    mainBtnRow:{
-        flexDirection:"row",
-        gap:20,
-        justifyContent:'center',
-        marginHorizontal:10,
-    },
-    mainBtnsCard:{
-        marginVertical:10,
-        padding:20,
-        borderRadius:20,
-        backgroundColor:'#c5c5c5',
-        gap:10,
-        alignSelf:'center',
-    },
-    viewInfo:{
-        padding:10,
-        justifyContent:'center',
-        alignItems:'center',
-        backgroundColor:'black',
-        borderRadius:20,
-    },
-    viewInfoText:{
-        color:'white',
-        fontSize:18,
-        fontWeight:"bold",
-    },
-    editProfile:{
-        padding:10,
-        justifyContent:'center',
-        alignItems:'center',
-        backgroundColor:'transparent',
-        borderWidth:1,
-        borderColor:'black',
-        borderRadius:20,
-    },
-    
-    editProfileTxt:{
-        color:'black',
-        fontSize:18,
-        fontWeight:'bold',
-    },
-    tetiaryCard:{
-        margin:10,
-        padding:20,
-        borderRadius:20,
-        backgroundColor:'#c5c5c5',
-        gap:10,
-        alignSelf:'center',
-    },
-    btnTetiary:{
-        padding:10,
-        justifyContent:'center',
-        alignItems:'center',
-        backgroundColor:'transparent',
-        borderWidth:1,
-        borderColor:'black',
-        borderRadius:20,
-    },
-    btnTetiaryTxt:{
-        fontWeight:'bold',
-        fontSize:18,
-    },
-})
+  container: {
+    flex: 1,
+    backgroundColor: "#F4F6F8",
+    paddingHorizontal: 20,
+    paddingTop: 50,
+  },
 
-export default styles
+  /* ---------- HEADER ---------- */
+  header: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 25,
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: "600",
+    color: "#111",
+  },
+
+  /* ---------- AVATAR SECTION ---------- */
+  avatarSection: {
+    alignItems: "center",
+    marginBottom: 30,
+  },
+  avatarWrapper: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: "#E0E0E0",
+    justifyContent: "center",
+    alignItems: "center",
+    elevation: 5,
+    shadowColor: "#000",
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+  },
+  avatar: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 60,
+  },
+  name: {
+    marginTop: 15,
+    fontSize: 22,
+    fontWeight: "700",
+    color: "#222",
+  },
+
+  /* ---------- INFO CARD ---------- */
+  infoCard: {
+    backgroundColor: "#FFFFFF",
+    padding: 20,
+    borderRadius: 16,
+    marginBottom: 30,
+    elevation: 3,
+    shadowColor: "#000",
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+  },
+  infoRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 15,
+    gap: 10,
+  },
+  infoText: {
+    fontSize: 15,
+    color: "#444",
+  },
+
+  /* ---------- BUTTONS ---------- */
+  buttonContainer: {
+    gap: 15,
+    marginBottom: 40,
+  },
+
+  primaryButton: {
+    backgroundColor: "#111",
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: "center",
+  },
+  primaryButtonText: {
+    color: "#FFF",
+    fontSize: 16,
+    fontWeight: "600",
+  },
+
+  secondaryButton: {
+    borderWidth: 1,
+    borderColor: "#111",
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: "center",
+  },
+  secondaryButtonText: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#111",
+  },
+});
+
+export default styles;

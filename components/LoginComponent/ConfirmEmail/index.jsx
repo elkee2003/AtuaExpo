@@ -1,118 +1,160 @@
-import { View, Text, TextInput, Alert, TouchableOpacity } from 'react-native'
-import React, {useState} from 'react'
-import styles from './styles'
-import { useForm, Controller } from 'react-hook-form';
-import { router, useLocalSearchParams } from 'expo-router'
-import { confirmSignUp,  resendSignUpCode} from 'aws-amplify/auth';
+import { confirmSignUp, resendSignUpCode } from "aws-amplify/auth";
+import { router, useLocalSearchParams } from "expo-router";
+import { useState } from "react";
+import { Controller, useForm } from "react-hook-form";
+import {
+    ActivityIndicator,
+    Alert,
+    KeyboardAvoidingView,
+    Platform,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import styles from "./styles";
 
 const ConfirmEmailCom = () => {
+  const [loading, setLoading] = useState(false);
+  const [loadingCode, setLoadingCode] = useState(false);
 
-    const [loading, setLoading] = useState(false)
-    const [loadingCode, setLoadingCode] = useState(false)
+  const { username } = useLocalSearchParams();
 
-    const { username } = useLocalSearchParams();
+  const {
+    control,
+    handleSubmit,
+    formState: { errors },
+  } = useForm();
 
-    const {control, handleSubmit, formState:{errors}} = useForm();
+  const onSubmit = async (data) => {
+    if (!username) {
+      Alert.alert("Error", "Session expired. Please sign up again.");
+      return;
+    }
 
-    // Function to handle form submission of code
-    const onSubmit = async (data) => {
-        const { confirmationCode } = data;
+    if (loading) return;
+    setLoading(true);
 
-        if(loading){
-            return;
-        }
+    try {
+      await confirmSignUp({
+        username,
+        confirmationCode: data.confirmationCode.trim(),
+      });
 
-        setLoading(true);
-        
-        try{
-            // Call confirmSignUp with username and code
-            const response = await confirmSignUp({username, confirmationCode});
+      Alert.alert("Success", "Your email has been verified.");
+      router.replace("/login");
+    } catch (error) {
+      Alert.alert(
+        "Verification Failed",
+        error?.message || "Something went wrong.",
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
 
-            Alert.alert('Success', 'You signed up successfully!');
+  const handleResendCode = async () => {
+    if (!username) {
+      Alert.alert("Error", "Session expired.");
+      return;
+    }
 
-            router.push('/login');
-        }catch(error){
-            // Log the error for debugging
-            Alert.alert('Oops', error.message)
-            console.log('Error confirming sign-up:', error);
-        }
-        setLoading(false);
-    };
+    if (loadingCode) return;
+    setLoadingCode(true);
 
-    // Function to resend code
-    const handleResendCode = async ({ username }) => {
-        if(loadingCode){
-            return;
-        }
-
-        setLoadingCode(true);
-        try{
-            const {
-                destination,
-                deliveryMedium,
-                attributeName
-            } = await resendSignUpCode({ username });
-            Alert.alert('Success', 'Code was resent to your email')
-        }catch(e){
-            Alert.alert('Oops', e.message)
-        }
-        setLoadingCode(false);
-    };
+    try {
+      await resendSignUpCode({ username });
+      Alert.alert("Code Sent", "A new code has been sent to your email.");
+    } catch (error) {
+      Alert.alert("Resend Failed", error?.message || "Something went wrong.");
+    } finally {
+      setLoadingCode(false);
+    }
+  };
 
   return (
-    <View style={styles.container}>
-
-        {/* Header */}
-        <View style={styles.titleCon}>
-            <Text style={styles.title}>
-                Confirm Your Email
+    <SafeAreaView style={styles.safe}>
+      <KeyboardAvoidingView
+        style={styles.container}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+      >
+        <View style={styles.card}>
+          {/* HEADER */}
+          <View style={styles.header}>
+            <Text style={styles.title}>Verify your email</Text>
+            <Text style={styles.subtitle}>
+              Enter the 6-digit code sent to{" "}
+              <Text style={styles.bold}>{username}</Text>
             </Text>
-        </View>
+          </View>
 
-        {/* Input */}
-        <View style={styles.inputSection}>
-        <Text style={styles.inputSub}>Enter Code</Text>
-        <Controller
-            name='confirmationCode'
-            control={control}
-            defaultValue=''
-            rules={{
-                required:'Confirmation Code is required',
-            }}
-            render={({field: {value, onChange, onBlur}})=>(
+          {/* INPUT */}
+          <View style={styles.form}>
+            <Controller
+              name="confirmationCode"
+              control={control}
+              defaultValue=""
+              rules={{
+                required: "Code is required",
+                minLength: {
+                  value: 6,
+                  message: "Enter a valid 6-digit code",
+                },
+              }}
+              render={({ field: { value, onChange, onBlur } }) => (
                 <TextInput
-                    style={styles.input}
-                    value={value}
-                    onChangeText={onChange}
-                    onBlur={onBlur}
-                    placeholder='Enter your code sent to your email'
+                  style={[
+                    styles.input,
+                    errors.confirmationCode && styles.inputError,
+                  ]}
+                  placeholder="000000"
+                  placeholderTextColor="#9CA3AF"
+                  value={value}
+                  onChangeText={onChange}
+                  onBlur={onBlur}
+                  keyboardType="number-pad"
+                  maxLength={6}
                 />
+              )}
+            />
+
+            {errors.confirmationCode && (
+              <Text style={styles.errorText}>
+                {errors.confirmationCode.message}
+              </Text>
             )}
-        />
-        {errors.confirmationCode && <Text style={styles.errorText}>{errors.confirmationCode.message}</Text>}
-        </View>
 
-        <TouchableOpacity 
-            style={styles.btnCon}
-            onPress={handleSubmit(onSubmit)}
-        >
-            <Text style={styles.btnTxt}>{loading ? 'Confirming' : 'Confirm'}</Text>
-        </TouchableOpacity>
+            {/* PRIMARY BUTTON */}
+            <TouchableOpacity
+              style={[styles.primaryButton, loading && styles.buttonDisabled]}
+              onPress={handleSubmit(onSubmit)}
+              disabled={loading}
+            >
+              {loading ? (
+                <ActivityIndicator color="#FFFFFF" />
+              ) : (
+                <Text style={styles.primaryButtonText}>Verify Email</Text>
+              )}
+            </TouchableOpacity>
+          </View>
 
-        {/* Secondary button */}
-        <View style={styles.secBtnSection}>
-            {/* Resend Code */}
-            <TouchableOpacity style={styles.secBtnCon} onPress={()=>handleResendCode({username})}>
-                <Text style={styles.secBtnTxt}>{loadingCode ? 'Resending' : 'Resend code'}</Text>
+          {/* SECONDARY */}
+          <View style={styles.secondarySection}>
+            <TouchableOpacity onPress={handleResendCode} disabled={loadingCode}>
+              <Text style={styles.secondaryText}>
+                {loadingCode ? "Resending..." : "Resend Code"}
+              </Text>
             </TouchableOpacity>
 
-            {/* Back to Sign In page */}
-            <TouchableOpacity style={styles.secBtnCon} onPress={()=>router.push('/login')}>
-                <Text style={styles.secBtnTxt}>Back to Sign In</Text>
+            <TouchableOpacity onPress={() => router.replace("/login")}>
+              <Text style={styles.secondaryText}>Back to Sign In</Text>
             </TouchableOpacity>
+          </View>
         </View>
-    </View>
-  )
-}
+      </KeyboardAvoidingView>
+    </SafeAreaView>
+  );
+};
 
 export default ConfirmEmailCom;

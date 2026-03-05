@@ -1,82 +1,53 @@
-import { StyleSheet,} from 'react-native'
+import { StyleSheet } from "react-native";
 
 const styles = StyleSheet.create({
-    container:{
-        flex:1,
-        marginTop:40,
-        marginHorizontal:10,
-    },
-    titleCon:{
-        flexDirection:'row',
-        width:300,
-        alignSelf:'center'
-    },
-    title:{
-        fontSize:22,
-        fontWeight:'bold'
-    },
-    inputSection:{
-        alignSelf:'center'
-    },
-    inputSub:{
-        marginTop:20,
-        marginBottom:5,
-        fontSize:18,
-    },
-    input:{
-        borderWidth:1,
-        fontSize:16,
-        padding:7,
-        width:300,
-        borderRadius:10,
-    },
-    passwordContainer: {
-        position: 'relative', // Make the container relative
-    },
-    eyeIcon: {
-        position: 'absolute',
-        right: 10,
-        top: 13,  // Adjust as per your design
-    },
-    btnCon:{
-        width: 300,
-        padding:10,
-        justifyContent:'center',
-        alignItems:'center',
-        alignSelf:'center',
-        backgroundColor:'#045e04',
-        borderRadius:10,
-        marginTop:20,
-    },
-    btnTxt:{
-        fontSize:20,
-        fontWeight:'bold',
-        color:'white'
-    },
-    secBtnSection:{
-        flexDirection:'row',
-        alignItems:'center',
-        justifyContent:'space-between',
-        // width:300,
-        marginTop:10,
-        marginHorizontal:35,
-    },
-    secBtnCon:{
-        marginTop:15,
-        alignSelf:'center'
-    },
-    secBtnTxt:{
-        fontSize:18,
-        fontWeight:'bold',
-        color:'#058b05'
-    },
-    errorText: {
-        color: 'red',
-        marginBottom: 10,
-    },
-    errorBorder: {
-        borderColor: 'red',
-    },
-})
+  container: {
+    flex: 1,
+    backgroundColor: "#F4F6F9",
+    paddingHorizontal: 24,
+  },
 
-export default styles
+  scroll: {
+    flexGrow: 1,
+    justifyContent: "center",
+    paddingVertical: 40,
+  },
+
+  header: {
+    marginBottom: 30,
+    alignItems: "center",
+  },
+
+  title: {
+    fontSize: 28,
+    fontWeight: "700",
+    color: "#0F172A",
+  },
+
+  subtitle: {
+    marginTop: 6,
+    fontSize: 15,
+    color: "#64748B",
+    textAlign: "center",
+  },
+
+  card: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 24,
+    padding: 24,
+    shadowColor: "#000",
+    shadowOpacity: 0.08,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+
+  link: {
+    textAlign: "center",
+    marginTop: 18,
+    fontSize: 14,
+    color: "#15803D",
+    fontWeight: "500",
+  },
+});
+
+export default styles;

@@ -1,73 +1,114 @@
-import { StyleSheet,} from 'react-native'
-import { SearchBar } from 'react-native-screens'
+import { StyleSheet } from "react-native";
 
-const styles = StyleSheet.create({
-    container:{
-        flex:1,
-        marginTop:40,
-        marginHorizontal:10,
-    },
-    title: {
-        fontSize: 30,
-        fontWeight: "bold",
-        textAlign: "center",
-        margin: 10,
-    },
-    searchBar:{
-        padding:9,
-        fontSize:17,
-        backgroundColor:'white',
-        borderWidth:1,
-        borderRadius:10,
-        marginBottom:20,
-    },
-    row:{
-        flexDirection:'row',
-        alignItems:'center',
-        backgroundColor:'#c4c2c2',
-        padding:5,
-        marginBottom:15,
-        borderRadius:20,
-    },
-    imgContainer:{
-        height:90,
-        width:120,     
-    },
-    img:{
-        width:'100%',
-        height:'100%',
-        resizeMode:"contain",
-        borderTopLeftRadius:20,
-        borderBottomLeftRadius:20,
-    },
-    detailRow:{
-        marginLeft:'auto',
-        marginRight:15,
-    },
-    sub:{
-        fontsize:18,
-        fontWeight:'bold',
-    },
-    detailFirst:{
-        fontsize:19,
-        marginBottom:10,
-    },
-    detail:{
-        fontsize:19,
-    },
-    btnContainer:{
-        marginHorizontal:80,
-        padding:5,
-        borderRadius:20,
-        backgroundColor:'#09d809',
-        justifyContent:'center',
-        alignItems:'center',
-        marginBottom:10,
-    },
-    btnTxt:{
-        fontSize:30,
-        fontWeight:'bold'
-    }
-})
+export default StyleSheet.create({
+  screen: {
+    flex: 1,
+    backgroundColor: "#f3f4f6",
+    paddingHorizontal: 16,
+  },
 
-export default styles
+  title: {
+    fontSize: 22,
+    fontWeight: "700",
+    marginVertical: 20,
+    color: "#111827",
+  },
+
+  card: {
+    backgroundColor: "#ffffff",
+    borderRadius: 18,
+    marginBottom: 20,
+    overflow: "hidden",
+    elevation: 4,
+  },
+
+  image: {
+    width: "100%",
+    height: 200,
+  },
+
+  badgeContainer: {
+    position: "absolute",
+    top: 12,
+    left: 12,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 20,
+    flexDirection: "row",
+    alignItems: "center",
+  },
+
+  onlineDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "#22c55e",
+    marginRight: 6,
+  },
+
+  badgeText: {
+    color: "#fff",
+    fontSize: 12,
+    fontWeight: "600",
+  },
+
+  content: {
+    padding: 16,
+  },
+
+  headerRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+
+  model: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#111827",
+  },
+
+  verified: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#16a34a",
+  },
+
+  vehicleClass: {
+    fontSize: 13,
+    color: "#6b7280",
+    marginTop: 4,
+  },
+
+  plate: {
+    fontSize: 13,
+    marginTop: 6,
+    color: "#374151",
+  },
+
+  description: {
+    marginTop: 10,
+    fontSize: 14,
+    color: "#4b5563",
+    lineHeight: 20,
+  },
+
+  bottomRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginTop: 16,
+    alignItems: "center",
+  },
+
+  driver: {
+    fontSize: 13,
+    color: "#6b7280",
+  },
+
+  more: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#111827",
+  },
+});

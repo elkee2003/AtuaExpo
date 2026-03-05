@@ -1,120 +1,169 @@
-import { StyleSheet, } from 'react-native'
-
+import { StyleSheet } from "react-native";
 
 const styles = StyleSheet.create({
-    container:{
-        marginTop:40,
-        marginHorizontal:10,
-    },
-    title: {
-        fontSize: 30,
-        fontWeight: "bold",
-        textAlign: "center",
-        margin: 10,
-    },
-    bckBtnCon:{
-        position:'absolute',
-        top:10,
-    },
-    bckBtnIcon:{
-        fontSize:30,
-        color:'black'
-    },
-    editBtn:{
-        position:'absolute',
-        right:10,
-        top:10,
-    },
-    editBtnTxt:{
-        color:'red',
-        fontSize:17,
-    },
-    profilePicContainer:{
-        position:'relative',
-        height:150,
-        width:150,
-        borderRadius:75,
-        backgroundColor:'#a2a2a8',
-        justifyContent:'center',
-        alignSelf:'center',
-        justifyContent:'center',
-        alignItems:'center',
-        marginVertical:10,
-    },
-    img:{
-        width:'100%',
-        height:'100%',
-        resizeMode:"contain",
-        borderRadius:75,
-    },
-    plusIconContainer: {
-        position: 'absolute',
-        top: '50%',
-        left: '50%',
-        transform: [{ translateX: -30 }, { translateY: -30 }], // Adjust translate values according to your icon size
-        zIndex: 3,
-    },
-    plusIcon:{
-        color: 'rgba(3, 3, 59, 0.7)',
-        backgroundColor:'transparent',
-        fontSize:60,
-        color:'#07a830',
-    },
-    doneBtn:{
-        backgroundColor:'#1a1b1a',
-        marginTop:10,
-        padding:2,
-        marginHorizontal:80,
-        marginBottom:10,
-        alignItems:'center',
-        borderRadius:30,
-    },
-    doneTxt:{
-        fontSize:30,
-        fontWeight:'bold',
-        color:'#e9e6e6'
-    },
-    guarantorSub:{
-        marginHorizontal:10,
-        fontSize:20,
-        fontWeight:'bold',
-    },
-    subHeader:{
-        marginTop:15,
-        fontSize:15,
-        fontWeight:'bold',
-    },
-    inputReview:{
-        padding:5,
-        fontSize:18,
-        letterSpacing:0.5,
-        color:"white",
-        backgroundColor:'#3b3b3b',
-        borderRadius:20,
-    },
-    inputReviewLast:{
-        padding:5,
-        fontSize:18,
-        letterSpacing:0.5,
-        color:"white",
-        backgroundColor:'#3b3b3b',
-        borderRadius:20,
-        marginBottom:20,
-    },
-    nxtBtn:{
-        backgroundColor:'#1a1b1a',
-        marginTop:10,
-        padding:2,
-        marginHorizontal:80,
-        marginBottom:10,
-        alignItems:'center',
-        borderRadius:30,
-    },
-    nxtBtnIcon:{
-        fontSize:50,
-        color:'#ffffff'
-    },
-  
-  })
+  safeArea: {
+    flex: 1,
+    backgroundColor: "#F9FAFB",
+  },
+
+  header: {
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#111827",
+  },
+
+  iconButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: "#F3F4F6",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+
+  scrollContainer: {
+    paddingHorizontal: 20,
+    paddingBottom: 140,
+  },
+
+  profileCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 24,
+    paddingVertical: 32,
+    alignItems: "center",
+    marginBottom: 24,
+    shadowColor: "#000",
+    shadowOpacity: 0.05,
+    shadowRadius: 15,
+    elevation: 6,
+  },
+
+  avatarWrapper: {
+    marginBottom: 16,
+  },
+
+  avatar: {
+    width: 110,
+    height: 110,
+    borderRadius: 55,
+  },
+
+  avatarPlaceholder: {
+    width: 110,
+    height: 110,
+    borderRadius: 55,
+    backgroundColor: "#E5E7EB",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+
+  fullName: {
+    fontSize: 20,
+    fontWeight: "700",
+    color: "#111827",
+  },
+
+  subtitle: {
+    marginTop: 6,
+    fontSize: 13,
+    color: "#10B981",
+    fontWeight: "600",
+  },
+
+  card: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 20,
+    padding: 20,
+    marginBottom: 20,
+    shadowColor: "#000",
+    shadowOpacity: 0.04,
+    shadowRadius: 10,
+    elevation: 4,
+  },
+
+  sectionTitle: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#6B7280",
+    marginBottom: 16,
+    textTransform: "uppercase",
+    letterSpacing: 1,
+  },
+
+  infoRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+
+  iconCircle: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: "#F3F4F6",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 14,
+  },
+
+  textBlock: {
+    flex: 1,
+  },
+
+  infoBlock: {
+    marginBottom: 12,
+  },
+
+  label: {
+    fontSize: 12,
+    color: "#6B7280",
+    marginBottom: 4,
+  },
+
+  value: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#111827",
+  },
+
+  divider: {
+    height: 1,
+    backgroundColor: "#E5E7EB",
+    marginVertical: 16,
+  },
+
+  bottomContainer: {
+    position: "absolute",
+    bottom: 0,
+    width: "100%",
+    padding: 20,
+    backgroundColor: "#FFFFFF",
+    borderTopWidth: 1,
+    borderColor: "#E5E7EB",
+  },
+
+  primaryButton: {
+    height: 56,
+    backgroundColor: "#111827",
+    borderRadius: 18,
+    justifyContent: "center",
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 10,
+  },
+
+  primaryButtonText: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontWeight: "600",
+  },
+});
 
 export default styles;
