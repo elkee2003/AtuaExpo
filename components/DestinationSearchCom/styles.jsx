@@ -1,100 +1,99 @@
 import { StyleSheet } from "react-native";
 
-const styles = StyleSheet.create({
+export default StyleSheet.create({
   container: {
-    padding: 10,
+    flex: 1,
+    backgroundColor: "#f7f7f7",
+  },
+
+  header: {
+    paddingTop: 60,
+    paddingHorizontal: 20,
+    paddingBottom: 10,
+  },
+
+  headerTitle: {
+    fontSize: 24,
+    fontWeight: "700",
+  },
+
+  searchCard: {
+    marginHorizontal: 16,
     backgroundColor: "#fff",
-    height: "100%",
+    borderRadius: 14,
+    padding: 12,
+    shadowColor: "#000",
+    shadowOpacity: 0.1,
+    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 10,
+    elevation: 5,
   },
+
+  inputContainer: {
+    marginVertical: 9,
+  },
+
   textInput: {
-    padding: 10,
-    backgroundColor: "#eee",
-    marginTop: 40,
-    marginBottom: 5,
+    backgroundColor: "#f1f1f1",
+    padding: 12,
+    borderRadius: 10,
+    fontSize: 15,
+  },
+
+  swapButton: {
+    position: "absolute",
+    right: 12,
+    top: 52,
+    backgroundColor: "#fff",
+    padding: 6,
     borderRadius: 20,
+    shadowColor: "#000",
+    shadowOpacity: 0.15,
+    shadowRadius: 5,
+    elevation: 3,
   },
-  separator: {
-    backgroundColor: "#efefef",
-    height: 1,
-  },
-  listView: {
-    position: "absolute",
-    top: 145,
-  },
-  autocompleteContainer: {
-    position: "absolute",
-    top: 0,
-    left: 10,
-    right: 10,
-  },
+
   row: {
     flexDirection: "row",
     alignItems: "center",
-    marginVertical: 7,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#eee",
   },
+
   iconContainer: {
-    backgroundColor: "#a2a2a2",
-    padding: 5,
-    borderRadius: 50,
-    marginRight: 15,
+    backgroundColor: "#4a4a4a",
+    padding: 8,
+    borderRadius: 20,
+    marginRight: 12,
   },
-  locationText: {},
-  circle: {
-    width: 5,
-    height: 5,
-    backgroundColor: "black",
+
+  textContainer: {
+    flex: 1,
+  },
+
+  locationTitle: {
+    fontSize: 15,
+    fontWeight: "500",
+  },
+
+  locationSubtitle: {
+    fontSize: 12,
+    color: "#888",
+    marginTop: 2,
+  },
+
+  rightButtonContainer: {
     position: "absolute",
-    top: 25,
-    left: 15,
-    borderRadius: 5,
+    right: 10,
+    top: 12,
+    flexDirection: "row",
+    alignItems: "center",
   },
-  line: {
-    width: 1,
-    height: 40,
-    backgroundColor: "#919191",
-    position: "absolute",
-    top: 36,
-    left: 16.5,
-  },
-  square: {
-    width: 5,
-    height: 5,
-    backgroundColor: "black",
-    position: "absolute",
-    top: 80,
-    left: 15,
-  },
-  topButton: {
-    position: "absolute",
-    top: 48,
-    right: 4,
-    zIndex: 2,
-    color: "#928f8f",
-    fontSize: 20,
-    // justifyContent: 'center',
-    // alignItems: 'center',
-    // marginLeft: 10
-  },
-  bottomButton: {
-    position: "absolute",
-    top: 48,
-    right: 4,
-    fontSize: 20,
-    zIndex: 2,
-    color: "#928f8f",
-    // justifyContent: 'center',
-    // alignItems: 'center',
-    // marginLeft: 10
-  },
-  gPoweredContainer: {
-    display: "none",
-  },
-  activityIndicator: {
-    position: "absolute",
-    top: "50%",
-    left: "50%",
-    zIndex: 3,
+
+  listView: {
+    backgroundColor: "#fff",
+    borderRadius: 10,
+    marginTop: 5,
   },
 });
-
-export default styles;

@@ -7,7 +7,7 @@ const OfferHeader = ({ offersCount, notifiedDriversCount }) => {
       <View style={styles.header}>
         <Text style={styles.title}>Waiting for driver offers...</Text>
         <Text style={styles.subtitle}>
-          Notified {notifiedDriversCount} freight drivers
+          Notified {notifiedDriversCount} maxi drivers
         </Text>
       </View>
     );

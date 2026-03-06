@@ -1,3 +1,4 @@
+// In ResultMap remember to uncomment the isApproved query before building for production
 import { useLocationContext } from "@/providers/LocationProvider";
 import { useOrderContext } from "@/providers/OrderProvider";
 import Ionicons from "@expo/vector-icons/Ionicons";

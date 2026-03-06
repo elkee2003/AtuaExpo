@@ -1,6 +1,7 @@
 import { freightPricingEngine } from "@/modules/freightPricingEngine";
 import { useLocationContext } from "@/providers/LocationProvider";
 import { useOrderContext } from "@/providers/OrderProvider";
+import { getTransportLabel } from "@/utils/transportFormatter";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { useEffect, useState } from "react";
 import {
@@ -169,7 +170,9 @@ export default function MaxiReviewScreen() {
 
           <Text style={styles.value}>Type: {transportationType}</Text>
 
-          <Text style={styles.value}>Vehicle: {vehicleClass}</Text>
+          <Text style={styles.value}>
+            Vehicle: {getTransportLabel(vehicleClass)}
+          </Text>
         </View>
 
         {/* CARGO */}

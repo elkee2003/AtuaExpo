@@ -37,18 +37,18 @@ const ResultMap = () => {
   };
 
   const getImage = (type) => {
-    if (type === "Micro X") {
+    if (type === "Micro") {
       return require("../../../assets/atuaImages/Bicycle.png");
     }
-    if (type === "Moto X") {
+    if (type === "Moto") {
       return require("../../../assets/atuaImages/Bike.jpg");
     }
-    if (type === "Maxi Batch") {
+    if (type === "Maxi") {
       return require("../../../assets/atuaImages/top-UberXL.png");
     }
-    if (type === "Maxi") {
-      return require("../../../assets/atuaImages/Deliverybicycle.png");
-    }
+    // if (type === "Maxi") {
+    //   return require("../../../assets/atuaImages/Deliverybicycle.png");
+    // }
     return require("../../../assets/atuaImages/Walk.png");
   };
 
@@ -62,10 +62,13 @@ const ResultMap = () => {
 
   const fetchCouriers = async () => {
     try {
-      const onlineCouriers = await DataStore.query(Courier, (c) =>
-        c.isOnline.eq(true),
+      const onlineApprovedCouriers = await DataStore.query(Courier, (c) =>
+        c.and((c) => [
+          c.isOnline.eq(true),
+          // c.isApproved.eq(true)
+        ]),
       );
-      setCouriers(onlineCouriers);
+      setCouriers(onlineApprovedCouriers);
     } catch (e) {
       Alert.alert("Error", e.message);
     }

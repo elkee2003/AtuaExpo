@@ -1,5 +1,6 @@
 // components/maxi/MaxiBiddingSheet.js
 
+import { router } from "expo-router";
 import { FlatList, Text, View } from "react-native";
 import OfferCard from "./OfferCard";
 import OfferCountdown from "./OfferCountdown";
@@ -35,6 +36,15 @@ const MaxiBiddingSheet = ({
         )}
         contentContainerStyle={{ paddingBottom: 120 }}
       />
+
+      <Text
+        style={styles.orderText}
+        onPress={() => {
+          router.push("/orderhistory");
+        }}
+      >
+        Order History
+      </Text>
 
       <Text style={styles.cancelText} onPress={onCancel}>
         Cancel Order

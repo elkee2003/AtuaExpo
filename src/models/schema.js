@@ -541,6 +541,15 @@ export const schema = {
                     "isRequired": false,
                     "attributes": []
                 },
+                "mediaUploadStatus": {
+                    "name": "mediaUploadStatus",
+                    "isArray": false,
+                    "type": {
+                        "enum": "MediaUploadStatus"
+                    },
+                    "isRequired": false,
+                    "attributes": []
+                },
                 "courierPreTransferPhotos": {
                     "name": "courierPreTransferPhotos",
                     "isArray": true,
@@ -1290,6 +1299,15 @@ export const schema = {
         }
     },
     "enums": {
+        "MediaUploadStatus": {
+            "name": "MediaUploadStatus",
+            "values": [
+                "PENDING",
+                "UPLOADING",
+                "COMPLETE",
+                "FAILED"
+            ]
+        },
         "OrderStatus": {
             "name": "OrderStatus",
             "values": [
@@ -1311,5 +1329,5 @@ export const schema = {
     },
     "nonModels": {},
     "codegenVersion": "3.4.4",
-    "version": "8e204461a887d2d38252948ed8d5eae1"
+    "version": "43d074e5910e234fb5bd0b5704ad0d88"
 };

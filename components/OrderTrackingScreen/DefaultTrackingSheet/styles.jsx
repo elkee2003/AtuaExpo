@@ -22,6 +22,17 @@ export default StyleSheet.create({
     marginBottom: 20,
   },
 
+  orderText: {
+    textAlign: "center",
+    color: "#252424",
+    marginTop: 20,
+    fontWeight: "600",
+    backgroundColor: "rgb(240, 240, 240)",
+    padding: 10,
+    marginHorizontal: 80,
+    borderRadius: 20,
+  },
+
   /* ❌ Cancel Button */
 
   cancelBtn: {

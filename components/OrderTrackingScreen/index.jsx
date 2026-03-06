@@ -12,6 +12,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import DefaultTrackingSheet from "./DefaultTrackingSheet";
 import MaxiBiddingSheet from "./Maxi";
+import RetryUploadBanner from "./Maxi/RetryUploadBaner";
 
 import styles from "./styles";
 
@@ -132,7 +133,11 @@ const OrderTrackingScreen = ({ orderId }) => {
     longitude: order.destinationLng,
   };
 
-  const isMaxi = order.transportationType === "MAXI";
+  // Condition to start bidding
+  const uploadFinished =
+    !order.mediaUploadStatus || order.mediaUploadStatus === "COMPLETE";
+
+  const canStartBidding = order.transportationType === "MAXI" && uploadFinished;
 
   /* ================= UI ================= */
 
@@ -163,7 +168,7 @@ const OrderTrackingScreen = ({ orderId }) => {
           anchor={{ x: 0.5, y: 0.5 }}
           tracksViewChanges={true}
         >
-          {order.status === "READY_FOR_PICKUP" ? (
+          {order.status === "READY_FOR_PICKUP" || order.status === "BIDDING" ? (
             <View style={{ height: "120", width: "120" }}>
               <Animated.View
                 style={[
@@ -212,7 +217,11 @@ const OrderTrackingScreen = ({ orderId }) => {
         topInset={1}
       >
         <BottomSheetView>
-          {isMaxi && order.status === "READY_FOR_PICKUP" ? (
+          {order.mediaUploadStatus === "FAILED" && (
+            <RetryUploadBanner order={order} uploadMedia={uploadMedia} />
+          )}
+
+          {canStartBidding && order.status === "BIDDING" ? (
             <MaxiBiddingSheet
               offers={offers}
               notifiedDriversCount={notifiedDriversCount}

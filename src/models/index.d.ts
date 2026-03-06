@@ -2,6 +2,13 @@ import { ModelInit, MutableModel, __modelMeta__, ManagedIdentifier } from "@aws-
 // @ts-ignore
 import { LazyLoading, LazyLoadingDisabled, AsyncCollection, AsyncItem } from "@aws-amplify/datastore";
 
+export enum MediaUploadStatus {
+  PENDING = "PENDING",
+  UPLOADING = "UPLOADING",
+  COMPLETE = "COMPLETE",
+  FAILED = "FAILED"
+}
+
 export enum OrderStatus {
   BIDDING = "BIDDING",
   READY_FOR_PICKUP = "READY_FOR_PICKUP",
@@ -157,6 +164,7 @@ type EagerOrder = {
   readonly senderPreTransferPhotos?: (string | null)[] | null;
   readonly senderPreTransferVideo?: string | null;
   readonly senderPreTransferRecordedAt?: string | null;
+  readonly mediaUploadStatus?: MediaUploadStatus | keyof typeof MediaUploadStatus | null;
   readonly courierPreTransferPhotos?: (string | null)[] | null;
   readonly courierPreTransferVideo?: string | null;
   readonly courierPreTransferRecordedAt?: string | null;
@@ -237,6 +245,7 @@ type LazyOrder = {
   readonly senderPreTransferPhotos?: (string | null)[] | null;
   readonly senderPreTransferVideo?: string | null;
   readonly senderPreTransferRecordedAt?: string | null;
+  readonly mediaUploadStatus?: MediaUploadStatus | keyof typeof MediaUploadStatus | null;
   readonly courierPreTransferPhotos?: (string | null)[] | null;
   readonly courierPreTransferVideo?: string | null;
   readonly courierPreTransferRecordedAt?: string | null;

@@ -1,3 +1,4 @@
+// I'll use this page for admin to see the different vehicles people upload, then delete this component and screen after
 import { router } from "expo-router";
 import { useEffect, useState } from "react";
 import {

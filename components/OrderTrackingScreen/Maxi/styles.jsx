@@ -88,10 +88,47 @@ export default StyleSheet.create({
     fontWeight: "600",
   },
 
+  orderText: {
+    textAlign: "center",
+    color: "#252424",
+    marginTop: 20,
+    fontWeight: "600",
+    backgroundColor: "rgb(240, 240, 240)",
+    padding: 10,
+    marginHorizontal: 80,
+    borderRadius: 20,
+  },
+
   cancelText: {
     textAlign: "center",
     color: "#ef4444",
     marginTop: 20,
+    fontWeight: "600",
+  },
+
+  /* STYLES FOR RETRY BANNER */
+
+  retryBanner: {
+    backgroundColor: "#FFF3CD",
+    padding: 12,
+    marginHorizontal: 16,
+    marginBottom: 10,
+    borderRadius: 10,
+  },
+
+  retryText: {
+    marginBottom: 8,
+  },
+
+  retryButton: {
+    backgroundColor: "#FF9900",
+    padding: 10,
+    borderRadius: 8,
+    alignItems: "center",
+  },
+
+  retryButtonText: {
+    color: "#fff",
     fontWeight: "600",
   },
 });

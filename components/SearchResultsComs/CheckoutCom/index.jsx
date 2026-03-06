@@ -5,6 +5,7 @@ import { Order } from "@/src/models";
 import { getTransportLabel } from "@/utils/transportFormatter";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { DataStore } from "aws-amplify/datastore";
+import * as Crypto from "expo-crypto";
 import { router } from "expo-router";
 import { useState } from "react";
 import {
@@ -51,18 +52,25 @@ const Checkout = () => {
   } = useOrderContext();
 
   // Function to generate verification code
-  const generateVerificationCode = () => {
-    const array = new Uint32Array(1);
-    crypto.getRandomValues(array);
+  const generateVerificationCode = async () => {
+    const randomBytes = await Crypto.getRandomBytesAsync(4);
 
-    return (array[0] % 1000000).toString().padStart(6, "0");
+    const number =
+      (randomBytes[0] << 24) |
+      (randomBytes[1] << 16) |
+      (randomBytes[2] << 8) |
+      randomBytes[3];
+
+    return Math.abs(number % 1000000)
+      .toString()
+      .padStart(6, "0");
   };
 
   const handleOrder = async () => {
     try {
       setLoading(true);
 
-      const verificationCode = generateVerificationCode();
+      const verificationCode = await generateVerificationCode();
 
       setDeliveryVerificationCode(verificationCode);
 

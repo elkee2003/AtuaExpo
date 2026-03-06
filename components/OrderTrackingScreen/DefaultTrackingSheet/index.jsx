@@ -1,3 +1,4 @@
+import { router } from "expo-router";
 import { Animated, Image, Text, TouchableOpacity, View } from "react-native";
 import styles from "./styles";
 
@@ -19,10 +20,10 @@ const DefaultTrackingSheet = ({ order, courier, driverCardAnim, onCancel }) => {
 
   const renderSubtitle = () => {
     if (order.status === "READY_FOR_PICKUP") {
-      return "Notifying nearby drivers.";
+      return "Notifying nearby couriers.";
     }
     if (order.status === "ACCEPTED") {
-      return `${courier?.firstName || "Driver"} is heading to pickup`;
+      return `${courier?.firstName || "Courier"} is heading to pickup`;
     }
     return null;
   };
@@ -31,6 +32,15 @@ const DefaultTrackingSheet = ({ order, courier, driverCardAnim, onCancel }) => {
     <View style={styles.sheetContent}>
       <Text style={styles.statusTitle}>{renderStatusTitle()}</Text>
       <Text style={styles.statusSubtitle}>{renderSubtitle()}</Text>
+
+      <Text
+        style={styles.orderText}
+        onPress={() => {
+          router.push("/orderhistory");
+        }}
+      >
+        Order History
+      </Text>
 
       {order.status === "READY_FOR_PICKUP" && (
         <TouchableOpacity style={styles.cancelBtn} onPress={onCancel}>

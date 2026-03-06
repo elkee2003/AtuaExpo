@@ -28,6 +28,13 @@ type CourierCompany @model @auth(rules: [{ allow: public }]) {
   push_token: String
 }
 
+enum MediaUploadStatus {
+  PENDING
+  UPLOADING
+  COMPLETE
+  FAILED
+}
+
 enum OrderStatus {
   BIDDING
   READY_FOR_PICKUP
@@ -102,6 +109,9 @@ type Order @model @auth(rules: [{ allow: public }]) {
   senderPreTransferPhotos: [String]
   senderPreTransferVideo: String
   senderPreTransferRecordedAt: AWSDateTime
+
+  # ---------------- MEDIA UPLOAD STATUS ----------------
+  mediaUploadStatus: MediaUploadStatus
 
   courierPreTransferPhotos: [String]
   courierPreTransferVideo: String

@@ -1,13 +1,12 @@
-import { View, Text } from 'react-native'
-import React from 'react';
-import MaxiTypesCom from '../../../components/SearchResultsComs/MaxiTypes/MaxiTypeList';
+import { View } from "react-native";
+import MaxiTypeCategories from "../../../components/SearchResultsComs/MaxiTypes/MaxiTypeCategories";
 
 const MaxiTypes = () => {
   return (
-    <View style={{flex:1}}>
-      <MaxiTypesCom/>
+    <View style={{ flex: 1 }}>
+      <MaxiTypeCategories />
     </View>
-  )
-}
+  );
+};
 
 export default MaxiTypes;
