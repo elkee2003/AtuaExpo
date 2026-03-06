@@ -164,6 +164,8 @@ type EagerOrder = {
   readonly senderPreTransferPhotos?: (string | null)[] | null;
   readonly senderPreTransferVideo?: string | null;
   readonly senderPreTransferRecordedAt?: string | null;
+  readonly senderPreTransferLocalPhotos?: (string | null)[] | null;
+  readonly senderPreTransferLocalVideo?: string | null;
   readonly mediaUploadStatus?: MediaUploadStatus | keyof typeof MediaUploadStatus | null;
   readonly courierPreTransferPhotos?: (string | null)[] | null;
   readonly courierPreTransferVideo?: string | null;
@@ -245,6 +247,8 @@ type LazyOrder = {
   readonly senderPreTransferPhotos?: (string | null)[] | null;
   readonly senderPreTransferVideo?: string | null;
   readonly senderPreTransferRecordedAt?: string | null;
+  readonly senderPreTransferLocalPhotos?: (string | null)[] | null;
+  readonly senderPreTransferLocalVideo?: string | null;
   readonly mediaUploadStatus?: MediaUploadStatus | keyof typeof MediaUploadStatus | null;
   readonly courierPreTransferPhotos?: (string | null)[] | null;
   readonly courierPreTransferVideo?: string | null;

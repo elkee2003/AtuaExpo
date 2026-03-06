@@ -541,6 +541,21 @@ export const schema = {
                     "isRequired": false,
                     "attributes": []
                 },
+                "senderPreTransferLocalPhotos": {
+                    "name": "senderPreTransferLocalPhotos",
+                    "isArray": true,
+                    "type": "String",
+                    "isRequired": false,
+                    "attributes": [],
+                    "isArrayNullable": true
+                },
+                "senderPreTransferLocalVideo": {
+                    "name": "senderPreTransferLocalVideo",
+                    "isArray": false,
+                    "type": "String",
+                    "isRequired": false,
+                    "attributes": []
+                },
                 "mediaUploadStatus": {
                     "name": "mediaUploadStatus",
                     "isArray": false,
@@ -1329,5 +1344,5 @@ export const schema = {
     },
     "nonModels": {},
     "codegenVersion": "3.4.4",
-    "version": "43d074e5910e234fb5bd0b5704ad0d88"
+    "version": "17ae79b6e762c0734586fe26dea88f6c"
 };

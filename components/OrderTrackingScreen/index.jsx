@@ -12,7 +12,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import DefaultTrackingSheet from "./DefaultTrackingSheet";
 import MaxiBiddingSheet from "./Maxi";
-import RetryUploadBanner from "./Maxi/RetryUploadBaner";
+import RetryUploadBanner from "./Maxi/RetryUploadBanner";
 
 import styles from "./styles";
 
@@ -65,7 +65,8 @@ const OrderTrackingScreen = ({ orderId }) => {
   /* ================= SEARCH PULSE ================= */
 
   useEffect(() => {
-    if (order?.status !== "READY_FOR_PICKUP") return;
+    if (order?.status !== "READY_FOR_PICKUP" || order?.status !== "BIDDING")
+      return;
 
     const animation = Animated.loop(
       Animated.sequence([
@@ -218,7 +219,7 @@ const OrderTrackingScreen = ({ orderId }) => {
       >
         <BottomSheetView>
           {order.mediaUploadStatus === "FAILED" && (
-            <RetryUploadBanner order={order} uploadMedia={uploadMedia} />
+            <RetryUploadBanner order={order} uploadEvidence={uploadEvidence} />
           )}
 
           {canStartBidding && order.status === "BIDDING" ? (

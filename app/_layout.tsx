@@ -1,6 +1,9 @@
 import ProfileProvider from "@/providers/ProfileProvider";
+import { resumePendingUploads } from "@/utils/resumePendingUploads";
+import { uploadEvidence } from "@/utils/uploadEvidence";
 import { Amplify } from "aws-amplify";
 import { Stack } from "expo-router";
+import React, { useEffect } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import AuthProvider from "../providers/AuthProvider";
 import LocationProvider from "../providers/LocationProvider";
@@ -10,6 +13,10 @@ import amplifyconfig from "../src/amplifyconfiguration.json";
 Amplify.configure(amplifyconfig);
 
 const RootLayout = () => {
+  useEffect(() => {
+    resumePendingUploads(uploadEvidence);
+  }, []);
+
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <AuthProvider>

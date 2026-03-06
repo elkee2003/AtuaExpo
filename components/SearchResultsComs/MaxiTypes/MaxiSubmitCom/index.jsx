@@ -2,10 +2,9 @@ import { useAuthContext } from "@/providers/AuthProvider";
 import { useLocationContext } from "@/providers/LocationProvider";
 import { useOrderContext } from "@/providers/OrderProvider";
 import { MediaUploadStatus, Order } from "@/src/models";
+import { uploadEvidence } from "@/utils/uploadEvidence";
 import { DataStore } from "aws-amplify/datastore";
-import { uploadData } from "aws-amplify/storage";
 import * as Crypto from "expo-crypto";
-import * as ImageManipulator from "expo-image-manipulator";
 import { router } from "expo-router";
 import { useState } from "react";
 import { Alert, Text, TouchableOpacity, View } from "react-native";
@@ -82,113 +81,6 @@ const MaxiSubmit = () => {
       .padStart(6, "0");
   };
 
-  // Function to upload photos
-  const uploadSenderPhotos = async () => {
-    if (!senderPreTransferPhotos?.length) return [];
-
-    const uploaded = [];
-
-    for (const photo of senderPreTransferPhotos) {
-      try {
-        const manipulated = await ImageManipulator.manipulateAsync(
-          photo.uri,
-          [{ resize: { width: 900 } }],
-          { compress: 0.7, format: ImageManipulator.SaveFormat.JPEG },
-        );
-
-        const response = await fetch(manipulated.uri);
-        const blob = await response.blob();
-
-        const key = `public/orders/${dbUser.id}/senderPreTransferPhotos/${Crypto.randomUUID()}.jpg`;
-
-        const result = await uploadData({
-          path: key,
-          data: blob,
-          options: { contentType: "image/jpeg" },
-        }).result;
-
-        uploaded.push(result.path);
-      } catch (err) {
-        console.log("Photo upload failed:", err);
-      }
-    }
-
-    return uploaded;
-  };
-
-  // Function to upload video
-  const uploadSenderVideo = async () => {
-    if (!senderPreTransferVideo?.uri) return null;
-
-    try {
-      const response = await fetch(senderPreTransferVideo.uri);
-      const blob = await response.blob();
-
-      const key = `public/orders/${dbUser.id}/senderPreTransferVideo/${Crypto.randomUUID()}.mp4`;
-
-      const result = await uploadData({
-        path: key,
-        data: blob,
-        options: { contentType: "video/mp4" },
-      }).result;
-
-      return result.path;
-    } catch (err) {
-      console.log("Video upload failed:", err);
-      return null;
-    }
-  };
-
-  // Upload evidence in background
-  const uploadEvidence = async (order) => {
-    try {
-      // 1️⃣ mark upload started
-      await DataStore.save(
-        Order.copyOf(order, (updated) => {
-          updated.mediaUploadStatus = MediaUploadStatus.UPLOADING;
-        }),
-      );
-
-      // on the drivers side do it in such a way driver sees "Sender evidence uploading... ". An example:
-      // if mediaUploadStatus === PENDING
-      //    "Preparing sender evidence..."
-
-      // if mediaUploadStatus === UPLOADING
-      //    "Sender evidence uploading..."
-
-      // if mediaUploadStatus === COMPLETE
-      //    show photos + video
-
-      // if mediaUploadStatus === FAILED
-      //    "Sender evidence failed to upload"
-
-      const [uploadedPhotos, uploadedVideo] = await Promise.all([
-        uploadSenderPhotos(),
-        uploadSenderVideo(),
-      ]);
-
-      // 2️⃣ save uploaded media
-      await DataStore.save(
-        Order.copyOf(order, (updated) => {
-          updated.senderPreTransferPhotos = uploadedPhotos;
-          updated.senderPreTransferVideo = uploadedVideo;
-          updated.mediaUploadStatus = MediaUploadStatus.COMPLETE;
-        }),
-      );
-
-      console.log("Evidence upload complete");
-    } catch (error) {
-      console.log("Evidence upload error", error);
-
-      await DataStore.save(
-        Order.copyOf(order, (updated) => {
-          updated.mediaUploadStatus = MediaUploadStatus.FAILED;
-          // if Failed, Retry Upload button should be shown here or in orderhistory
-        }),
-      );
-    }
-  };
-
   // Function to submit bid
   const handleSubmit = async () => {
     if (submitting) return;
@@ -217,9 +109,12 @@ const MaxiSubmit = () => {
 
       setDeliveryVerificationCode(verificationCode);
 
+      // ✅ NEW — capture media before reset
+      const mediaPhotos = [...(senderPreTransferPhotos || [])];
+      const mediaVideo = senderPreTransferVideo;
+
       const hasSenderMedia =
-        (senderPreTransferPhotos && senderPreTransferPhotos.length > 0) ||
-        senderPreTransferVideo?.uri;
+        (mediaPhotos && mediaPhotos.length > 0) || mediaVideo?.uri;
 
       const mediaStatus = hasSenderMedia ? MediaUploadStatus.PENDING : null;
 
@@ -287,6 +182,10 @@ const MaxiSubmit = () => {
           // 🔥 CUSTODY EVIDENCE ONLY RECORDED AT
           mediaUploadStatus: mediaStatus,
           // on the drivers side do it in such a way driver sees "Sender evidence uploading..."
+
+          // Save local media paths
+          senderPreTransferLocalPhotos: mediaPhotos.map((p) => p.uri),
+          senderPreTransferLocalVideo: mediaVideo?.uri || null,
           senderPreTransferRecordedAt:
             senderPreTransferRecordedAt?.toISOString?.() ||
             new Date().toISOString(),
@@ -310,7 +209,7 @@ const MaxiSubmit = () => {
       // 2️⃣ Upload evidence in background
       if (hasSenderMedia) {
         setTimeout(() => {
-          uploadEvidence(newOrder);
+          uploadEvidence(newOrder, mediaPhotos, mediaVideo);
         }, 0);
       }
 

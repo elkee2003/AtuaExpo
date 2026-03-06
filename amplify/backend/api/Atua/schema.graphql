@@ -110,6 +110,9 @@ type Order @model @auth(rules: [{ allow: public }]) {
   senderPreTransferVideo: String
   senderPreTransferRecordedAt: AWSDateTime
 
+  senderPreTransferLocalPhotos: [String]
+  senderPreTransferLocalVideo: String
+
   # ---------------- MEDIA UPLOAD STATUS ----------------
   mediaUploadStatus: MediaUploadStatus
 
