@@ -1,34 +1,25 @@
-import { Order } from "@/src/models";
-import { DataStore } from "aws-amplify/datastore";
+import { uploadEvidence } from "@/utils/uploadEvidence";
 import { useState } from "react";
 import { Text, TouchableOpacity, View } from "react-native";
 import styles from "./styles";
 
-const RetryUploadBanner = ({ order, uploadEvidence }) => {
+const RetryUploadBanner = ({ order }) => {
   const [loading, setLoading] = useState(false);
+
   const retryUpload = async () => {
     try {
       setLoading(true);
 
-      await DataStore.save(
-        Order.copyOf(order, (updated) => {
-          updated.mediaUploadStatus = "UPLOADING";
-        }),
-      );
+      const photos =
+        order.senderPreTransferLocalPhotos?.map((uri) => ({ uri })) || [];
 
-      await uploadEvidence(order);
+      const video = order.senderPreTransferLocalVideo
+        ? { uri: order.senderPreTransferLocalVideo }
+        : null;
 
-      await DataStore.save(
-        Order.copyOf(order, (updated) => {
-          updated.mediaUploadStatus = "COMPLETE";
-        }),
-      );
+      await uploadEvidence(order, photos, video);
     } catch (error) {
-      await DataStore.save(
-        Order.copyOf(order, (updated) => {
-          updated.mediaUploadStatus = "FAILED";
-        }),
-      );
+      console.log("Retry upload failed:", error);
     }
 
     setLoading(false);

@@ -65,7 +65,7 @@ const OrderTrackingScreen = ({ orderId }) => {
   /* ================= SEARCH PULSE ================= */
 
   useEffect(() => {
-    if (order?.status !== "READY_FOR_PICKUP" || order?.status !== "BIDDING")
+    if (order?.status !== "READY_FOR_PICKUP" && order?.status !== "BIDDING")
       return;
 
     const animation = Animated.loop(
