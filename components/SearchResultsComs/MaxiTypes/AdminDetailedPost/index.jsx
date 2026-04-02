@@ -1,3 +1,4 @@
+// Admin components will be deleted after I add them to admin side
 import { useOrderContext } from "@/providers/OrderProvider";
 import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";

@@ -16,6 +16,13 @@ import RetryUploadBanner from "./Maxi/RetryUploadBanner";
 
 import styles from "./styles";
 
+const courierAnim = useRef(
+  new Animated.ValueXY({
+    x: 0,
+    y: 0,
+  }),
+).current;
+
 const OrderTrackingScreen = ({ orderId }) => {
   const bottomSheetRef = useRef(null);
   const mapRef = useRef(null);
@@ -54,13 +61,40 @@ const OrderTrackingScreen = ({ orderId }) => {
   useEffect(() => {
     if (!order?.Courier?.id) return;
 
+    let subscription;
+
     const fetchCourier = async () => {
       const data = await DataStore.query(Courier, order.Courier.id);
       setCourier(data);
     };
 
     fetchCourier();
+
+    // ✅ REAL-TIME updates
+    subscription = DataStore.observe(Courier, order.Courier.id).subscribe(
+      (msg) => {
+        setCourier(msg.element);
+      },
+    );
+
+    return () => {
+      if (subscription) subscription.unsubscribe();
+    };
   }, [order?.Courier?.id]);
+
+  useEffect(() => {
+    if (!courier?.lat || !courier?.lng) return;
+
+    /* ================= ANIMATE WHEN COURIER UPDATES ================= */
+    Animated.timing(courierAnim, {
+      toValue: {
+        x: courier.lat,
+        y: courier.lng,
+      },
+      duration: 1000,
+      useNativeDriver: false,
+    }).start();
+  }, [courier?.lat, courier?.lng]);
 
   /* ================= SEARCH PULSE ================= */
 
@@ -197,17 +231,17 @@ const OrderTrackingScreen = ({ orderId }) => {
 
         {/* Courier Marker */}
         {courier?.lat && courier?.lng && (
-          <Marker
+          <Marker.Animated
             coordinate={{
-              latitude: courier.lat,
-              longitude: courier.lng,
+              latitude: courierAnim.x,
+              longitude: courierAnim.y,
             }}
           >
             <Image
               source={{ uri: courier.profilePic }}
               style={styles.courierAvatar}
             />
-          </Marker>
+          </Marker.Animated>
         )}
       </MapView>
 

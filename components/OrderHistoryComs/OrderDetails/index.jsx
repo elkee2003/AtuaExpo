@@ -1,11 +1,11 @@
 import {
-    ActivityIndicator,
-    Image,
-    Modal,
-    ScrollView,
-    Text,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Image,
+  Modal,
+  ScrollView,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
 
 import { Courier, Order } from "@/src/models";
@@ -212,12 +212,18 @@ const OrderDetails = ({ orderId }) => {
       </Section>
 
       <Section
-        title="Load Details"
+        title="Parcel Details"
         open={sections.load}
         toggle={() => toggleSection("load")}
       >
-        <Text>Category: {order.loadCategory}</Text>
-        <Text>Weight: {order.declaredWeightBracket}</Text>
+        {order.loadCategory ? <Text>Category: {order.loadCategory}</Text> : ""}
+
+        {order.declaredWeightBracket ? (
+          <Text>Weight: {order.declaredWeightBracket}</Text>
+        ) : (
+          ""
+        )}
+
         <Text>Details: {order.orderDetails}</Text>
       </Section>
 
@@ -226,9 +232,27 @@ const OrderDetails = ({ orderId }) => {
         open={sections.pricing}
         toggle={() => toggleSection("pricing")}
       >
-        <Text>Offer: ₦{order.initialOfferPrice}</Text>
-        <Text>Loading Fee: ₦{order.loadingFee}</Text>
-        <Text>Unloading Fee: ₦{order.unloadingFee}</Text>
+        {order.initialOfferPrice ? (
+          <Text>Offer: ₦{order.initialOfferPrice}</Text>
+        ) : (
+          ""
+        )}
+
+        {order.loadingFee ? <Text>Loading Fee: ₦{order.loadingFee}</Text> : ""}
+
+        {order.unloadingFee ? (
+          <Text>Unloading Fee: ₦{order.unloadingFee}</Text>
+        ) : (
+          ""
+        )}
+
+        {order.platformFee ? (
+          <Text>Platform Fee: ₦{order.platformFee}</Text>
+        ) : (
+          ""
+        )}
+
+        {order.vatAmount ? <Text>VAT: ₦{order.vatAmount}</Text> : ""}
 
         <Text style={styles.total}>
           Total: ₦{order.totalPrice?.toLocaleString()}
@@ -265,7 +289,10 @@ const OrderDetails = ({ orderId }) => {
           </>
         )}
 
-        {(order.status === "ACCEPTED" || order.status === "IN_TRANSIT") && (
+        {(order.status === "READY_FOR_PICKUP" ||
+          order.status === "BIDDING" ||
+          order.status === "ACCEPTED" ||
+          order.status === "IN_TRANSIT") && (
           <>
             <Button
               title="Track Order"

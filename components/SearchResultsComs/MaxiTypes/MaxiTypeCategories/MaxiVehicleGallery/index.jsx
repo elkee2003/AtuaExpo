@@ -1,11 +1,11 @@
 import {
-    ActivityIndicator,
-    Animated,
-    Image,
-    ScrollView,
-    Text,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Animated,
+  Image,
+  ScrollView,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
 
 import { Courier } from "@/src/models";

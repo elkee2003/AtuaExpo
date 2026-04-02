@@ -22,6 +22,7 @@ const OrderProvider = ({ children }) => {
   const [loadingFee, setLoadingFee] = useState(null);
   const [unloadingFee, setUnloadingFee] = useState(null);
   const [totalPrice, setTotalPrice] = useState();
+  const [operationalFare, setOperationalFare] = useState();
   const [courierEarnings, setCourierEarnings] = useState(null);
   const [commissionAmount, setCommissionAmount] = useState(null);
   const [platformFee, setPlatformFee] = useState(null);
@@ -132,6 +133,7 @@ const OrderProvider = ({ children }) => {
     setLastOfferBy("");
     setLoadingFee(null);
     setUnloadingFee(null);
+    setOperationalFare(null);
     setTotalPrice(null);
     setCourierEarnings(null);
     setCommissionAmount(null);
@@ -212,6 +214,8 @@ const OrderProvider = ({ children }) => {
         setLoadingFee,
         unloadingFee,
         setUnloadingFee,
+        operationalFare,
+        setOperationalFare,
         totalPrice,
         setTotalPrice,
         courierEarnings,

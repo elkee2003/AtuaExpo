@@ -23,6 +23,7 @@ import styles from "./styles";
 
 const AtuaTypes = ({ selectedType, setSelectedType }) => {
   const {
+    setOperationalFare,
     setTotalPrice,
     setCourierEarnings,
     setPlatformFee,
@@ -122,6 +123,7 @@ const AtuaTypes = ({ selectedType, setSelectedType }) => {
       return;
     }
 
+    setOperationalFare(priceData.operationalFare);
     setTotalPrice(priceData.customerPrice);
     setCourierEarnings(priceData.courierEarnings);
     setPlatformFee(priceData.platformFee);

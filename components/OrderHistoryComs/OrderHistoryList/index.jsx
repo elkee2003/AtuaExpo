@@ -5,13 +5,14 @@ import { Order } from "../../../src/models";
 import styles from "./styles";
 
 const OrderHistoryList = ({ order, refreshOrders }) => {
-  const isLive = order.status === "ACCEPTED" || order.status === "PICKEDUP";
+  const isLive = order.status === "ACCEPTED";
 
-  const goToLive = () => {
-    // if (isLive) {
-    // router.push(`/screens/orderliveupdate/${order.id}`);
+  const goToOrderDetails = () => {
+    router.push(`/screens/orderdetails/${order.id}`);
+  };
+
+  const goToTracking = () => {
     router.push(`/screens/orderTrackingScreen/${order.id}`);
-    // }
   };
 
   const deleteOrder = async () => {
@@ -61,7 +62,7 @@ const OrderHistoryList = ({ order, refreshOrders }) => {
     <TouchableOpacity
       activeOpacity={0.95}
       style={[styles.card, isLive && styles.cardActive]}
-      onPress={goToLive}
+      onPress={goToOrderDetails}
     >
       {/* Top Row */}
       <View style={styles.topRow}>
@@ -85,6 +86,10 @@ const OrderHistoryList = ({ order, refreshOrders }) => {
         <Text style={styles.price}>₦{order?.totalPrice?.toLocaleString()}</Text>
         <Text style={styles.transport}>{order.transportationType}</Text>
       </View>
+
+      <TouchableOpacity style={styles.trackButton} onPress={goToTracking}>
+        <Text style={styles.trackText}>Order Tracking</Text>
+      </TouchableOpacity>
 
       {/* READY_FOR_PICKUP → Delete */}
       {order.status === "READY_FOR_PICKUP" && (

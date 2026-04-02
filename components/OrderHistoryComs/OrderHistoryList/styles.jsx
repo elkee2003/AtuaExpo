@@ -95,6 +95,19 @@ const styles = StyleSheet.create({
     textTransform: "capitalize",
   },
 
+  trackButton: {
+    marginTop: 16,
+    backgroundColor: "#2563EB",
+    paddingVertical: 10,
+    borderRadius: 10,
+    alignItems: "center",
+  },
+
+  trackText: {
+    color: "#FFFFFF",
+    fontWeight: "600",
+  },
+
   deleteButton: {
     marginTop: 16,
     backgroundColor: "#FEF2F2",

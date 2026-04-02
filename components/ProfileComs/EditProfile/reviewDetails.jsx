@@ -6,12 +6,12 @@ import * as ImageManipulator from "expo-image-manipulator";
 import { router } from "expo-router";
 import { useState } from "react";
 import {
-    Alert,
-    Image,
-    ScrollView,
-    Text,
-    TouchableOpacity,
-    View,
+  Alert,
+  Image,
+  ScrollView,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import { useAuthContext } from "../../../providers/AuthProvider";
 import { useProfileContext } from "../../../providers/ProfileProvider";
@@ -31,7 +31,7 @@ const ReviewUserCom = () => {
     phoneNumber,
   } = useProfileContext();
 
-  const { dbUser, setDbUser, sub } = useAuthContext();
+  const { dbUser, setDbUser, sub, userMail } = useAuthContext();
 
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -138,13 +138,37 @@ const ReviewUserCom = () => {
     setUploading(true);
 
     try {
-      const uploadedImagePath = await uploadImage(); // Upload image first
+      // ✅ 1. FIRST check if user already exists
+      let existingUsers = await DataStore.query(User, (u) => u.sub.eq(sub));
 
+      // 🔁 Retry after clearing (handles your schema change issue)
+      if (existingUsers.length === 0) {
+        console.log("No local user — retrying sync...");
+
+        await DataStore.clear();
+        await DataStore.start();
+
+        existingUsers = await DataStore.query(User, (u) => u.sub.eq(sub));
+      }
+
+      // ✅ 2. If user exists → DON'T create another one
+      if (existingUsers.length > 0) {
+        console.log("User already exists, skipping creation");
+
+        setDbUser(existingUsers[0]);
+        return;
+      }
+
+      // ✅ 3. Only now upload image
+      const uploadedImagePath = await uploadImage();
+
+      // ✅ 4. Create new user
       const user = await DataStore.save(
         new User({
           profilePic: uploadedImagePath,
           firstName,
           lastName,
+          email: userMail,
           exactAddress,
           address,
           phoneNumber,
@@ -153,9 +177,12 @@ const ReviewUserCom = () => {
           sub,
         }),
       );
+
       setDbUser(user);
     } catch (e) {
       Alert.alert("Error", e.message);
+    } finally {
+      setUploading(false);
     }
   };
 
@@ -170,6 +197,7 @@ const ReviewUserCom = () => {
         User.copyOf(dbUser, (updated) => {
           updated.firstName = firstName;
           updated.lastName = lastName;
+          updated.email = userMail;
           updated.profilePic = uploadedImagePath;
           updated.exactAddress = exactAddress;
           updated.address = address;

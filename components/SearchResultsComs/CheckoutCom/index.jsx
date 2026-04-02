@@ -7,7 +7,7 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import { DataStore } from "aws-amplify/datastore";
 import * as Crypto from "expo-crypto";
 import { router } from "expo-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -30,6 +30,9 @@ const Checkout = () => {
     originLng,
     destinationLat,
     destinationLng,
+    isInterState,
+    tripType,
+    setTripType,
     resetAllLocationFields,
   } = useLocationContext();
 
@@ -39,6 +42,7 @@ const Checkout = () => {
     recipientNumber2,
     orderDetails,
     transportationType,
+    operationalFare,
     totalPrice,
     courierEarnings,
     commissionAmount,
@@ -94,6 +98,8 @@ const Checkout = () => {
           destinationAddress: destinationAddress?.data?.description,
           destinationLat: parseFloat(destinationLat),
           destinationLng: parseFloat(destinationLng),
+          tripType,
+          isInterState,
           // VERIFICATION
           deliveryVerificationCode: verificationCode,
           userID: dbUser.id,
@@ -114,6 +120,11 @@ const Checkout = () => {
       setLoading(false);
     }
   };
+
+  // useEffect to set tripType
+  useEffect(() => {
+    setTripType(isInterState ? "INTERSTATE" : "INTRASTATE");
+  }, [isInterState, setTripType]);
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -192,14 +203,19 @@ const Checkout = () => {
           </View>
 
           <View style={styles.row}>
+            <Text style={styles.label}>Operational Fee</Text>
+            <Text style={styles.value}>₦{operationalFare}</Text>
+          </View>
+
+          <View style={styles.row}>
             <Text style={styles.label}>Platform Fee</Text>
             <Text style={styles.value}>₦{platformFee}</Text>
           </View>
 
-          {/* <View style={styles.row}>
-            <Text style={styles.label}>Input Fee</Text>
-            <Text style={styles.value}>₦{}</Text>
-          </View> */}
+          <View style={styles.row}>
+            <Text style={styles.label}>VAT</Text>
+            <Text style={styles.value}>₦{vatAmount}</Text>
+          </View>
 
           <View style={styles.divider} />
 

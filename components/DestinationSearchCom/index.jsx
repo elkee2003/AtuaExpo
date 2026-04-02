@@ -84,7 +84,7 @@ const DestinationSearchComponent = () => {
     if (originLat && destinationLat) {
       router.push("/screens/searchresults");
     }
-  }, [originLat, destinationLat]);
+  }, [originLat, destinationLat, originState, destinationState]);
 
   /* ------------------ INTERSTATE DETECTION ------------------ */
 
@@ -125,29 +125,36 @@ const DestinationSearchComponent = () => {
       setOriginLat(latitude);
       setOriginLng(longitude);
 
-      // Reverse geocode to get address
       const response = await fetch(
         `https://maps.googleapis.com/maps/api/geocode/json?latlng=${latitude},${longitude}&key=${GOOGLE_API_KEY}`,
       );
 
       const data = await response.json();
 
-      const address = data.results?.[0]?.formatted_address;
+      const result = data.results?.[0];
+      const address = result?.formatted_address;
 
       if (address && originAutocompleteRef.current) {
         originAutocompleteRef.current.setAddressText(address);
 
-        setOriginAddress({
-          data: { description: address },
-          details: {
-            geometry: {
-              location: {
-                lat: latitude,
-                lng: longitude,
-              },
+        const details = {
+          geometry: {
+            location: {
+              lat: latitude,
+              lng: longitude,
             },
           },
+          address_components: result?.address_components,
+        };
+
+        setOriginAddress({
+          data: { description: address },
+          details,
         });
+
+        // 🔥 FIX: Extract state just like manual selection
+        const state = extractState(details);
+        setOriginState(state);
       }
     } catch (error) {
       console.log("Location error", error);

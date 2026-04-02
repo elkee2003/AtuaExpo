@@ -6,6 +6,7 @@ export default StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#F7F7F7",
+    marginBottom: 25,
   },
 
   loader: {

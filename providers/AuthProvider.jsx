@@ -1,155 +1,168 @@
-import { View, Text } from 'react-native'
-import React, {useState, useEffect, useContext, createContext} from 'react';
-import { getCurrentUser, signOut } from 'aws-amplify/auth';
-import { Hub } from 'aws-amplify/utils';
-import { router } from 'expo-router';
-import { DataStore, Predicates } from 'aws-amplify/datastore'
-import { User } from '@/src/models'
+import { User } from "@/src/models";
+import { getCurrentUser, signOut } from "aws-amplify/auth";
+import { DataStore } from "aws-amplify/datastore";
+import { Hub } from "aws-amplify/utils";
+import { router } from "expo-router";
+import React, { createContext, useContext, useEffect, useState } from "react";
 
-const AuthContext = createContext({})
+const AuthContext = createContext({});
 
-const AuthProvider = ({children}) => {
+const AuthProvider = ({ children }) => {
+  // Amplify states
+  const [authUser, setAuthUser] = useState(null);
+  const [dbUser, setDbUser] = useState(null);
+  const [sub, setSub] = useState(null);
+  const [userMail, setUserMail] = useState(null);
 
-    // Amplify states
-    const [authUser, setAuthUser] = useState(null);
-    const [dbUser, setDbUser] = useState(null);
-    const [sub, setSub] = useState(null);
-    const [userMail, setUserMail] = useState(null);
-
-    // ✅ Function to handle full logout and cleanup
-    const handleUserDeleted = async () => {
-      console.log('User deleted from Cognito — clearing session...');
-      try {
-        await signOut({ global: true }); // clears all sessions
-        await DataStore.clear(); // clears cached data
-        await DataStore.start(); 
-      } catch (err) {
-        console.log('Error clearing session:', err);
-      } finally {
-        setAuthUser(null);
-        setDbUser(null);
-        setSub(null);
-        router.push('/login'); // navigate back to login
-      }
-    };
-
-    // Functions for useEffect
-    const currentAuthenticatedUser = async () =>{
-        try {
-          const user = await getCurrentUser();
-          setAuthUser(user)
-          // const subId = authUser?.userId;
-          // setSub(subId);
-          setSub(user.userId);
-          const email = authUser?.signInDetails?.loginId;
-          setUserMail(email);
-        } catch (err) {
-          console.log('Auth check failed:', err.name);
-
-          // Handle deleted / invalid / expired user session
-          if (
-            err.name === 'UserNotFoundException' ||
-            err.name === 'NotAuthorizedException' ||
-            err.name === 'InvalidSignatureException'
-          ) {
-            await handleUserDeleted();
-          }
-        }
-    };
-
-    const dbCurrentUser = async () =>{
-      if(!sub) return; // Ensure sub is available before querying DataStore
-
-        try{
-          const dbusercurrent = await DataStore.query(User, (user)=>user.sub.eq(sub))
-          // DataStore.delete(User, Predicates.ALL)
-          // DataStore.clear()
-          
-          // If statement to check dbuser in the database
-          if (dbusercurrent.length === 0) {
-            // If no user data is found in the cloud, clear the local DataStore
-            await DataStore.clear();
-            setDbUser(null); // Set to null so the UI reflects it as blank
-          } else {
-            setDbUser(dbusercurrent[0]);
-          }
-          
-          // I commented this out because it is the same with the else if you look above. It was part of the old code before the if statement, therefore if I remove the if statement, I should uncomment setDbUser(dbusercurrent[0])
-          // setDbUser(dbusercurrent[0])
-        }catch(error){
-          console.error('Error getting dbuser: ', error)
-        }
+  // ✅ Function to handle full logout and cleanup
+  const handleUserDeleted = async () => {
+    console.log("User deleted from Cognito — clearing session...");
+    try {
+      await signOut({ global: true }); // clears all sessions
+      await DataStore.clear(); // clears cached data
+      await DataStore.start();
+    } catch (err) {
+      console.log("Error clearing session:", err);
+    } finally {
+      setAuthUser(null);
+      setDbUser(null);
+      setSub(null);
+      router.push("/login"); // navigate back to login
     }
+  };
 
-    useEffect(()=>{
-        currentAuthenticatedUser()
-    },[sub])
+  // Functions for useEffect
+  const currentAuthenticatedUser = async () => {
+    try {
+      const user = await getCurrentUser();
+      setAuthUser(user);
+      // const subId = authUser?.userId;
+      // setSub(subId);
+      setSub(user.userId);
+      const email = authUser?.signInDetails?.loginId;
+      setUserMail(email);
+    } catch (err) {
+      console.log("Auth check failed:", err.name);
 
-    useEffect(()=>{
-
-      const listener = (data) => {
-        const { event } = data.payload;
-        if (event === 'signedIn') {
-          currentAuthenticatedUser();
-        } else if (event === 'signedOut') {
-          setAuthUser(null); // Clear the authUser state
-          setSub(null); // Clear the sub state
-          router.push('/login'); // Navigate to the sign-in page
-        }
-      };
-  
-      // Start listening for authentication events
-      const hubListener = Hub.listen('auth', listener);
-  
-      // Cleanup the listener when the component unmounts
-      return () => hubListener(); // Stop listening for the events
-    },[]);
-
-    useEffect(()=>{
-      if(sub){
-        dbCurrentUser()
+      // Handle deleted / invalid / expired user session
+      if (
+        err.name === "UserNotFoundException" ||
+        err.name === "NotAuthorizedException" ||
+        err.name === "InvalidSignatureException"
+      ) {
+        await handleUserDeleted();
       }
-    }, [sub])
+    }
+  };
 
-    // Set up a subscription to listen to changes on the current user's User instance
-    useEffect(() => {
-      if (!dbUser) return;
-  
-      const subscription = DataStore.observe(User, dbUser.id).subscribe(
-        ({ element, opType }) => {
-          if (opType === 'UPDATE') {
-            setDbUser(element);
-          }
-        }
-      );
-  
-      return () => subscription.unsubscribe();
-    }, [dbUser]);
+  const dbCurrentUser = async () => {
+    if (!sub) return; // Ensure sub is available before querying DataStore
 
-    useEffect(() => {
-      if (!dbUser) return;
-    
-      // Observe for deletion of the Realtor record
-      const deleteSubscription = DataStore.observe(User).subscribe(
-        async ({ element, opType }) => {
-          if (opType === 'DELETE' && element.id === dbUser.id) {
-            await DataStore.clear();
-            setDbUser(null); // Clear dbUser when the record is deleted
-          }
+    try {
+      let dbusercurrent = await DataStore.query(User, (u) => u.sub.eq(sub));
+
+      if (dbusercurrent.length === 0) {
+        console.log("No local user — forcing sync retry...");
+
+        await DataStore.clear();
+        await DataStore.start();
+
+        // retry AFTER sync
+        dbusercurrent = await DataStore.query(User, (u) => u.sub.eq(sub));
+      }
+      // DataStore.delete(User, Predicates.ALL)
+      // DataStore.clear()
+
+      // If statement to check dbuser in the database
+      if (dbusercurrent.length === 0) {
+        // If no user data is found in the cloud, clear the local DataStore
+        await DataStore.clear();
+        setDbUser(null); // Set to null so the UI reflects it as blank
+      } else {
+        setDbUser(dbusercurrent[0]);
+      }
+
+      // I commented this out because it is the same with the else if you look above. It was part of the old code before the if statement, therefore if I remove the if statement, I should uncomment setDbUser(dbusercurrent[0])
+      // setDbUser(dbusercurrent[0])
+    } catch (error) {
+      console.error("Error getting dbuser: ", error);
+    }
+  };
+
+  useEffect(() => {
+    currentAuthenticatedUser();
+  }, [sub]);
+
+  useEffect(() => {
+    const listener = (data) => {
+      const { event } = data.payload;
+      if (event === "signedIn") {
+        currentAuthenticatedUser();
+      } else if (event === "signedOut") {
+        setAuthUser(null); // Clear the authUser state
+        setSub(null); // Clear the sub state
+        router.push("/login"); // Navigate to the sign-in page
+      }
+    };
+
+    // Start listening for authentication events
+    const hubListener = Hub.listen("auth", listener);
+
+    // Cleanup the listener when the component unmounts
+    return () => hubListener(); // Stop listening for the events
+  }, []);
+
+  useEffect(() => {
+    if (sub) {
+      dbCurrentUser();
+    }
+  }, [sub]);
+
+  // Set up a subscription to listen to changes on the current user's User instance
+  useEffect(() => {
+    if (!dbUser) return;
+
+    const subscription = DataStore.observe(User, dbUser.id).subscribe(
+      ({ element, opType }) => {
+        if (opType === "UPDATE") {
+          setDbUser(element);
         }
-      );
-    
-      return () => deleteSubscription.unsubscribe();
-    }, [dbUser]);
+      },
+    );
+
+    return () => subscription.unsubscribe();
+  }, [dbUser]);
+
+  useEffect(() => {
+    if (!dbUser) return;
+
+    // Observe for deletion of the Realtor record
+    const deleteSubscription = DataStore.observe(User).subscribe(
+      async ({ element, opType }) => {
+        if (opType === "DELETE" && element.id === dbUser.id) {
+          await DataStore.clear();
+          setDbUser(null); // Clear dbUser when the record is deleted
+        }
+      },
+    );
+
+    return () => deleteSubscription.unsubscribe();
+  }, [dbUser]);
 
   return (
-    <AuthContext.Provider value={{
-        authUser, dbUser, setDbUser, sub
-    }}>
-        {children}
+    <AuthContext.Provider
+      value={{
+        authUser,
+        dbUser,
+        setDbUser,
+        sub,
+        userMail,
+      }}
+    >
+      {children}
     </AuthContext.Provider>
-  )
-}
+  );
+};
 
 export default AuthProvider;
 export const useAuthContext = () => useContext(AuthContext);
