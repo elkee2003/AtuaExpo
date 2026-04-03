@@ -5,6 +5,17 @@ import { Hub } from "aws-amplify/utils";
 import { router } from "expo-router";
 import React, { createContext, useContext, useEffect, useState } from "react";
 
+const waitForDataStoreReady = () => {
+  return new Promise((resolve) => {
+    const unsubscribe = Hub.listen("datastore", ({ payload }) => {
+      if (payload.event === "ready") {
+        unsubscribe(); // stop listening
+        resolve();
+      }
+    });
+  });
+};
+
 const AuthContext = createContext({});
 
 const AuthProvider = ({ children }) => {
@@ -56,34 +67,18 @@ const AuthProvider = ({ children }) => {
   };
 
   const dbCurrentUser = async () => {
-    if (!sub) return; // Ensure sub is available before querying DataStore
+    if (!sub) return;
 
     try {
-      let dbusercurrent = await DataStore.query(User, (u) => u.sub.eq(sub));
+      await waitForDataStoreReady(); // 🔥 THIS is the fix
 
-      if (dbusercurrent.length === 0) {
-        console.log("No local user — forcing sync retry...");
+      const users = await DataStore.query(User, (u) => u.sub.eq(sub));
 
-        await DataStore.clear();
-        await DataStore.start();
-
-        // retry AFTER sync
-        dbusercurrent = await DataStore.query(User, (u) => u.sub.eq(sub));
-      }
-      // DataStore.delete(User, Predicates.ALL)
-      // DataStore.clear()
-
-      // If statement to check dbuser in the database
-      if (dbusercurrent.length === 0) {
-        // If no user data is found in the cloud, clear the local DataStore
-        await DataStore.clear();
-        setDbUser(null); // Set to null so the UI reflects it as blank
+      if (users.length > 0) {
+        setDbUser(users[0]);
       } else {
-        setDbUser(dbusercurrent[0]);
+        setDbUser(null);
       }
-
-      // I commented this out because it is the same with the else if you look above. It was part of the old code before the if statement, therefore if I remove the if statement, I should uncomment setDbUser(dbusercurrent[0])
-      // setDbUser(dbusercurrent[0])
     } catch (error) {
       console.error("Error getting dbuser: ", error);
     }

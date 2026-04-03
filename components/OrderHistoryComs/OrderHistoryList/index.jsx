@@ -83,7 +83,11 @@ const OrderHistoryList = ({ order, refreshOrders }) => {
 
       {/* Bottom Row */}
       <View style={styles.bottomRow}>
-        <Text style={styles.price}>₦{order?.totalPrice?.toLocaleString()}</Text>
+        <Text style={styles.price}>
+          ₦
+          {order?.totalPrice?.toLocaleString() ||
+            order?.initialOfferPrice?.toLocaleString()}
+        </Text>
         <Text style={styles.transport}>{order.transportationType}</Text>
       </View>
 
