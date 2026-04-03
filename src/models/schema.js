@@ -269,6 +269,136 @@ export const schema = {
                 }
             ]
         },
+        "Offer": {
+            "name": "Offer",
+            "fields": {
+                "id": {
+                    "name": "id",
+                    "isArray": false,
+                    "type": "ID",
+                    "isRequired": true,
+                    "attributes": []
+                },
+                "orderID": {
+                    "name": "orderID",
+                    "isArray": false,
+                    "type": "ID",
+                    "isRequired": true,
+                    "attributes": []
+                },
+                "order": {
+                    "name": "order",
+                    "isArray": false,
+                    "type": {
+                        "model": "Order"
+                    },
+                    "isRequired": false,
+                    "attributes": [],
+                    "association": {
+                        "connectionType": "BELONGS_TO",
+                        "targetNames": [
+                            "orderID"
+                        ]
+                    }
+                },
+                "courierID": {
+                    "name": "courierID",
+                    "isArray": false,
+                    "type": "ID",
+                    "isRequired": true,
+                    "attributes": []
+                },
+                "courier": {
+                    "name": "courier",
+                    "isArray": false,
+                    "type": {
+                        "model": "Courier"
+                    },
+                    "isRequired": false,
+                    "attributes": [],
+                    "association": {
+                        "connectionType": "BELONGS_TO",
+                        "targetNames": [
+                            "courierID"
+                        ]
+                    }
+                },
+                "amount": {
+                    "name": "amount",
+                    "isArray": false,
+                    "type": "Float",
+                    "isRequired": true,
+                    "attributes": []
+                },
+                "status": {
+                    "name": "status",
+                    "isArray": false,
+                    "type": {
+                        "enum": "OfferStatus"
+                    },
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "createdAt": {
+                    "name": "createdAt",
+                    "isArray": false,
+                    "type": "AWSDateTime",
+                    "isRequired": false,
+                    "attributes": [],
+                    "isReadOnly": true
+                },
+                "updatedAt": {
+                    "name": "updatedAt",
+                    "isArray": false,
+                    "type": "AWSDateTime",
+                    "isRequired": false,
+                    "attributes": [],
+                    "isReadOnly": true
+                }
+            },
+            "syncable": true,
+            "pluralName": "Offers",
+            "attributes": [
+                {
+                    "type": "model",
+                    "properties": {}
+                },
+                {
+                    "type": "key",
+                    "properties": {
+                        "name": "byOrder",
+                        "fields": [
+                            "orderID"
+                        ]
+                    }
+                },
+                {
+                    "type": "key",
+                    "properties": {
+                        "name": "byCourier",
+                        "fields": [
+                            "courierID"
+                        ]
+                    }
+                },
+                {
+                    "type": "auth",
+                    "properties": {
+                        "rules": [
+                            {
+                                "allow": "public",
+                                "operations": [
+                                    "create",
+                                    "update",
+                                    "delete",
+                                    "read"
+                                ]
+                            }
+                        ]
+                    }
+                }
+            ]
+        },
         "Order": {
             "name": "Order",
             "fields": {
@@ -779,6 +909,34 @@ export const schema = {
                     "isRequired": false,
                     "attributes": []
                 },
+                "acceptedOfferID": {
+                    "name": "acceptedOfferID",
+                    "isArray": false,
+                    "type": "ID",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "assignedCourierId": {
+                    "name": "assignedCourierId",
+                    "isArray": false,
+                    "type": "ID",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "assignmentStatus": {
+                    "name": "assignmentStatus",
+                    "isArray": false,
+                    "type": "String",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "assignmentExpiresAt": {
+                    "name": "assignmentExpiresAt",
+                    "isArray": false,
+                    "type": "AWSDateTime",
+                    "isRequired": false,
+                    "attributes": []
+                },
                 "userID": {
                     "name": "userID",
                     "isArray": false,
@@ -786,8 +944,24 @@ export const schema = {
                     "isRequired": true,
                     "attributes": []
                 },
-                "Courier": {
-                    "name": "Courier",
+                "offers": {
+                    "name": "offers",
+                    "isArray": true,
+                    "type": {
+                        "model": "Offer"
+                    },
+                    "isRequired": false,
+                    "attributes": [],
+                    "isArrayNullable": true,
+                    "association": {
+                        "connectionType": "HAS_MANY",
+                        "associatedWith": [
+                            "order"
+                        ]
+                    }
+                },
+                "assignedCourier": {
+                    "name": "assignedCourier",
                     "isArray": false,
                     "type": {
                         "model": "Courier"
@@ -795,12 +969,9 @@ export const schema = {
                     "isRequired": false,
                     "attributes": [],
                     "association": {
-                        "connectionType": "HAS_ONE",
-                        "associatedWith": [
-                            "id"
-                        ],
+                        "connectionType": "BELONGS_TO",
                         "targetNames": [
-                            "orderCourierId"
+                            "assignedCourierId"
                         ]
                     }
                 },
@@ -819,13 +990,6 @@ export const schema = {
                     "isRequired": false,
                     "attributes": [],
                     "isReadOnly": true
-                },
-                "orderCourierId": {
-                    "name": "orderCourierId",
-                    "isArray": false,
-                    "type": "ID",
-                    "isRequired": false,
-                    "attributes": []
                 }
             },
             "syncable": true,
@@ -834,6 +998,15 @@ export const schema = {
                 {
                     "type": "model",
                     "properties": {}
+                },
+                {
+                    "type": "key",
+                    "properties": {
+                        "name": "byAssignedCourier",
+                        "fields": [
+                            "assignedCourierId"
+                        ]
+                    }
                 },
                 {
                     "type": "key",
@@ -998,6 +1171,13 @@ export const schema = {
                     "isRequired": false,
                     "attributes": []
                 },
+                "vehicleColour": {
+                    "name": "vehicleColour",
+                    "isArray": false,
+                    "type": "String",
+                    "isRequired": false,
+                    "attributes": []
+                },
                 "plateNumber": {
                     "name": "plateNumber",
                     "isArray": false,
@@ -1124,6 +1304,38 @@ export const schema = {
                     "type": "String",
                     "isRequired": false,
                     "attributes": []
+                },
+                "offers": {
+                    "name": "offers",
+                    "isArray": true,
+                    "type": {
+                        "model": "Offer"
+                    },
+                    "isRequired": false,
+                    "attributes": [],
+                    "isArrayNullable": true,
+                    "association": {
+                        "connectionType": "HAS_MANY",
+                        "associatedWith": [
+                            "courier"
+                        ]
+                    }
+                },
+                "orders": {
+                    "name": "orders",
+                    "isArray": true,
+                    "type": {
+                        "model": "Order"
+                    },
+                    "isRequired": false,
+                    "attributes": [],
+                    "isArrayNullable": true,
+                    "association": {
+                        "connectionType": "HAS_MANY",
+                        "associatedWith": [
+                            "assignedCourier"
+                        ]
+                    }
                 },
                 "createdAt": {
                     "name": "createdAt",
@@ -1314,6 +1526,14 @@ export const schema = {
         }
     },
     "enums": {
+        "OfferStatus": {
+            "name": "OfferStatus",
+            "values": [
+                "ACTIVE",
+                "ACCEPTED",
+                "REJECTED"
+            ]
+        },
         "MediaUploadStatus": {
             "name": "MediaUploadStatus",
             "values": [
@@ -1344,5 +1564,5 @@ export const schema = {
     },
     "nonModels": {},
     "codegenVersion": "3.4.4",
-    "version": "17ae79b6e762c0734586fe26dea88f6c"
+    "version": "0df2dc6f5e5b81f7b7022a8cb1442139"
 };

@@ -2,6 +2,12 @@
 import { initSchema } from '@aws-amplify/datastore';
 import { schema } from './schema';
 
+const OfferStatus = {
+  "ACTIVE": "ACTIVE",
+  "ACCEPTED": "ACCEPTED",
+  "REJECTED": "REJECTED"
+};
+
 const MediaUploadStatus = {
   "PENDING": "PENDING",
   "UPLOADING": "UPLOADING",
@@ -25,14 +31,16 @@ const OrderStatus = {
   "DISPUTED": "DISPUTED"
 };
 
-const { CompanyVehicle, CourierCompany, Order, Courier, User } = initSchema(schema);
+const { CompanyVehicle, CourierCompany, Offer, Order, Courier, User } = initSchema(schema);
 
 export {
   CompanyVehicle,
   CourierCompany,
+  Offer,
   Order,
   Courier,
   User,
+  OfferStatus,
   MediaUploadStatus,
   OrderStatus
 };

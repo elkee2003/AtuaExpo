@@ -2,6 +2,12 @@ import { ModelInit, MutableModel, __modelMeta__, ManagedIdentifier } from "@aws-
 // @ts-ignore
 import { LazyLoading, LazyLoadingDisabled, AsyncCollection, AsyncItem } from "@aws-amplify/datastore";
 
+export enum OfferStatus {
+  ACTIVE = "ACTIVE",
+  ACCEPTED = "ACCEPTED",
+  REJECTED = "REJECTED"
+}
+
 export enum MediaUploadStatus {
   PENDING = "PENDING",
   UPLOADING = "UPLOADING",
@@ -121,6 +127,44 @@ export declare const CourierCompany: (new (init: ModelInit<CourierCompany>) => C
   copyOf(source: CourierCompany, mutator: (draft: MutableModel<CourierCompany>) => MutableModel<CourierCompany> | void): CourierCompany;
 }
 
+type EagerOffer = {
+  readonly [__modelMeta__]: {
+    identifier: ManagedIdentifier<Offer, 'id'>;
+    readOnlyFields: 'createdAt' | 'updatedAt';
+  };
+  readonly id: string;
+  readonly orderID: string;
+  readonly order?: Order | null;
+  readonly courierID: string;
+  readonly courier?: Courier | null;
+  readonly amount: number;
+  readonly status?: OfferStatus | keyof typeof OfferStatus | null;
+  readonly createdAt?: string | null;
+  readonly updatedAt?: string | null;
+}
+
+type LazyOffer = {
+  readonly [__modelMeta__]: {
+    identifier: ManagedIdentifier<Offer, 'id'>;
+    readOnlyFields: 'createdAt' | 'updatedAt';
+  };
+  readonly id: string;
+  readonly orderID: string;
+  readonly order: AsyncItem<Order | undefined>;
+  readonly courierID: string;
+  readonly courier: AsyncItem<Courier | undefined>;
+  readonly amount: number;
+  readonly status?: OfferStatus | keyof typeof OfferStatus | null;
+  readonly createdAt?: string | null;
+  readonly updatedAt?: string | null;
+}
+
+export declare type Offer = LazyLoading extends LazyLoadingDisabled ? EagerOffer : LazyOffer
+
+export declare const Offer: (new (init: ModelInit<Offer>) => Offer) & {
+  copyOf(source: Offer, mutator: (draft: MutableModel<Offer>) => MutableModel<Offer> | void): Offer;
+}
+
 type EagerOrder = {
   readonly [__modelMeta__]: {
     identifier: ManagedIdentifier<Order, 'id'>;
@@ -197,11 +241,15 @@ type EagerOrder = {
   readonly logisticsTrackingStatus?: string | null;
   readonly handedOverToLogisticsAt?: string | null;
   readonly logisticsIntakeConfirmedAt?: string | null;
+  readonly acceptedOfferID?: string | null;
+  readonly assignedCourierId?: string | null;
+  readonly assignmentStatus?: string | null;
+  readonly assignmentExpiresAt?: string | null;
   readonly userID: string;
-  readonly Courier?: Courier | null;
+  readonly offers?: (Offer | null)[] | null;
+  readonly assignedCourier?: Courier | null;
   readonly createdAt?: string | null;
   readonly updatedAt?: string | null;
-  readonly orderCourierId?: string | null;
 }
 
 type LazyOrder = {
@@ -280,11 +328,15 @@ type LazyOrder = {
   readonly logisticsTrackingStatus?: string | null;
   readonly handedOverToLogisticsAt?: string | null;
   readonly logisticsIntakeConfirmedAt?: string | null;
+  readonly acceptedOfferID?: string | null;
+  readonly assignedCourierId?: string | null;
+  readonly assignmentStatus?: string | null;
+  readonly assignmentExpiresAt?: string | null;
   readonly userID: string;
-  readonly Courier: AsyncItem<Courier | undefined>;
+  readonly offers: AsyncCollection<Offer>;
+  readonly assignedCourier: AsyncItem<Courier | undefined>;
   readonly createdAt?: string | null;
   readonly updatedAt?: string | null;
-  readonly orderCourierId?: string | null;
 }
 
 export declare type Order = LazyLoading extends LazyLoadingDisabled ? EagerOrder : LazyOrder
@@ -317,6 +369,7 @@ type EagerCourier = {
   readonly transportationType?: string | null;
   readonly vehicleClass?: string | null;
   readonly model?: string | null;
+  readonly vehicleColour?: string | null;
   readonly plateNumber?: string | null;
   readonly maxiImages?: (string | null)[] | null;
   readonly maxiDescription?: string | null;
@@ -335,6 +388,8 @@ type EagerCourier = {
   readonly push_token?: string | null;
   readonly isApproved?: boolean | null;
   readonly approvedById?: string | null;
+  readonly offers?: (Offer | null)[] | null;
+  readonly orders?: (Order | null)[] | null;
   readonly createdAt?: string | null;
   readonly updatedAt?: string | null;
 }
@@ -363,6 +418,7 @@ type LazyCourier = {
   readonly transportationType?: string | null;
   readonly vehicleClass?: string | null;
   readonly model?: string | null;
+  readonly vehicleColour?: string | null;
   readonly plateNumber?: string | null;
   readonly maxiImages?: (string | null)[] | null;
   readonly maxiDescription?: string | null;
@@ -381,6 +437,8 @@ type LazyCourier = {
   readonly push_token?: string | null;
   readonly isApproved?: boolean | null;
   readonly approvedById?: string | null;
+  readonly offers: AsyncCollection<Offer>;
+  readonly orders: AsyncCollection<Order>;
   readonly createdAt?: string | null;
   readonly updatedAt?: string | null;
 }

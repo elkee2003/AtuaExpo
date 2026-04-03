@@ -16,16 +16,14 @@ import RetryUploadBanner from "./Maxi/RetryUploadBanner";
 
 import styles from "./styles";
 
-const courierAnim = useRef(
-  new Animated.ValueXY({
-    x: 0,
-    y: 0,
-  }),
-).current;
-
 const OrderTrackingScreen = ({ orderId }) => {
   const bottomSheetRef = useRef(null);
   const mapRef = useRef(null);
+
+  const courierAnim = useRef({
+    latitude: new Animated.Value(0),
+    longitude: new Animated.Value(0),
+  }).current;
 
   const snapPoints = useMemo(() => ["30%", "55%"], []);
 
@@ -85,16 +83,27 @@ const OrderTrackingScreen = ({ orderId }) => {
   useEffect(() => {
     if (!courier?.lat || !courier?.lng) return;
 
-    /* ================= ANIMATE WHEN COURIER UPDATES ================= */
-    Animated.timing(courierAnim, {
-      toValue: {
-        x: courier.lat,
-        y: courier.lng,
-      },
-      duration: 1000,
-      useNativeDriver: false,
-    }).start();
+    Animated.parallel([
+      Animated.timing(courierAnim.latitude, {
+        toValue: courier.lat,
+        duration: 500,
+        useNativeDriver: false,
+      }),
+      Animated.timing(courierAnim.longitude, {
+        toValue: courier.lng,
+        duration: 500,
+        useNativeDriver: false,
+      }),
+    ]).start();
   }, [courier?.lat, courier?.lng]);
+
+  useEffect(() => {
+    if (!courier?.lat || !courier?.lng) return;
+
+    // ✅ FIRST TIME: set immediately (no animation jump)
+    courierAnim.latitude.setValue(courier.lat);
+    courierAnim.longitude.setValue(courier.lng);
+  }, [courier?.id]); // only when courier first appears
 
   /* ================= SEARCH PULSE ================= */
 
@@ -106,12 +115,12 @@ const OrderTrackingScreen = ({ orderId }) => {
       Animated.sequence([
         Animated.timing(pulseAnim, {
           toValue: 1.4,
-          duration: 1000,
+          duration: 500,
           useNativeDriver: true,
         }),
         Animated.timing(pulseAnim, {
           toValue: 1,
-          duration: 1000,
+          duration: 500,
           useNativeDriver: true,
         }),
       ]),
@@ -233,8 +242,8 @@ const OrderTrackingScreen = ({ orderId }) => {
         {courier?.lat && courier?.lng && (
           <Marker.Animated
             coordinate={{
-              latitude: courierAnim.x,
-              longitude: courierAnim.y,
+              latitude: courierAnim.latitude,
+              longitude: courierAnim.longitude,
             }}
           >
             <Image
@@ -253,7 +262,7 @@ const OrderTrackingScreen = ({ orderId }) => {
       >
         <BottomSheetView>
           {order.mediaUploadStatus === "FAILED" && (
-            <RetryUploadBanner order={order} uploadEvidence={uploadEvidence} />
+            <RetryUploadBanner order={order} />
           )}
 
           {canStartBidding && order.status === "BIDDING" ? (

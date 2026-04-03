@@ -28,6 +28,12 @@ type CourierCompany @model @auth(rules: [{ allow: public }]) {
   push_token: String
 }
 
+enum OfferStatus {
+  ACTIVE
+  ACCEPTED
+  REJECTED
+}
+
 enum MediaUploadStatus {
   PENDING
   UPLOADING
@@ -49,6 +55,19 @@ enum OrderStatus {
   IN_LOGISTICS_TRANSIT
   CANCELLED
   DISPUTED
+}
+
+type Offer @model @auth(rules: [{ allow: public }]) {
+  id: ID!
+
+  orderID: ID! @index(name: "byOrder")
+  order: Order @belongsTo(fields: ["orderID"])
+
+  courierID: ID! @index(name: "byCourier")
+  courier: Courier @belongsTo(fields: ["courierID"])
+
+  amount: Float!
+  status: OfferStatus # ACTIVE | ACCEPTED | REJECTED
 }
 
 type Order @model @auth(rules: [{ allow: public }]) {
@@ -157,9 +176,18 @@ type Order @model @auth(rules: [{ allow: public }]) {
   handedOverToLogisticsAt: AWSDateTime
   logisticsIntakeConfirmedAt: AWSDateTime
 
+  # ---------------- OFFER ID THAT WAS ACCEPTED ----------------
+  acceptedOfferID: ID
+
+  # ---------------- ASSIGNMENT FIELDS ----------------
+  assignedCourierId: ID @index(name: "byAssignedCourier")
+  assignmentStatus: String
+  assignmentExpiresAt: AWSDateTime
+
   # ---------------- RELATIONS ----------------
   userID: ID! @index(name: "byUser")
-  Courier: Courier @hasOne
+  offers: [Offer] @hasMany(indexName: "byOrder", fields: ["id"])
+  assignedCourier: Courier @belongsTo(fields: ["assignedCourierId"])
 }
 
 type Courier @model @auth(rules: [{ allow: public }]) {
@@ -182,6 +210,7 @@ type Courier @model @auth(rules: [{ allow: public }]) {
   transportationType: String
   vehicleClass: String
   model: String
+  vehicleColour: String
   plateNumber: String
   maxiImages: [String]
   maxiDescription: String
@@ -200,6 +229,9 @@ type Courier @model @auth(rules: [{ allow: public }]) {
   push_token: String
   isApproved: Boolean
   approvedById: String
+
+  offers: [Offer] @hasMany(indexName: "byCourier", fields: ["id"])
+  orders: [Order] @hasMany(indexName: "byAssignedCourier", fields: ["id"])
 }
 
 type User @model @auth(rules: [{ allow: public }]) {

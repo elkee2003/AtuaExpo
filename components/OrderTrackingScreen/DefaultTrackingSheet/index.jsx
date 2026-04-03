@@ -2,6 +2,8 @@ import { router } from "expo-router";
 import { Animated, Image, Text, TouchableOpacity, View } from "react-native";
 import styles from "./styles";
 
+// note I have to show bidding and the current offer when user navigates to the tracking page or when waiting for courier to accept order
+
 const DefaultTrackingSheet = ({ order, courier, driverCardAnim, onCancel }) => {
   const renderStatusTitle = () => {
     switch (order.status) {
