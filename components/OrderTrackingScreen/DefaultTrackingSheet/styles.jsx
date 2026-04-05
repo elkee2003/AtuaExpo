@@ -19,7 +19,7 @@ export default StyleSheet.create({
   statusSubtitle: {
     fontSize: 14,
     color: "#666",
-    marginBottom: 20,
+    marginBottom: 15,
   },
 
   orderText: {
@@ -55,25 +55,30 @@ export default StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     padding: 16,
-    borderRadius: 16,
+    borderRadius: 18,
     backgroundColor: "#fff",
     shadowColor: "#000",
     shadowOpacity: 0.08,
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 6 },
     elevation: 5,
-    marginTop: 10,
+    marginTop: 12,
   },
 
   driverImage: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
     marginRight: 14,
+    backgroundColor: "#eee", // fallback feel
+  },
+
+  driverInfo: {
+    flex: 1,
   },
 
   driverName: {
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: "700",
     color: "#111",
   },
@@ -81,6 +86,29 @@ export default StyleSheet.create({
   driverSub: {
     fontSize: 13,
     color: "#777",
+    marginTop: 3,
+  },
+
+  driverMeta: {
+    fontSize: 12,
+    color: "#999",
     marginTop: 2,
+  },
+
+  /* 💰 Price badge */
+
+  priceBadge: {
+    marginTop: 8,
+    alignSelf: "flex-start",
+    backgroundColor: "#E8F5E9",
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+
+  priceText: {
+    color: "#2E7D32",
+    fontWeight: "700",
+    fontSize: 14,
   },
 });

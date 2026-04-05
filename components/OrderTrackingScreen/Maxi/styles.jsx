@@ -88,21 +88,103 @@ export default StyleSheet.create({
     fontWeight: "600",
   },
 
+  /* ================== COUNTER OFFER INPUT ================== */
+
+  inputContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+
+    marginTop: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+
+    backgroundColor: "#ffffff",
+
+    borderRadius: 18,
+
+    borderWidth: 1,
+    borderColor: "#f1f5f9",
+
+    // ✨ iOS shadow (softer + lifted)
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: -3 }, // 👈 upward shadow
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
+
+    // ✨ Android shadow
+    elevation: 8,
+  },
+
+  input: {
+    flex: 1,
+
+    backgroundColor: "#f3f4f6",
+
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+
+    fontSize: 16,
+    fontWeight: "500",
+    color: "#111",
+
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+
+    marginRight: 10,
+  },
+
+  sendBtn: {
+    backgroundColor: "#111",
+
+    paddingVertical: 12,
+    paddingHorizontal: 18,
+
+    borderRadius: 12,
+
+    justifyContent: "center",
+    alignItems: "center",
+
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+
+  sendText: {
+    color: "#fff",
+    fontWeight: "600",
+    fontSize: 14,
+    letterSpacing: 0.3,
+  },
+
+  sendBtnDisabled: {
+    backgroundColor: "#9ca3af",
+  },
+
+  waitingText: {
+    textAlign: "center",
+    marginTop: 10,
+    fontSize: 13,
+    color: "#6b7280",
+    fontWeight: "500",
+  },
+
   orderText: {
     textAlign: "center",
-    color: "#252424",
-    marginTop: 20,
-    fontWeight: "600",
-    backgroundColor: "rgb(240, 240, 240)",
-    padding: 10,
-    marginHorizontal: 80,
-    borderRadius: 20,
+    marginTop: 16,
+    fontSize: 16,
+    color: "#2563EB",
+    fontWeight: "500",
+    textDecorationLine: "underline",
   },
 
   cancelText: {
     textAlign: "center",
     color: "#ef4444",
     marginTop: 20,
+    marginBottom: 35,
     fontWeight: "600",
   },
 

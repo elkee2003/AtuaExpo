@@ -283,7 +283,7 @@ export const schema = {
                     "name": "orderID",
                     "isArray": false,
                     "type": "ID",
-                    "isRequired": true,
+                    "isRequired": false,
                     "attributes": []
                 },
                 "order": {
@@ -305,7 +305,7 @@ export const schema = {
                     "name": "courierID",
                     "isArray": false,
                     "type": "ID",
-                    "isRequired": true,
+                    "isRequired": false,
                     "attributes": []
                 },
                 "courier": {
@@ -323,11 +323,18 @@ export const schema = {
                         ]
                     }
                 },
+                "senderType": {
+                    "name": "senderType",
+                    "isArray": false,
+                    "type": "String",
+                    "isRequired": false,
+                    "attributes": []
+                },
                 "amount": {
                     "name": "amount",
                     "isArray": false,
                     "type": "Float",
-                    "isRequired": true,
+                    "isRequired": false,
                     "attributes": []
                 },
                 "status": {
@@ -1564,5 +1571,5 @@ export const schema = {
     },
     "nonModels": {},
     "codegenVersion": "3.4.4",
-    "version": "0df2dc6f5e5b81f7b7022a8cb1442139"
+    "version": "7a50f902f46e3849ddd456d46775c583"
 };

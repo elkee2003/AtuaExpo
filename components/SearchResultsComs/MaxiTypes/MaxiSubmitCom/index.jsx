@@ -1,7 +1,7 @@
 import { useAuthContext } from "@/providers/AuthProvider";
 import { useLocationContext } from "@/providers/LocationProvider";
 import { useOrderContext } from "@/providers/OrderProvider";
-import { MediaUploadStatus, Order } from "@/src/models";
+import { MediaUploadStatus, Offer, Order } from "@/src/models";
 import { uploadEvidence } from "@/utils/uploadEvidence";
 import { DataStore } from "aws-amplify/datastore";
 import * as Crypto from "expo-crypto";
@@ -153,9 +153,9 @@ const MaxiSubmit = () => {
           estimatedMaxPrice: parseFloat(estimatedMaxPrice),
 
           initialOfferPrice: parseFloat(initialOfferPrice),
-          currentOfferPrice: parseFloat(initialOfferPrice),
+          // currentOfferPrice: parseFloat(initialOfferPrice),
 
-          lastOfferBy: "USER",
+          // lastOfferBy: "USER",
 
           loadingFee: parseFloat(loadingFee),
           unloadingFee: parseFloat(unloadingFee),
@@ -192,6 +192,15 @@ const MaxiSubmit = () => {
 
           // RELATION
           userID: dbUser.id,
+        }),
+      );
+
+      await DataStore.save(
+        new Offer({
+          orderID: newOrder.id,
+          senderType: "USER",
+          amount: parseFloat(initialOfferPrice),
+          status: "ACTIVE",
         }),
       );
 

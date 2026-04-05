@@ -1,29 +1,58 @@
 import { Image, Text, TouchableOpacity, View } from "react-native";
 import styles from "./styles";
 
-const OfferCard = ({ offer, onAccept, onCounter }) => {
+const OfferCard = ({
+  offer,
+  courier,
+  onAccept,
+  onCounter,
+  isLatest,
+  isAcceptDisabled,
+}) => {
+  const isUserTurn = isLatest && offer?.senderType === "COURIER";
+
   return (
-    <View style={styles.card}>
-      <Image source={{ uri: offer.courier.profilePic }} style={styles.avatar} />
+    <View
+      style={[
+        styles.card,
+        isLatest && {
+          borderColor: "#4CAF50",
+          borderWidth: 2,
+          backgroundColor: "#E8F5E9",
+        },
+      ]}
+    >
+      <Image source={{ uri: courier?.profilePic }} style={styles.avatar} />
 
       <View style={{ flex: 1 }}>
         <Text style={styles.name}>
-          {offer.courier.firstName} {offer.courier.lastName}
+          {courier?.firstName} {courier?.lastName}
         </Text>
 
         <Text style={styles.vehicle}>
-          {offer.courier.vehicleClass} • {offer.courier.model}
+          {courier?.vehicleClass} • {courier?.model}
         </Text>
 
         <Text style={styles.price}>₦{offer.amount}</Text>
       </View>
 
       <View style={styles.actions}>
-        <TouchableOpacity style={styles.acceptBtn} onPress={onAccept}>
+        <TouchableOpacity
+          style={[
+            styles.acceptBtn,
+            (!isUserTurn || isAcceptDisabled) && { opacity: 0.5 },
+          ]}
+          onPress={onAccept}
+          disabled={!isUserTurn || isAcceptDisabled}
+        >
           <Text style={styles.acceptText}>Accept</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.counterBtn} onPress={onCounter}>
+        <TouchableOpacity
+          style={[styles.counterBtn, !isUserTurn && { opacity: 0.5 }]}
+          onPress={onCounter}
+          disabled={!isUserTurn}
+        >
           <Text style={styles.counterText}>Counter</Text>
         </TouchableOpacity>
       </View>

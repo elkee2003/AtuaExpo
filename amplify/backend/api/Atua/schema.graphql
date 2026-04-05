@@ -60,13 +60,14 @@ enum OrderStatus {
 type Offer @model @auth(rules: [{ allow: public }]) {
   id: ID!
 
-  orderID: ID! @index(name: "byOrder")
+  orderID: ID @index(name: "byOrder")
   order: Order @belongsTo(fields: ["orderID"])
 
-  courierID: ID! @index(name: "byCourier")
+  courierID: ID @index(name: "byCourier")
   courier: Courier @belongsTo(fields: ["courierID"])
 
-  amount: Float!
+  senderType: String # "USER" | "COURIER"
+  amount: Float
   status: OfferStatus # ACTIVE | ACCEPTED | REJECTED
 }
 

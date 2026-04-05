@@ -14,7 +14,6 @@ import { getUrl } from "aws-amplify/storage";
 import { useEffect, useState } from "react";
 
 import Collapsible from "react-native-collapsible";
-import MapView, { Marker } from "react-native-maps";
 import PagerView from "react-native-pager-view";
 import Placeholder from "../../../assets/images/placeholder.png";
 
@@ -83,21 +82,25 @@ const OrderDetails = ({ orderId }) => {
   const loadEvidence = async (order) => {
     try {
       const groups = [
-        order?.senderPreTransferPhotos,
-        order?.courierPreTransferPhotos,
-        order?.courierPostLoadingPhotos,
-        order?.dropoffArrivalPhotos,
-        order?.postDeliveryPhotos,
+        order?.senderPreTransferPhotos || [],
+        order?.courierPreTransferPhotos || [],
+        order?.courierPostLoadingPhotos || [],
+        order?.dropoffArrivalPhotos || [],
+        order?.postDeliveryPhotos || [],
       ];
 
       const allImages = groups.flat().filter(Boolean);
 
-      const urls = await Promise.all(
-        allImages.map(async (img) => {
+      const urls = [];
+
+      for (const img of allImages) {
+        try {
           const url = await getUrl({ path: img });
-          return { uri: url.url };
-        }),
-      );
+          urls.push({ uri: url.url });
+        } catch (e) {
+          console.log("Image error:", e);
+        }
+      }
 
       setEvidence(urls);
     } catch (e) {
@@ -142,7 +145,7 @@ const OrderDetails = ({ orderId }) => {
         <Text style={styles.status}>{order.status}</Text>
       </View>
 
-      <View style={styles.mapContainer}>
+      {/* <View style={styles.mapContainer}>
         <MapView
           style={styles.map}
           initialRegion={{
@@ -166,7 +169,7 @@ const OrderDetails = ({ orderId }) => {
             }}
           />
         </MapView>
-      </View>
+      </View> */}
 
       {courier && (
         <View style={styles.courierCard}>

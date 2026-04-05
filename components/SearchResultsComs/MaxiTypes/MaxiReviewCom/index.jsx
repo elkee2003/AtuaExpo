@@ -19,6 +19,8 @@ import MediaPreviewModal from "./MediaPreviewModal/MediaPreviewModal";
 import styles from "./styles";
 import VideoThumbnail from "./VideoThumbnail";
 
+// I should note that I take platform fee and VAT, and all these are not calculated yet, when the user sends initialofferprice, so if the courier counters it, he is countering with what he expect to go home with, lets say 80% or 75%, if/when he counter, what should I show the courier to pay, because, i think it can't be the exact amount (the amount the courier countered with), because if the user accepts, then it shortening what is meant is meant to be calculated. I think I am not sure
+
 export default function MaxiReviewScreen() {
   const [showCamera, setShowCamera] = useState(false);
   const [cameraMode, setCameraMode] = useState(null);

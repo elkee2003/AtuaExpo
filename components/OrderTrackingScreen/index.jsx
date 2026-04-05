@@ -1,5 +1,5 @@
 import { GOOGLE_API_KEY } from "@/keys";
-import { Courier, Order } from "@/src/models";
+import { Courier, Offer, Order } from "@/src/models";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import BottomSheet, { BottomSheetView } from "@gorhom/bottom-sheet";
 import { DataStore } from "aws-amplify/datastore";
@@ -25,7 +25,7 @@ const OrderTrackingScreen = ({ orderId }) => {
     longitude: new Animated.Value(0),
   }).current;
 
-  const snapPoints = useMemo(() => ["30%", "55%"], []);
+  const snapPoints = useMemo(() => ["35%", "60%", "85%"], []);
 
   const [order, setOrder] = useState(null);
   const [courier, setCourier] = useState(null);
@@ -54,31 +54,86 @@ const OrderTrackingScreen = ({ orderId }) => {
     return () => subscription.unsubscribe();
   }, [orderId]);
 
+  /* ================= FETCH OFFER ================= */
+  useEffect(() => {
+    const fetchOffers = async () => {
+      const result = await DataStore.query(Offer, (o) => o.orderID.eq(orderId));
+
+      // ✅ ONLY COURIER OFFERS (ignore USER initial offer)
+      const courierOffers = result.filter(
+        (offer) => offer.senderType === "COURIER",
+      );
+
+      // ✅ group by courier (latest per courier)
+      const latestByCourier = {};
+
+      courierOffers.forEach((offer) => {
+        const existing = latestByCourier[offer.courierID];
+
+        if (
+          !existing ||
+          new Date(offer.createdAt) > new Date(existing.createdAt)
+        ) {
+          latestByCourier[offer.courierID] = offer;
+        }
+      });
+
+      const latestOffers = Object.values(latestByCourier);
+
+      const sorted = latestOffers.sort(
+        (a, b) => new Date(b.createdAt) - new Date(a.createdAt),
+      );
+
+      // ✅ attach courier data
+      const enriched = await Promise.all(
+        sorted.map(async (offer) => {
+          const courier = await DataStore.query(Courier, offer.courierID);
+          return {
+            offer,
+            courier,
+          };
+        }),
+      );
+
+      setOffers(enriched);
+    };
+
+    fetchOffers();
+
+    const sub = DataStore.observe(Offer).subscribe((msg) => {
+      if (msg.element.orderID === orderId) {
+        fetchOffers();
+      }
+    });
+
+    return () => sub.unsubscribe();
+  }, [orderId]);
+
   /* ================= FETCH COURIER ================= */
 
   useEffect(() => {
-    if (!order?.Courier?.id) return;
+    if (!order?.assignedCourierId) return;
 
     let subscription;
 
     const fetchCourier = async () => {
-      const data = await DataStore.query(Courier, order.Courier.id);
+      const data = await DataStore.query(Courier, order.assignedCourierId);
       setCourier(data);
     };
 
     fetchCourier();
 
-    // ✅ REAL-TIME updates
-    subscription = DataStore.observe(Courier, order.Courier.id).subscribe(
-      (msg) => {
-        setCourier(msg.element);
-      },
-    );
+    subscription = DataStore.observe(
+      Courier,
+      order.assignedCourierId,
+    ).subscribe((msg) => {
+      setCourier(msg.element);
+    });
 
     return () => {
       if (subscription) subscription.unsubscribe();
     };
-  }, [order?.Courier?.id]);
+  }, [order?.assignedCourierId]);
 
   useEffect(() => {
     if (!courier?.lat || !courier?.lng) return;
@@ -259,6 +314,8 @@ const OrderTrackingScreen = ({ orderId }) => {
         index={0}
         snapPoints={snapPoints}
         topInset={1}
+        keyboardBehavior="extend"
+        keyboardBlurBehavior="restore"
       >
         <BottomSheetView>
           {order.mediaUploadStatus === "FAILED" && (
@@ -267,11 +324,48 @@ const OrderTrackingScreen = ({ orderId }) => {
 
           {canStartBidding && order.status === "BIDDING" ? (
             <MaxiBiddingSheet
+              order={order}
               offers={offers}
               notifiedDriversCount={notifiedDriversCount}
               expiresAt={order.offerExpiresAt}
-              onAcceptOffer={(offer) => console.log("Accept", offer)}
-              onCounterOffer={(offer) => console.log("Counter", offer)}
+              bottomSheetRef={bottomSheetRef}
+              onAcceptOffer={async (offer) => {
+                if (order.status === "ACCEPTED") return;
+
+                try {
+                  await DataStore.save(
+                    Order.copyOf(order, (updated) => {
+                      updated.status = "ACCEPTED";
+                      updated.totalPrice = offer.amount;
+                      updated.acceptedOfferID = offer.id;
+                      updated.assignedCourierId = offer.courierID;
+                    }),
+                  );
+
+                  await DataStore.save(
+                    Offer.copyOf(offer, (updated) => {
+                      updated.status = "ACCEPTED";
+                    }),
+                  );
+                } catch (e) {
+                  console.log(e);
+                }
+              }}
+              onCounterOffer={async (offer) => {
+                try {
+                  await DataStore.save(
+                    new Offer({
+                      orderID: order.id,
+                      courierID: offer.courierID,
+                      senderType: "USER",
+                      amount: offer.amount,
+                      status: "ACTIVE",
+                    }),
+                  );
+                } catch (e) {
+                  console.log(e);
+                }
+              }}
               onCancel={() => router.back()}
             />
           ) : (
