@@ -188,6 +188,7 @@ type EagerOrder = {
   readonly tripType?: string | null;
   readonly distance?: string | null;
   readonly transportationType?: string | null;
+  readonly vehicleClass?: string | null;
   readonly status?: OrderStatus | keyof typeof OrderStatus | null;
   readonly loadCategory?: string | null;
   readonly isInterState?: boolean | null;
@@ -247,6 +248,8 @@ type EagerOrder = {
   readonly assignedCourierId?: string | null;
   readonly assignmentStatus?: string | null;
   readonly assignmentExpiresAt?: string | null;
+  readonly assignmentAttempts?: number | null;
+  readonly lastAssignedAt?: string | null;
   readonly userID: string;
   readonly offers?: (Offer | null)[] | null;
   readonly assignedCourier?: Courier | null;
@@ -275,6 +278,7 @@ type LazyOrder = {
   readonly tripType?: string | null;
   readonly distance?: string | null;
   readonly transportationType?: string | null;
+  readonly vehicleClass?: string | null;
   readonly status?: OrderStatus | keyof typeof OrderStatus | null;
   readonly loadCategory?: string | null;
   readonly isInterState?: boolean | null;
@@ -334,6 +338,8 @@ type LazyOrder = {
   readonly assignedCourierId?: string | null;
   readonly assignmentStatus?: string | null;
   readonly assignmentExpiresAt?: string | null;
+  readonly assignmentAttempts?: number | null;
+  readonly lastAssignedAt?: string | null;
   readonly userID: string;
   readonly offers: AsyncCollection<Offer>;
   readonly assignedCourier: AsyncItem<Courier | undefined>;
@@ -390,6 +396,9 @@ type EagerCourier = {
   readonly push_token?: string | null;
   readonly isApproved?: boolean | null;
   readonly approvedById?: string | null;
+  readonly currentBatchCount?: number | null;
+  readonly currentExpressCount?: number | null;
+  readonly lastBatchAssignedAt?: string | null;
   readonly offers?: (Offer | null)[] | null;
   readonly orders?: (Order | null)[] | null;
   readonly createdAt?: string | null;
@@ -439,6 +448,9 @@ type LazyCourier = {
   readonly push_token?: string | null;
   readonly isApproved?: boolean | null;
   readonly approvedById?: string | null;
+  readonly currentBatchCount?: number | null;
+  readonly currentExpressCount?: number | null;
+  readonly lastBatchAssignedAt?: string | null;
   readonly offers: AsyncCollection<Offer>;
   readonly orders: AsyncCollection<Order>;
   readonly createdAt?: string | null;

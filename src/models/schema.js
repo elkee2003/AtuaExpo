@@ -521,6 +521,13 @@ export const schema = {
                     "isRequired": false,
                     "attributes": []
                 },
+                "vehicleClass": {
+                    "name": "vehicleClass",
+                    "isArray": false,
+                    "type": "String",
+                    "isRequired": false,
+                    "attributes": []
+                },
                 "status": {
                     "name": "status",
                     "isArray": false,
@@ -944,6 +951,20 @@ export const schema = {
                     "isRequired": false,
                     "attributes": []
                 },
+                "assignmentAttempts": {
+                    "name": "assignmentAttempts",
+                    "isArray": false,
+                    "type": "Int",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "lastAssignedAt": {
+                    "name": "lastAssignedAt",
+                    "isArray": false,
+                    "type": "AWSDateTime",
+                    "isRequired": false,
+                    "attributes": []
+                },
                 "userID": {
                     "name": "userID",
                     "isArray": false,
@@ -1312,6 +1333,27 @@ export const schema = {
                     "isRequired": false,
                     "attributes": []
                 },
+                "currentBatchCount": {
+                    "name": "currentBatchCount",
+                    "isArray": false,
+                    "type": "Int",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "currentExpressCount": {
+                    "name": "currentExpressCount",
+                    "isArray": false,
+                    "type": "Int",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "lastBatchAssignedAt": {
+                    "name": "lastBatchAssignedAt",
+                    "isArray": false,
+                    "type": "AWSDateTime",
+                    "isRequired": false,
+                    "attributes": []
+                },
                 "offers": {
                     "name": "offers",
                     "isArray": true,
@@ -1571,5 +1613,5 @@ export const schema = {
     },
     "nonModels": {},
     "codegenVersion": "3.4.4",
-    "version": "7a50f902f46e3849ddd456d46775c583"
+    "version": "83e2d5667414e1f2d16f587a3bea4a41"
 };

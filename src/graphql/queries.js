@@ -252,6 +252,7 @@ export const getOffer = /* GraphQL */ `
         tripType
         distance
         transportationType
+        vehicleClass
         status
         loadCategory
         isInterState
@@ -311,6 +312,8 @@ export const getOffer = /* GraphQL */ `
         assignedCourierId
         assignmentStatus
         assignmentExpiresAt
+        assignmentAttempts
+        lastAssignedAt
         userID
         createdAt
         updatedAt
@@ -359,6 +362,9 @@ export const getOffer = /* GraphQL */ `
         push_token
         isApproved
         approvedById
+        currentBatchCount
+        currentExpressCount
+        lastBatchAssignedAt
         createdAt
         updatedAt
         _version
@@ -527,6 +533,7 @@ export const getOrder = /* GraphQL */ `
       tripType
       distance
       transportationType
+      vehicleClass
       status
       loadCategory
       isInterState
@@ -586,6 +593,8 @@ export const getOrder = /* GraphQL */ `
       assignedCourierId
       assignmentStatus
       assignmentExpiresAt
+      assignmentAttempts
+      lastAssignedAt
       userID
       offers {
         nextToken
@@ -631,6 +640,9 @@ export const getOrder = /* GraphQL */ `
         push_token
         isApproved
         approvedById
+        currentBatchCount
+        currentExpressCount
+        lastBatchAssignedAt
         createdAt
         updatedAt
         _version
@@ -671,6 +683,7 @@ export const listOrders = /* GraphQL */ `
         tripType
         distance
         transportationType
+        vehicleClass
         status
         loadCategory
         isInterState
@@ -730,6 +743,8 @@ export const listOrders = /* GraphQL */ `
         assignedCourierId
         assignmentStatus
         assignmentExpiresAt
+        assignmentAttempts
+        lastAssignedAt
         userID
         createdAt
         updatedAt
@@ -774,6 +789,7 @@ export const syncOrders = /* GraphQL */ `
         tripType
         distance
         transportationType
+        vehicleClass
         status
         loadCategory
         isInterState
@@ -833,6 +849,8 @@ export const syncOrders = /* GraphQL */ `
         assignedCourierId
         assignmentStatus
         assignmentExpiresAt
+        assignmentAttempts
+        lastAssignedAt
         userID
         createdAt
         updatedAt
@@ -879,6 +897,7 @@ export const ordersByAssignedCourierId = /* GraphQL */ `
         tripType
         distance
         transportationType
+        vehicleClass
         status
         loadCategory
         isInterState
@@ -938,6 +957,8 @@ export const ordersByAssignedCourierId = /* GraphQL */ `
         assignedCourierId
         assignmentStatus
         assignmentExpiresAt
+        assignmentAttempts
+        lastAssignedAt
         userID
         createdAt
         updatedAt
@@ -984,6 +1005,7 @@ export const ordersByUserID = /* GraphQL */ `
         tripType
         distance
         transportationType
+        vehicleClass
         status
         loadCategory
         isInterState
@@ -1043,6 +1065,8 @@ export const ordersByUserID = /* GraphQL */ `
         assignedCourierId
         assignmentStatus
         assignmentExpiresAt
+        assignmentAttempts
+        lastAssignedAt
         userID
         createdAt
         updatedAt
@@ -1098,6 +1122,9 @@ export const getCourier = /* GraphQL */ `
       push_token
       isApproved
       approvedById
+      currentBatchCount
+      currentExpressCount
+      lastBatchAssignedAt
       offers {
         nextToken
         startedAt
@@ -1163,6 +1190,9 @@ export const listCouriers = /* GraphQL */ `
         push_token
         isApproved
         approvedById
+        currentBatchCount
+        currentExpressCount
+        lastBatchAssignedAt
         createdAt
         updatedAt
         _version
@@ -1228,6 +1258,9 @@ export const syncCouriers = /* GraphQL */ `
         push_token
         isApproved
         approvedById
+        currentBatchCount
+        currentExpressCount
+        lastBatchAssignedAt
         createdAt
         updatedAt
         _version

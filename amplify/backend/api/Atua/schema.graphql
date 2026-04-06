@@ -94,6 +94,7 @@ type Order @model @auth(rules: [{ allow: public }]) {
   distance: String
 
   transportationType: String
+  vehicleClass: String
   status: OrderStatus
 
   # ---------------- PRICING ----------------
@@ -184,6 +185,8 @@ type Order @model @auth(rules: [{ allow: public }]) {
   assignedCourierId: ID @index(name: "byAssignedCourier")
   assignmentStatus: String
   assignmentExpiresAt: AWSDateTime
+  assignmentAttempts: Int
+  lastAssignedAt: AWSDateTime
 
   # ---------------- RELATIONS ----------------
   userID: ID! @index(name: "byUser")
@@ -230,6 +233,9 @@ type Courier @model @auth(rules: [{ allow: public }]) {
   push_token: String
   isApproved: Boolean
   approvedById: String
+  currentBatchCount: Int
+  currentExpressCount: Int
+  lastBatchAssignedAt: AWSDateTime
 
   offers: [Offer] @hasMany(indexName: "byCourier", fields: ["id"])
   orders: [Order] @hasMany(indexName: "byAssignedCourier", fields: ["id"])

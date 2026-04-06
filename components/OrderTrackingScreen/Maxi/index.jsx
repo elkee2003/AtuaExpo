@@ -140,7 +140,7 @@ const MaxiBiddingSheet = ({
               setIsWaiting(true);
             }}
           >
-            <Text style={styles.sendText}>Send </Text>
+            <Text style={styles.sendText}>Counter</Text>
           </TouchableOpacity>
         </View>
       )}

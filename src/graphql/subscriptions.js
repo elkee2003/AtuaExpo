@@ -188,6 +188,7 @@ export const onCreateOffer = /* GraphQL */ `
         tripType
         distance
         transportationType
+        vehicleClass
         status
         loadCategory
         isInterState
@@ -247,6 +248,8 @@ export const onCreateOffer = /* GraphQL */ `
         assignedCourierId
         assignmentStatus
         assignmentExpiresAt
+        assignmentAttempts
+        lastAssignedAt
         userID
         createdAt
         updatedAt
@@ -295,6 +298,9 @@ export const onCreateOffer = /* GraphQL */ `
         push_token
         isApproved
         approvedById
+        currentBatchCount
+        currentExpressCount
+        lastBatchAssignedAt
         createdAt
         updatedAt
         _version
@@ -336,6 +342,7 @@ export const onUpdateOffer = /* GraphQL */ `
         tripType
         distance
         transportationType
+        vehicleClass
         status
         loadCategory
         isInterState
@@ -395,6 +402,8 @@ export const onUpdateOffer = /* GraphQL */ `
         assignedCourierId
         assignmentStatus
         assignmentExpiresAt
+        assignmentAttempts
+        lastAssignedAt
         userID
         createdAt
         updatedAt
@@ -443,6 +452,9 @@ export const onUpdateOffer = /* GraphQL */ `
         push_token
         isApproved
         approvedById
+        currentBatchCount
+        currentExpressCount
+        lastBatchAssignedAt
         createdAt
         updatedAt
         _version
@@ -484,6 +496,7 @@ export const onDeleteOffer = /* GraphQL */ `
         tripType
         distance
         transportationType
+        vehicleClass
         status
         loadCategory
         isInterState
@@ -543,6 +556,8 @@ export const onDeleteOffer = /* GraphQL */ `
         assignedCourierId
         assignmentStatus
         assignmentExpiresAt
+        assignmentAttempts
+        lastAssignedAt
         userID
         createdAt
         updatedAt
@@ -591,6 +606,9 @@ export const onDeleteOffer = /* GraphQL */ `
         push_token
         isApproved
         approvedById
+        currentBatchCount
+        currentExpressCount
+        lastBatchAssignedAt
         createdAt
         updatedAt
         _version
@@ -629,6 +647,7 @@ export const onCreateOrder = /* GraphQL */ `
       tripType
       distance
       transportationType
+      vehicleClass
       status
       loadCategory
       isInterState
@@ -688,6 +707,8 @@ export const onCreateOrder = /* GraphQL */ `
       assignedCourierId
       assignmentStatus
       assignmentExpiresAt
+      assignmentAttempts
+      lastAssignedAt
       userID
       offers {
         nextToken
@@ -733,6 +754,9 @@ export const onCreateOrder = /* GraphQL */ `
         push_token
         isApproved
         approvedById
+        currentBatchCount
+        currentExpressCount
+        lastBatchAssignedAt
         createdAt
         updatedAt
         _version
@@ -768,6 +792,7 @@ export const onUpdateOrder = /* GraphQL */ `
       tripType
       distance
       transportationType
+      vehicleClass
       status
       loadCategory
       isInterState
@@ -827,6 +852,8 @@ export const onUpdateOrder = /* GraphQL */ `
       assignedCourierId
       assignmentStatus
       assignmentExpiresAt
+      assignmentAttempts
+      lastAssignedAt
       userID
       offers {
         nextToken
@@ -872,6 +899,9 @@ export const onUpdateOrder = /* GraphQL */ `
         push_token
         isApproved
         approvedById
+        currentBatchCount
+        currentExpressCount
+        lastBatchAssignedAt
         createdAt
         updatedAt
         _version
@@ -907,6 +937,7 @@ export const onDeleteOrder = /* GraphQL */ `
       tripType
       distance
       transportationType
+      vehicleClass
       status
       loadCategory
       isInterState
@@ -966,6 +997,8 @@ export const onDeleteOrder = /* GraphQL */ `
       assignedCourierId
       assignmentStatus
       assignmentExpiresAt
+      assignmentAttempts
+      lastAssignedAt
       userID
       offers {
         nextToken
@@ -1011,6 +1044,9 @@ export const onDeleteOrder = /* GraphQL */ `
         push_token
         isApproved
         approvedById
+        currentBatchCount
+        currentExpressCount
+        lastBatchAssignedAt
         createdAt
         updatedAt
         _version
@@ -1068,6 +1104,9 @@ export const onCreateCourier = /* GraphQL */ `
       push_token
       isApproved
       approvedById
+      currentBatchCount
+      currentExpressCount
+      lastBatchAssignedAt
       offers {
         nextToken
         startedAt
@@ -1128,6 +1167,9 @@ export const onUpdateCourier = /* GraphQL */ `
       push_token
       isApproved
       approvedById
+      currentBatchCount
+      currentExpressCount
+      lastBatchAssignedAt
       offers {
         nextToken
         startedAt
@@ -1188,6 +1230,9 @@ export const onDeleteCourier = /* GraphQL */ `
       push_token
       isApproved
       approvedById
+      currentBatchCount
+      currentExpressCount
+      lastBatchAssignedAt
       offers {
         nextToken
         startedAt
