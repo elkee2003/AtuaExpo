@@ -21,6 +21,7 @@ export enum OrderStatus {
   ACCEPTED = "ACCEPTED",
   ARRIVED_PICKUP = "ARRIVED_PICKUP",
   LOADING = "LOADING",
+  PICKED_UP = "PICKED_UP",
   IN_TRANSIT = "IN_TRANSIT",
   ARRIVED_DROPOFF = "ARRIVED_DROPOFF",
   UNLOADING = "UNLOADING",
@@ -250,6 +251,7 @@ type EagerOrder = {
   readonly assignmentExpiresAt?: string | null;
   readonly assignmentAttempts?: number | null;
   readonly lastAssignedAt?: string | null;
+  readonly rejectedCourierIds?: (string | null)[] | null;
   readonly userID: string;
   readonly offers?: (Offer | null)[] | null;
   readonly assignedCourier?: Courier | null;
@@ -340,6 +342,7 @@ type LazyOrder = {
   readonly assignmentExpiresAt?: string | null;
   readonly assignmentAttempts?: number | null;
   readonly lastAssignedAt?: string | null;
+  readonly rejectedCourierIds?: (string | null)[] | null;
   readonly userID: string;
   readonly offers: AsyncCollection<Offer>;
   readonly assignedCourier: AsyncItem<Courier | undefined>;

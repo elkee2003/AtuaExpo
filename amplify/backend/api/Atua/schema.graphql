@@ -47,6 +47,7 @@ enum OrderStatus {
   ACCEPTED
   ARRIVED_PICKUP
   LOADING
+  PICKED_UP
   IN_TRANSIT
   ARRIVED_DROPOFF
   UNLOADING
@@ -187,7 +188,7 @@ type Order @model @auth(rules: [{ allow: public }]) {
   assignmentExpiresAt: AWSDateTime
   assignmentAttempts: Int
   lastAssignedAt: AWSDateTime
-
+  rejectedCourierIds: [ID] # meant to be for couriers already assigned that expired or didn't accept
   # ---------------- RELATIONS ----------------
   userID: ID! @index(name: "byUser")
   offers: [Offer] @hasMany(indexName: "byOrder", fields: ["id"])

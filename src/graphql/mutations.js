@@ -259,6 +259,7 @@ export const createOffer = /* GraphQL */ `
         assignmentExpiresAt
         assignmentAttempts
         lastAssignedAt
+        rejectedCourierIds
         userID
         createdAt
         updatedAt
@@ -416,6 +417,7 @@ export const updateOffer = /* GraphQL */ `
         assignmentExpiresAt
         assignmentAttempts
         lastAssignedAt
+        rejectedCourierIds
         userID
         createdAt
         updatedAt
@@ -573,6 +575,7 @@ export const deleteOffer = /* GraphQL */ `
         assignmentExpiresAt
         assignmentAttempts
         lastAssignedAt
+        rejectedCourierIds
         userID
         createdAt
         updatedAt
@@ -727,6 +730,7 @@ export const createOrder = /* GraphQL */ `
       assignmentExpiresAt
       assignmentAttempts
       lastAssignedAt
+      rejectedCourierIds
       userID
       offers {
         nextToken
@@ -875,6 +879,7 @@ export const updateOrder = /* GraphQL */ `
       assignmentExpiresAt
       assignmentAttempts
       lastAssignedAt
+      rejectedCourierIds
       userID
       offers {
         nextToken
@@ -1023,6 +1028,7 @@ export const deleteOrder = /* GraphQL */ `
       assignmentExpiresAt
       assignmentAttempts
       lastAssignedAt
+      rejectedCourierIds
       userID
       offers {
         nextToken

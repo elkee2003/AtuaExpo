@@ -24,6 +24,22 @@
         "checkUserGroup": {
           "deploymentBucketName": "amplify-atua-staging-19d66-deployment",
           "s3Key": "amplify-builds/checkUserGroup-546d484f346867625832-build.zip"
+        },
+        "assignOrder": {
+          "deploymentBucketName": "amplify-atua-staging-19d66-deployment",
+          "s3Key": "amplify-builds/assignOrder-4a796634397239427644-build.zip"
+        },
+        "reassignOrder": {
+          "deploymentBucketName": "amplify-atua-staging-19d66-deployment",
+          "s3Key": "amplify-builds/reassignOrder-6773452b747a4876366c-build.zip"
+        },
+        "forceDispatch": {
+          "deploymentBucketName": "amplify-atua-staging-19d66-deployment",
+          "s3Key": "amplify-builds/forceDispatch-4c755352556b62586256-build.zip"
+        },
+        "resetCourierIfIdle": {
+          "deploymentBucketName": "amplify-atua-staging-19d66-deployment",
+          "s3Key": "amplify-builds/resetCourierIfIdle-56474547574f4756384a-build.zip"
         }
       },
       "storage": {

@@ -965,6 +965,14 @@ export const schema = {
                     "isRequired": false,
                     "attributes": []
                 },
+                "rejectedCourierIds": {
+                    "name": "rejectedCourierIds",
+                    "isArray": true,
+                    "type": "ID",
+                    "isRequired": false,
+                    "attributes": [],
+                    "isArrayNullable": true
+                },
                 "userID": {
                     "name": "userID",
                     "isArray": false,
@@ -1600,6 +1608,7 @@ export const schema = {
                 "ACCEPTED",
                 "ARRIVED_PICKUP",
                 "LOADING",
+                "PICKED_UP",
                 "IN_TRANSIT",
                 "ARRIVED_DROPOFF",
                 "UNLOADING",
@@ -1613,5 +1622,5 @@ export const schema = {
     },
     "nonModels": {},
     "codegenVersion": "3.4.4",
-    "version": "83e2d5667414e1f2d16f587a3bea4a41"
+    "version": "26c0a21d187bb4a7caba2c46d9e788a6"
 };

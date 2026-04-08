@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "api": {
+      "Atua": [
+        "Query",
+        "Mutation"
+      ]
+    },
+    "storage": {
+      "Order:@model(appsync)": [
+        "create",
+        "read",
+        "update",
+        "delete"
+      ],
+      "Courier:@model(appsync)": [
+        "create",
+        "read",
+        "update",
+        "delete"
+      ]
+    }
+  },
+  "lambdaLayers": []
+}

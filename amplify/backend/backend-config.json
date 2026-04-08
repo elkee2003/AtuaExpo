@@ -59,6 +59,22 @@
     }
   },
   "function": {
+    "assignOrder": {
+      "build": true,
+      "dependsOn": [
+        {
+          "attributes": [
+            "GraphQLAPIIdOutput",
+            "GraphQLAPIEndpointOutput",
+            "GraphQLAPIKeyOutput"
+          ],
+          "category": "api",
+          "resourceName": "Atua"
+        }
+      ],
+      "providerPlugin": "awscloudformation",
+      "service": "Lambda"
+    },
     "atuac06ab999c06ab999PostConfirmation": {
       "build": true,
       "providerPlugin": "awscloudformation",
@@ -77,9 +93,73 @@
       ],
       "providerPlugin": "awscloudformation",
       "service": "Lambda"
+    },
+    "forceDispatch": {
+      "build": true,
+      "dependsOn": [
+        {
+          "attributes": [
+            "GraphQLAPIIdOutput",
+            "GraphQLAPIEndpointOutput",
+            "GraphQLAPIKeyOutput"
+          ],
+          "category": "api",
+          "resourceName": "Atua"
+        }
+      ],
+      "providerPlugin": "awscloudformation",
+      "service": "Lambda"
+    },
+    "reassignOrder": {
+      "build": true,
+      "dependsOn": [
+        {
+          "attributes": [
+            "GraphQLAPIIdOutput",
+            "GraphQLAPIEndpointOutput",
+            "GraphQLAPIKeyOutput"
+          ],
+          "category": "api",
+          "resourceName": "Atua"
+        }
+      ],
+      "providerPlugin": "awscloudformation",
+      "service": "Lambda"
+    },
+    "resetCourierIfIdle": {
+      "build": true,
+      "dependsOn": [
+        {
+          "attributes": [
+            "GraphQLAPIIdOutput",
+            "GraphQLAPIEndpointOutput",
+            "GraphQLAPIKeyOutput"
+          ],
+          "category": "api",
+          "resourceName": "Atua"
+        }
+      ],
+      "providerPlugin": "awscloudformation",
+      "service": "Lambda"
     }
   },
   "parameters": {
+    "AMPLIFY_function_assignOrder_deploymentBucketName": {
+      "usedBy": [
+        {
+          "category": "function",
+          "resourceName": "assignOrder"
+        }
+      ]
+    },
+    "AMPLIFY_function_assignOrder_s3Key": {
+      "usedBy": [
+        {
+          "category": "function",
+          "resourceName": "assignOrder"
+        }
+      ]
+    },
     "AMPLIFY_function_atuac06ab999c06ab999PostConfirmation_deploymentBucketName": {
       "usedBy": [
         {
@@ -109,6 +189,54 @@
         {
           "category": "function",
           "resourceName": "checkUserGroup"
+        }
+      ]
+    },
+    "AMPLIFY_function_forceDispatch_deploymentBucketName": {
+      "usedBy": [
+        {
+          "category": "function",
+          "resourceName": "forceDispatch"
+        }
+      ]
+    },
+    "AMPLIFY_function_forceDispatch_s3Key": {
+      "usedBy": [
+        {
+          "category": "function",
+          "resourceName": "forceDispatch"
+        }
+      ]
+    },
+    "AMPLIFY_function_reassignOrder_deploymentBucketName": {
+      "usedBy": [
+        {
+          "category": "function",
+          "resourceName": "reassignOrder"
+        }
+      ]
+    },
+    "AMPLIFY_function_reassignOrder_s3Key": {
+      "usedBy": [
+        {
+          "category": "function",
+          "resourceName": "reassignOrder"
+        }
+      ]
+    },
+    "AMPLIFY_function_resetCourierIfIdle_deploymentBucketName": {
+      "usedBy": [
+        {
+          "category": "function",
+          "resourceName": "resetCourierIfIdle"
+        }
+      ]
+    },
+    "AMPLIFY_function_resetCourierIfIdle_s3Key": {
+      "usedBy": [
+        {
+          "category": "function",
+          "resourceName": "resetCourierIfIdle"
         }
       ]
     }
