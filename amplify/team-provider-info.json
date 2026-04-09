@@ -27,19 +27,19 @@
         },
         "assignOrder": {
           "deploymentBucketName": "amplify-atua-staging-19d66-deployment",
-          "s3Key": "amplify-builds/assignOrder-4a796634397239427644-build.zip"
+          "s3Key": "amplify-builds/assignOrder-4659564a6e364855704c-build.zip"
         },
         "reassignOrder": {
           "deploymentBucketName": "amplify-atua-staging-19d66-deployment",
-          "s3Key": "amplify-builds/reassignOrder-6773452b747a4876366c-build.zip"
+          "s3Key": "amplify-builds/reassignOrder-656756314d4b616e686d-build.zip"
         },
         "forceDispatch": {
           "deploymentBucketName": "amplify-atua-staging-19d66-deployment",
-          "s3Key": "amplify-builds/forceDispatch-4c755352556b62586256-build.zip"
+          "s3Key": "amplify-builds/forceDispatch-4b685247754a4767432b-build.zip"
         },
         "resetCourierIfIdle": {
           "deploymentBucketName": "amplify-atua-staging-19d66-deployment",
-          "s3Key": "amplify-builds/resetCourierIfIdle-56474547574f4756384a-build.zip"
+          "s3Key": "amplify-builds/resetCourierIfIdle-6e787264554d37655131-build.zip"
         }
       },
       "storage": {

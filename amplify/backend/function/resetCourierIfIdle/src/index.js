@@ -4,6 +4,10 @@ const docClient = new AWS.DynamoDB.DocumentClient();
 const COURIER_TABLE = process.env.COURIER_TABLE;
 const ORDER_TABLE = process.env.ORDER_TABLE;
 
+// I will have to change this scan because it will be expensive. I will come back to it later
+// docClient.scan({ TableName: COURIER_TABLE })
+// docClient.scan({ TableName: ORDER_TABLE })
+
 exports.handler = async (event) => {
   console.log("Checking courier completion...");
 

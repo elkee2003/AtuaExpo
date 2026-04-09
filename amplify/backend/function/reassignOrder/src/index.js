@@ -4,6 +4,10 @@ const docClient = new AWS.DynamoDB.DocumentClient();
 const COURIER_TABLE = "Courier-n4tb6ywvhnf3zesv5ibhpitqiq-staging";
 const ORDER_TABLE = "Order-n4tb6ywvhnf3zesv5ibhpitqiq-staging";
 
+// I will have to change this scan because it will be expensive. I will come back to it later
+// docClient.scan({ TableName: COURIER_TABLE })
+// docClient.scan({ TableName: ORDER_TABLE })
+
 exports.handler = async () => {
   const now = new Date().toISOString();
 
@@ -99,10 +103,11 @@ async function assignNextCourier(order) {
   );
 
   for (let courier of sorted) {
-    if (canAccept(courier, order, rejected)) {
-      await assign(order.id, courier.id);
-      return;
-    }
+    if (!canAccept(courier, order, rejected)) continue;
+
+    const success = await assign(order, courier.id);
+
+    if (success) return; // ✅ only stop if assignment worked
   }
 
   console.log("No available courier for order:", order.id);
@@ -138,27 +143,70 @@ function canAccept(courier, order, rejected) {
   return true;
 }
 
-async function assign(orderId, courierId) {
+async function assign(order, courierId) {
   const expires = new Date(Date.now() + 25000).toISOString();
 
-  await docClient
-    .update({
-      TableName: ORDER_TABLE,
-      Key: { id: orderId },
-      UpdateExpression: `
-        SET assignedCourierId = :c,
-            assignmentStatus = :s,
-            assignmentExpiresAt = :e
-      `,
-      ExpressionAttributeValues: {
-        ":c": courierId,
-        ":s": "PENDING",
-        ":e": expires,
-      },
-    })
-    .promise();
+  try {
+    await docClient
+      .update({
+        TableName: ORDER_TABLE,
+        Key: { id: order.id },
+        UpdateExpression: `
+          SET assignedCourierId = :c,
+              assignmentStatus = :s,
+              assignmentExpiresAt = :e
+        `,
+        ConditionExpression:
+          "assignedCourierId = :null OR attribute_not_exists(assignedCourierId)",
+        ExpressionAttributeValues: {
+          ":c": courierId,
+          ":s": "PENDING",
+          ":e": expires,
+          ":null": null,
+        },
+      })
+      .promise();
 
-  console.log(`Assigned order ${orderId} → courier ${courierId}`);
+    console.log(`Assigned order ${order.id} → courier ${courierId}`);
+
+    // ✅ NOW SAFE
+    if (order.transportationType?.includes("EXPRESS")) {
+      await docClient
+        .update({
+          TableName: COURIER_TABLE,
+          Key: { id: courierId },
+          UpdateExpression:
+            "SET currentExpressCount = if_not_exists(currentExpressCount, :zero) + :inc",
+          ExpressionAttributeValues: {
+            ":inc": 1,
+            ":zero": 0,
+          },
+        })
+        .promise();
+    } else {
+      await docClient
+        .update({
+          TableName: COURIER_TABLE,
+          Key: { id: courierId },
+          UpdateExpression:
+            "SET currentBatchCount = if_not_exists(currentBatchCount, :zero) + :inc",
+          ExpressionAttributeValues: {
+            ":inc": 1,
+            ":zero": 0,
+          },
+        })
+        .promise();
+    }
+
+    return true;
+  } catch (err) {
+    if (err.code === "ConditionalCheckFailedException") {
+      console.log(`Assignment skipped (already taken): ${order.id}`);
+      return false;
+    } else {
+      throw err;
+    }
+  }
 }
 
 /* ================= DISTANCE ================= */

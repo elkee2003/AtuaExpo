@@ -4,6 +4,10 @@ const docClient = new AWS.DynamoDB.DocumentClient();
 const COURIER_TABLE = "Courier-n4tb6ywvhnf3zesv5ibhpitqiq-staging";
 const ORDER_TABLE = "Order-n4tb6ywvhnf3zesv5ibhpitqiq-staging";
 
+// I will have to change this scan because it will be expensive. I will come back to it later
+// docClient.scan({ TableName: COURIER_TABLE })
+// docClient.scan({ TableName: ORDER_TABLE })
+
 exports.handler = async () => {
   console.log("Running force dispatch...");
 
