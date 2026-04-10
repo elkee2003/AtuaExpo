@@ -208,6 +208,9 @@ export const createOffer = /* GraphQL */ `
         lastOfferBy
         loadingFee
         unloadingFee
+        floorSurcharge
+        fragileSurcharge
+        extrasTotal
         totalPrice
         courierEarnings
         commissionAmount
@@ -255,11 +258,11 @@ export const createOffer = /* GraphQL */ `
         logisticsIntakeConfirmedAt
         acceptedOfferID
         assignedCourierId
-        assignmentStatus
         assignmentExpiresAt
         assignmentAttempts
         lastAssignedAt
         rejectedCourierIds
+        assignmentStatus
         userID
         createdAt
         updatedAt
@@ -311,6 +314,7 @@ export const createOffer = /* GraphQL */ `
         currentBatchCount
         currentExpressCount
         lastBatchAssignedAt
+        statusKey
         createdAt
         updatedAt
         _version
@@ -366,6 +370,9 @@ export const updateOffer = /* GraphQL */ `
         lastOfferBy
         loadingFee
         unloadingFee
+        floorSurcharge
+        fragileSurcharge
+        extrasTotal
         totalPrice
         courierEarnings
         commissionAmount
@@ -413,11 +420,11 @@ export const updateOffer = /* GraphQL */ `
         logisticsIntakeConfirmedAt
         acceptedOfferID
         assignedCourierId
-        assignmentStatus
         assignmentExpiresAt
         assignmentAttempts
         lastAssignedAt
         rejectedCourierIds
+        assignmentStatus
         userID
         createdAt
         updatedAt
@@ -469,6 +476,7 @@ export const updateOffer = /* GraphQL */ `
         currentBatchCount
         currentExpressCount
         lastBatchAssignedAt
+        statusKey
         createdAt
         updatedAt
         _version
@@ -524,6 +532,9 @@ export const deleteOffer = /* GraphQL */ `
         lastOfferBy
         loadingFee
         unloadingFee
+        floorSurcharge
+        fragileSurcharge
+        extrasTotal
         totalPrice
         courierEarnings
         commissionAmount
@@ -571,11 +582,11 @@ export const deleteOffer = /* GraphQL */ `
         logisticsIntakeConfirmedAt
         acceptedOfferID
         assignedCourierId
-        assignmentStatus
         assignmentExpiresAt
         assignmentAttempts
         lastAssignedAt
         rejectedCourierIds
+        assignmentStatus
         userID
         createdAt
         updatedAt
@@ -627,6 +638,7 @@ export const deleteOffer = /* GraphQL */ `
         currentBatchCount
         currentExpressCount
         lastBatchAssignedAt
+        statusKey
         createdAt
         updatedAt
         _version
@@ -679,6 +691,9 @@ export const createOrder = /* GraphQL */ `
       lastOfferBy
       loadingFee
       unloadingFee
+      floorSurcharge
+      fragileSurcharge
+      extrasTotal
       totalPrice
       courierEarnings
       commissionAmount
@@ -726,11 +741,11 @@ export const createOrder = /* GraphQL */ `
       logisticsIntakeConfirmedAt
       acceptedOfferID
       assignedCourierId
-      assignmentStatus
       assignmentExpiresAt
       assignmentAttempts
       lastAssignedAt
       rejectedCourierIds
+      assignmentStatus
       userID
       offers {
         nextToken
@@ -779,6 +794,7 @@ export const createOrder = /* GraphQL */ `
         currentBatchCount
         currentExpressCount
         lastBatchAssignedAt
+        statusKey
         createdAt
         updatedAt
         _version
@@ -828,6 +844,9 @@ export const updateOrder = /* GraphQL */ `
       lastOfferBy
       loadingFee
       unloadingFee
+      floorSurcharge
+      fragileSurcharge
+      extrasTotal
       totalPrice
       courierEarnings
       commissionAmount
@@ -875,11 +894,11 @@ export const updateOrder = /* GraphQL */ `
       logisticsIntakeConfirmedAt
       acceptedOfferID
       assignedCourierId
-      assignmentStatus
       assignmentExpiresAt
       assignmentAttempts
       lastAssignedAt
       rejectedCourierIds
+      assignmentStatus
       userID
       offers {
         nextToken
@@ -928,6 +947,7 @@ export const updateOrder = /* GraphQL */ `
         currentBatchCount
         currentExpressCount
         lastBatchAssignedAt
+        statusKey
         createdAt
         updatedAt
         _version
@@ -977,6 +997,9 @@ export const deleteOrder = /* GraphQL */ `
       lastOfferBy
       loadingFee
       unloadingFee
+      floorSurcharge
+      fragileSurcharge
+      extrasTotal
       totalPrice
       courierEarnings
       commissionAmount
@@ -1024,11 +1047,11 @@ export const deleteOrder = /* GraphQL */ `
       logisticsIntakeConfirmedAt
       acceptedOfferID
       assignedCourierId
-      assignmentStatus
       assignmentExpiresAt
       assignmentAttempts
       lastAssignedAt
       rejectedCourierIds
+      assignmentStatus
       userID
       offers {
         nextToken
@@ -1077,6 +1100,7 @@ export const deleteOrder = /* GraphQL */ `
         currentBatchCount
         currentExpressCount
         lastBatchAssignedAt
+        statusKey
         createdAt
         updatedAt
         _version
@@ -1140,6 +1164,7 @@ export const createCourier = /* GraphQL */ `
       currentBatchCount
       currentExpressCount
       lastBatchAssignedAt
+      statusKey
       offers {
         nextToken
         startedAt
@@ -1206,6 +1231,7 @@ export const updateCourier = /* GraphQL */ `
       currentBatchCount
       currentExpressCount
       lastBatchAssignedAt
+      statusKey
       offers {
         nextToken
         startedAt
@@ -1272,6 +1298,7 @@ export const deleteCourier = /* GraphQL */ `
       currentBatchCount
       currentExpressCount
       lastBatchAssignedAt
+      statusKey
       offers {
         nextToken
         startedAt

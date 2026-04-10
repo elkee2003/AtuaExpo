@@ -8,6 +8,8 @@ import {
   View,
 } from "react-native";
 
+import MapView, { Marker } from "react-native-maps";
+
 import { Courier, Order } from "@/src/models";
 import { DataStore } from "aws-amplify/datastore";
 import { getUrl } from "aws-amplify/storage";
@@ -30,6 +32,12 @@ const OrderDetails = ({ orderId }) => {
   const [showViewer, setShowViewer] = useState(false);
   const [selectedImage, setSelectedImage] = useState(0);
 
+  const hasValidCoords =
+    typeof order?.originLat === "number" &&
+    typeof order?.originLng === "number" &&
+    typeof order?.destinationLat === "number" &&
+    typeof order?.destinationLng === "number";
+
   const [sections, setSections] = useState({
     route: true,
     pricing: false,
@@ -38,48 +46,58 @@ const OrderDetails = ({ orderId }) => {
   });
 
   useEffect(() => {
-    fetchOrder();
+    let isMounted = true;
+
+    const fetchData = async () => {
+      try {
+        const orderData = await DataStore.query(Order, orderId);
+        if (!isMounted) return;
+
+        setOrder(orderData);
+
+        if (orderData?.Courier?.id) {
+          const courierData = await DataStore.query(
+            Courier,
+            orderData.Courier.id,
+          );
+
+          if (!isMounted) return;
+
+          setCourier(courierData);
+
+          if (courierData?.profilePic) {
+            await loadCourierImage(courierData, isMounted);
+          }
+        }
+
+        await loadEvidence(orderData, isMounted);
+      } catch (e) {
+        console.log(e);
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    };
+
+    fetchData();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   //   Load Courier Image
-  const loadCourierImage = async (courier) => {
+  const loadCourierImage = async (courier, isMounted) => {
     if (!courier?.profilePic) return;
 
     try {
       const url = await getUrl({ path: courier.profilePic });
-      setProfileImage(url.url);
+      if (isMounted) setProfileImage(url.url);
     } catch (e) {
       console.log(e);
     }
   };
 
-  //   Fetch Order
-  const fetchOrder = async () => {
-    try {
-      const orderData = await DataStore.query(Order, orderId);
-      setOrder(orderData);
-
-      if (orderData?.Courier?.id) {
-        const courierData = await DataStore.query(
-          Courier,
-          orderData.Courier.id,
-        );
-        setCourier(courierData);
-
-        if (courierData?.profilePic) {
-          loadCourierImage(courierData);
-        }
-      }
-
-      loadEvidence(orderData);
-    } catch (e) {
-      console.log(e);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const loadEvidence = async (order) => {
+  const loadEvidence = async (order, isMounted) => {
     try {
       const groups = [
         order?.senderPreTransferPhotos || [],
@@ -90,7 +108,6 @@ const OrderDetails = ({ orderId }) => {
       ];
 
       const allImages = groups.flat().filter(Boolean);
-
       const urls = [];
 
       for (const img of allImages) {
@@ -102,7 +119,7 @@ const OrderDetails = ({ orderId }) => {
         }
       }
 
-      setEvidence(urls);
+      if (isMounted) setEvidence(urls);
     } catch (e) {
       console.log(e);
     }
@@ -116,6 +133,8 @@ const OrderDetails = ({ orderId }) => {
   };
 
   const reorder = () => {
+    if (!order?.id) return;
+
     router.push({
       pathname: "/screens/createOrder",
       params: { reorderId: order.id },
@@ -145,31 +164,33 @@ const OrderDetails = ({ orderId }) => {
         <Text style={styles.status}>{order.status}</Text>
       </View>
 
-      {/* <View style={styles.mapContainer}>
-        <MapView
-          style={styles.map}
-          initialRegion={{
-            latitude: order.originLat,
-            longitude: order.originLng,
-            latitudeDelta: 0.05,
-            longitudeDelta: 0.05,
-          }}
-        >
-          <Marker
-            coordinate={{
+      {hasValidCoords && (
+        <View style={styles.mapContainer}>
+          <MapView
+            style={styles.map}
+            initialRegion={{
               latitude: order.originLat,
               longitude: order.originLng,
+              latitudeDelta: 0.05,
+              longitudeDelta: 0.05,
             }}
-          />
+          >
+            <Marker
+              coordinate={{
+                latitude: order.originLat,
+                longitude: order.originLng,
+              }}
+            />
 
-          <Marker
-            coordinate={{
-              latitude: order.destinationLat,
-              longitude: order.destinationLng,
-            }}
-          />
-        </MapView>
-      </View> */}
+            <Marker
+              coordinate={{
+                latitude: order.destinationLat,
+                longitude: order.destinationLng,
+              }}
+            />
+          </MapView>
+        </View>
+      )}
 
       {courier && (
         <View style={styles.courierCard}>
@@ -324,7 +345,10 @@ const OrderDetails = ({ orderId }) => {
             <Text style={{ color: "#fff", fontSize: 20 }}>✕</Text>
           </TouchableOpacity>
 
-          <PagerView style={styles.viewerPager} initialPage={selectedImage}>
+          <PagerView
+            style={styles.viewerPager}
+            initialPage={Math.min(selectedImage, evidence.length - 1)}
+          >
             {evidence.map((img, i) => (
               <View key={i} style={styles.viewerPage}>
                 <Image

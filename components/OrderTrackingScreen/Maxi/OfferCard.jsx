@@ -4,12 +4,13 @@ import styles from "./styles";
 const OfferCard = ({
   offer,
   courier,
+  order,
   onAccept,
   onCounter,
   isLatest,
   isAcceptDisabled,
 }) => {
-  const isUserTurn = isLatest && offer?.senderType === "COURIER";
+  const isUserTurn = isLatest && order?.lastOfferBy === "COURIER";
 
   return (
     <View

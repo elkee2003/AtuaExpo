@@ -332,6 +332,8 @@ const OrderTrackingScreen = ({ orderId }) => {
               onAcceptOffer={async (offer) => {
                 if (order.status === "ACCEPTED") return;
 
+                if (order.lastOfferBy !== "COURIER") return;
+
                 try {
                   await DataStore.save(
                     Order.copyOf(order, (updated) => {
@@ -360,6 +362,13 @@ const OrderTrackingScreen = ({ orderId }) => {
                       senderType: "USER",
                       amount: offer.amount,
                       status: "ACTIVE",
+                    }),
+                  );
+
+                  // 2️⃣ ✅ UPDATE TURN (THIS IS WHAT YOU WERE MISSING)
+                  await DataStore.save(
+                    Order.copyOf(order, (updated) => {
+                      updated.lastOfferBy = "USER";
                     }),
                   );
                 } catch (e) {

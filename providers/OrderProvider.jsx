@@ -21,6 +21,9 @@ const OrderProvider = ({ children }) => {
   const [lastOfferBy, setLastOfferBy] = useState("");
   const [loadingFee, setLoadingFee] = useState(null);
   const [unloadingFee, setUnloadingFee] = useState(null);
+  const [floorSurcharge, setFloorSurcharge] = useState(null);
+  const [fragileSurcharge, setFragileSurcharge] = useState(null);
+  const [extrasTotal, setExtrasTotal] = useState(null);
   const [totalPrice, setTotalPrice] = useState();
   const [operationalFare, setOperationalFare] = useState();
   const [courierEarnings, setCourierEarnings] = useState(null);
@@ -81,6 +84,9 @@ const OrderProvider = ({ children }) => {
     setLastOfferBy("");
     setLoadingFee(null);
     setUnloadingFee(null);
+    setFloorSurcharge(null);
+    setFragileSurcharge(null);
+    setExtrasTotal(null);
     setPickupLoadingResponsibility("");
     setPickupFloorLevel("");
     setPickupFloorLevelPrice(null);
@@ -133,6 +139,9 @@ const OrderProvider = ({ children }) => {
     setLastOfferBy("");
     setLoadingFee(null);
     setUnloadingFee(null);
+    setFloorSurcharge(null);
+    setFragileSurcharge(null);
+    setExtrasTotal(null);
     setOperationalFare(null);
     setTotalPrice(null);
     setCourierEarnings(null);
@@ -214,6 +223,12 @@ const OrderProvider = ({ children }) => {
         setLoadingFee,
         unloadingFee,
         setUnloadingFee,
+        floorSurcharge,
+        setFloorSurcharge,
+        fragileSurcharge,
+        setFragileSurcharge,
+        extrasTotal,
+        setExtrasTotal,
         operationalFare,
         setOperationalFare,
         totalPrice,

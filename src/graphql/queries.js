@@ -263,6 +263,9 @@ export const getOffer = /* GraphQL */ `
         lastOfferBy
         loadingFee
         unloadingFee
+        floorSurcharge
+        fragileSurcharge
+        extrasTotal
         totalPrice
         courierEarnings
         commissionAmount
@@ -310,11 +313,11 @@ export const getOffer = /* GraphQL */ `
         logisticsIntakeConfirmedAt
         acceptedOfferID
         assignedCourierId
-        assignmentStatus
         assignmentExpiresAt
         assignmentAttempts
         lastAssignedAt
         rejectedCourierIds
+        assignmentStatus
         userID
         createdAt
         updatedAt
@@ -366,6 +369,7 @@ export const getOffer = /* GraphQL */ `
         currentBatchCount
         currentExpressCount
         lastBatchAssignedAt
+        statusKey
         createdAt
         updatedAt
         _version
@@ -545,6 +549,9 @@ export const getOrder = /* GraphQL */ `
       lastOfferBy
       loadingFee
       unloadingFee
+      floorSurcharge
+      fragileSurcharge
+      extrasTotal
       totalPrice
       courierEarnings
       commissionAmount
@@ -592,11 +599,11 @@ export const getOrder = /* GraphQL */ `
       logisticsIntakeConfirmedAt
       acceptedOfferID
       assignedCourierId
-      assignmentStatus
       assignmentExpiresAt
       assignmentAttempts
       lastAssignedAt
       rejectedCourierIds
+      assignmentStatus
       userID
       offers {
         nextToken
@@ -645,6 +652,7 @@ export const getOrder = /* GraphQL */ `
         currentBatchCount
         currentExpressCount
         lastBatchAssignedAt
+        statusKey
         createdAt
         updatedAt
         _version
@@ -696,6 +704,9 @@ export const listOrders = /* GraphQL */ `
         lastOfferBy
         loadingFee
         unloadingFee
+        floorSurcharge
+        fragileSurcharge
+        extrasTotal
         totalPrice
         courierEarnings
         commissionAmount
@@ -743,11 +754,11 @@ export const listOrders = /* GraphQL */ `
         logisticsIntakeConfirmedAt
         acceptedOfferID
         assignedCourierId
-        assignmentStatus
         assignmentExpiresAt
         assignmentAttempts
         lastAssignedAt
         rejectedCourierIds
+        assignmentStatus
         userID
         createdAt
         updatedAt
@@ -803,6 +814,9 @@ export const syncOrders = /* GraphQL */ `
         lastOfferBy
         loadingFee
         unloadingFee
+        floorSurcharge
+        fragileSurcharge
+        extrasTotal
         totalPrice
         courierEarnings
         commissionAmount
@@ -850,11 +864,11 @@ export const syncOrders = /* GraphQL */ `
         logisticsIntakeConfirmedAt
         acceptedOfferID
         assignedCourierId
-        assignmentStatus
         assignmentExpiresAt
         assignmentAttempts
         lastAssignedAt
         rejectedCourierIds
+        assignmentStatus
         userID
         createdAt
         updatedAt
@@ -912,6 +926,9 @@ export const ordersByAssignedCourierId = /* GraphQL */ `
         lastOfferBy
         loadingFee
         unloadingFee
+        floorSurcharge
+        fragileSurcharge
+        extrasTotal
         totalPrice
         courierEarnings
         commissionAmount
@@ -959,11 +976,125 @@ export const ordersByAssignedCourierId = /* GraphQL */ `
         logisticsIntakeConfirmedAt
         acceptedOfferID
         assignedCourierId
-        assignmentStatus
         assignmentExpiresAt
         assignmentAttempts
         lastAssignedAt
         rejectedCourierIds
+        assignmentStatus
+        userID
+        createdAt
+        updatedAt
+        _version
+        _deleted
+        _lastChangedAt
+        __typename
+      }
+      nextToken
+      startedAt
+      __typename
+    }
+  }
+`;
+export const ordersByAssignmentStatusAndAssignmentExpiresAt = /* GraphQL */ `
+  query OrdersByAssignmentStatusAndAssignmentExpiresAt(
+    $assignmentStatus: String!
+    $assignmentExpiresAt: ModelStringKeyConditionInput
+    $sortDirection: ModelSortDirection
+    $filter: ModelOrderFilterInput
+    $limit: Int
+    $nextToken: String
+  ) {
+    ordersByAssignmentStatusAndAssignmentExpiresAt(
+      assignmentStatus: $assignmentStatus
+      assignmentExpiresAt: $assignmentExpiresAt
+      sortDirection: $sortDirection
+      filter: $filter
+      limit: $limit
+      nextToken: $nextToken
+    ) {
+      items {
+        id
+        recipientName
+        recipientNumber
+        recipientNumber2
+        orderDetails
+        originAddress
+        originState
+        originLat
+        originLng
+        destinationAddress
+        destinationState
+        destinationLat
+        destinationLng
+        tripType
+        distance
+        transportationType
+        vehicleClass
+        status
+        loadCategory
+        isInterState
+        estimatedMinPrice
+        estimatedMaxPrice
+        initialOfferPrice
+        currentOfferPrice
+        lastOfferBy
+        loadingFee
+        unloadingFee
+        floorSurcharge
+        fragileSurcharge
+        extrasTotal
+        totalPrice
+        courierEarnings
+        commissionAmount
+        platformFee
+        platformServiceRevenue
+        vatAmount
+        platformNetRevenue
+        deliveryVerificationCode
+        declaredWeightBracket
+        senderPreTransferPhotos
+        senderPreTransferVideo
+        senderPreTransferRecordedAt
+        senderPreTransferLocalPhotos
+        senderPreTransferLocalVideo
+        mediaUploadStatus
+        courierPreTransferPhotos
+        courierPreTransferVideo
+        courierPreTransferRecordedAt
+        courierPostLoadingPhotos
+        courierPostLoadingVideo
+        dropoffArrivalPhotos
+        dropoffArrivalVideo
+        postDeliveryPhotos
+        postDeliveryVideo
+        pickupLoadingResponsibility
+        pickupFloorLevel
+        pickupFloorLevelPrice
+        pickupHasElevator
+        dropoffUnloadingResponsibility
+        dropoffFloorLevel
+        dropoffFloorLevelPrice
+        dropoffHasElevator
+        acceptedAt
+        arrivedPickupAt
+        loadingStartedAt
+        tripStartedAt
+        arrivedDropoffAt
+        unloadingCompletedAt
+        logisticsCompanyId
+        waybillNumber
+        waybillPhoto
+        logisticsTrackingCode
+        logisticsTrackingStatus
+        handedOverToLogisticsAt
+        logisticsIntakeConfirmedAt
+        acceptedOfferID
+        assignedCourierId
+        assignmentExpiresAt
+        assignmentAttempts
+        lastAssignedAt
+        rejectedCourierIds
+        assignmentStatus
         userID
         createdAt
         updatedAt
@@ -1021,6 +1152,9 @@ export const ordersByUserID = /* GraphQL */ `
         lastOfferBy
         loadingFee
         unloadingFee
+        floorSurcharge
+        fragileSurcharge
+        extrasTotal
         totalPrice
         courierEarnings
         commissionAmount
@@ -1068,11 +1202,11 @@ export const ordersByUserID = /* GraphQL */ `
         logisticsIntakeConfirmedAt
         acceptedOfferID
         assignedCourierId
-        assignmentStatus
         assignmentExpiresAt
         assignmentAttempts
         lastAssignedAt
         rejectedCourierIds
+        assignmentStatus
         userID
         createdAt
         updatedAt
@@ -1131,6 +1265,7 @@ export const getCourier = /* GraphQL */ `
       currentBatchCount
       currentExpressCount
       lastBatchAssignedAt
+      statusKey
       offers {
         nextToken
         startedAt
@@ -1199,6 +1334,7 @@ export const listCouriers = /* GraphQL */ `
         currentBatchCount
         currentExpressCount
         lastBatchAssignedAt
+        statusKey
         createdAt
         updatedAt
         _version
@@ -1267,6 +1403,78 @@ export const syncCouriers = /* GraphQL */ `
         currentBatchCount
         currentExpressCount
         lastBatchAssignedAt
+        statusKey
+        createdAt
+        updatedAt
+        _version
+        _deleted
+        _lastChangedAt
+        __typename
+      }
+      nextToken
+      startedAt
+      __typename
+    }
+  }
+`;
+export const couriersByStatus = /* GraphQL */ `
+  query CouriersByStatus(
+    $statusKey: String!
+    $sortDirection: ModelSortDirection
+    $filter: ModelCourierFilterInput
+    $limit: Int
+    $nextToken: String
+  ) {
+    couriersByStatus(
+      statusKey: $statusKey
+      sortDirection: $sortDirection
+      filter: $filter
+      limit: $limit
+      nextToken: $nextToken
+    ) {
+      items {
+        id
+        sub
+        isOnline
+        firstName
+        lastName
+        profilePic
+        address
+        landMark
+        phoneNumber
+        email
+        courierNIN
+        courierNINImage
+        bankCode
+        bankName
+        accountName
+        accountNumber
+        transportationType
+        vehicleClass
+        model
+        vehicleColour
+        plateNumber
+        maxiImages
+        maxiDescription
+        guarantorName
+        guarantorLastName
+        guarantorProfession
+        guarantorNumber
+        guarantorRelationship
+        guarantorAddress
+        guarantorEmail
+        guarantorNIN
+        guarantorNINImage
+        lat
+        lng
+        heading
+        push_token
+        isApproved
+        approvedById
+        currentBatchCount
+        currentExpressCount
+        lastBatchAssignedAt
+        statusKey
         createdAt
         updatedAt
         _version

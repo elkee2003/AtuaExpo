@@ -600,6 +600,27 @@ export const schema = {
                     "isRequired": false,
                     "attributes": []
                 },
+                "floorSurcharge": {
+                    "name": "floorSurcharge",
+                    "isArray": false,
+                    "type": "Float",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "fragileSurcharge": {
+                    "name": "fragileSurcharge",
+                    "isArray": false,
+                    "type": "Float",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "extrasTotal": {
+                    "name": "extrasTotal",
+                    "isArray": false,
+                    "type": "Float",
+                    "isRequired": false,
+                    "attributes": []
+                },
                 "totalPrice": {
                     "name": "totalPrice",
                     "isArray": false,
@@ -937,13 +958,6 @@ export const schema = {
                     "isRequired": false,
                     "attributes": []
                 },
-                "assignmentStatus": {
-                    "name": "assignmentStatus",
-                    "isArray": false,
-                    "type": "String",
-                    "isRequired": false,
-                    "attributes": []
-                },
                 "assignmentExpiresAt": {
                     "name": "assignmentExpiresAt",
                     "isArray": false,
@@ -972,6 +986,13 @@ export const schema = {
                     "isRequired": false,
                     "attributes": [],
                     "isArrayNullable": true
+                },
+                "assignmentStatus": {
+                    "name": "assignmentStatus",
+                    "isArray": false,
+                    "type": "String",
+                    "isRequired": false,
+                    "attributes": []
                 },
                 "userID": {
                     "name": "userID",
@@ -1041,6 +1062,16 @@ export const schema = {
                         "name": "byAssignedCourier",
                         "fields": [
                             "assignedCourierId"
+                        ]
+                    }
+                },
+                {
+                    "type": "key",
+                    "properties": {
+                        "name": "byAssignmentStatus",
+                        "fields": [
+                            "assignmentStatus",
+                            "assignmentExpiresAt"
                         ]
                     }
                 },
@@ -1362,6 +1393,13 @@ export const schema = {
                     "isRequired": false,
                     "attributes": []
                 },
+                "statusKey": {
+                    "name": "statusKey",
+                    "isArray": false,
+                    "type": "String",
+                    "isRequired": false,
+                    "attributes": []
+                },
                 "offers": {
                     "name": "offers",
                     "isArray": true,
@@ -1417,6 +1455,16 @@ export const schema = {
                 {
                     "type": "model",
                     "properties": {}
+                },
+                {
+                    "type": "key",
+                    "properties": {
+                        "name": "byStatus",
+                        "queryField": "couriersByStatus",
+                        "fields": [
+                            "statusKey"
+                        ]
+                    }
                 },
                 {
                     "type": "auth",
@@ -1622,5 +1670,5 @@ export const schema = {
     },
     "nonModels": {},
     "codegenVersion": "3.4.4",
-    "version": "26c0a21d187bb4a7caba2c46d9e788a6"
+    "version": "b493cc3880885d18a85f5f4376a0190f"
 };

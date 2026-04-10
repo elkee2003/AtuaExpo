@@ -110,6 +110,10 @@ type Order @model @auth(rules: [{ allow: public }]) {
   lastOfferBy: String # "USER" or "COURIER"
   loadingFee: Float
   unloadingFee: Float
+  floorSurcharge: Float
+  fragileSurcharge: Float
+
+  extrasTotal: Float
 
   # ------- General -------
   totalPrice: Float # final agreed price
@@ -184,12 +188,14 @@ type Order @model @auth(rules: [{ allow: public }]) {
 
   # ---------------- ASSIGNMENT FIELDS ----------------
   assignedCourierId: ID @index(name: "byAssignedCourier")
-  assignmentStatus: String
+  #assignmentStatus: String
   assignmentExpiresAt: AWSDateTime
   assignmentAttempts: Int
   lastAssignedAt: AWSDateTime
   rejectedCourierIds: [ID] # meant to be for couriers already assigned that expired or didn't accept
   # ---------------- RELATIONS ----------------
+  assignmentStatus: String
+    @index(name: "byAssignmentStatus", sortKeyFields: ["assignmentExpiresAt"])
   userID: ID! @index(name: "byUser")
   offers: [Offer] @hasMany(indexName: "byOrder", fields: ["id"])
   assignedCourier: Courier @belongsTo(fields: ["assignedCourierId"])
@@ -238,6 +244,7 @@ type Courier @model @auth(rules: [{ allow: public }]) {
   currentExpressCount: Int
   lastBatchAssignedAt: AWSDateTime
 
+  statusKey: String @index(name: "byStatus", queryField: "couriersByStatus")
   offers: [Offer] @hasMany(indexName: "byCourier", fields: ["id"])
   orders: [Order] @hasMany(indexName: "byAssignedCourier", fields: ["id"])
 }

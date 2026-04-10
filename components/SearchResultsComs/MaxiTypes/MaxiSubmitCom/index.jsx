@@ -1,3 +1,4 @@
+import { freightPricingEngine } from "@/modules/freightPricingEngine";
 import { useAuthContext } from "@/providers/AuthProvider";
 import { useLocationContext } from "@/providers/LocationProvider";
 import { useOrderContext } from "@/providers/OrderProvider";
@@ -45,6 +46,9 @@ const MaxiSubmit = () => {
     initialOfferPrice,
     loadingFee,
     unloadingFee,
+    floorSurcharge,
+    fragileSurcharge,
+    extrasTotal,
     platformFee,
     deliveryVerificationCode,
     setDeliveryVerificationCode,
@@ -92,6 +96,17 @@ const MaxiSubmit = () => {
         Alert.alert("Error", "User not authenticated");
         return;
       }
+
+      const pricing = freightPricingEngine({
+        type: transportationType,
+        distanceKm: totalKm,
+        loadCategory,
+        isInterState,
+        loadingFee,
+        unloadingFee,
+        floorSurcharge,
+        fragileSurcharge,
+      });
 
       if (
         initialOfferPrice < estimatedMinPrice ||
@@ -153,12 +168,14 @@ const MaxiSubmit = () => {
           estimatedMaxPrice: parseFloat(estimatedMaxPrice),
 
           initialOfferPrice: parseFloat(initialOfferPrice),
-          // currentOfferPrice: parseFloat(initialOfferPrice),
 
-          // lastOfferBy: "USER",
+          lastOfferBy: "USER",
 
-          loadingFee: parseFloat(loadingFee),
-          unloadingFee: parseFloat(unloadingFee),
+          loadingFee: pricing.extras.loadingFee,
+          unloadingFee: pricing.extras.unloadingFee,
+          floorSurcharge: pricing.extras.floorSurcharge,
+          fragileSurcharge: pricing.extras.fragileSurcharge,
+          extrasTotal: pricing.extrasTotal,
 
           platformFee: parseFloat(platformFee),
 

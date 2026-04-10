@@ -1,11 +1,19 @@
 import { DataStore } from "aws-amplify/datastore";
 import { router } from "expo-router";
+import { useState } from "react";
 import { Alert, Text, TouchableOpacity, View } from "react-native";
+import Collapsible from "react-native-collapsible";
 import { Order } from "../../../src/models";
 import styles from "./styles";
 
 const OrderHistoryList = ({ order, refreshOrders }) => {
+  const [expanded, setExpanded] = useState(false);
+
   const isLive = order.status === "ACCEPTED";
+
+  const toggleExpand = () => {
+    setExpanded((prev) => !prev); // ✅ now toggles properly
+  };
 
   const goToOrderDetails = () => {
     router.push(`/screens/orderdetails/${order.id}`);
@@ -20,7 +28,7 @@ const OrderHistoryList = ({ order, refreshOrders }) => {
       const orderToDelete = await DataStore.query(Order, order.id);
       if (orderToDelete) {
         await DataStore.delete(orderToDelete);
-        refreshOrders();
+        refreshOrders?.();
       }
     } catch (error) {
       console.log("Delete error:", error);
@@ -34,10 +42,10 @@ const OrderHistoryList = ({ order, refreshOrders }) => {
         await DataStore.save(
           Order.copyOf(orderToCancel, (updated) => {
             updated.status = "READY_FOR_PICKUP";
-            updated.orderCourierId = null;
+            updated.assignedCourierId = null;
           }),
         );
-        refreshOrders();
+        refreshOrders?.();
       }
     } catch (error) {
       console.log("Cancel error:", error);
@@ -62,9 +70,9 @@ const OrderHistoryList = ({ order, refreshOrders }) => {
     <TouchableOpacity
       activeOpacity={0.95}
       style={[styles.card, isLive && styles.cardActive]}
-      onPress={goToOrderDetails}
+      onPress={toggleExpand}
     >
-      {/* Top Row */}
+      {/* Header */}
       <View style={styles.topRow}>
         <Text style={styles.date}>{order?.createdAt?.substring(0, 10)}</Text>
 
@@ -73,15 +81,9 @@ const OrderHistoryList = ({ order, refreshOrders }) => {
         </View>
       </View>
 
-      {/* Main Content */}
+      {/* Summary */}
       <Text style={styles.recipient}>{order.recipientName}</Text>
-      <Text style={styles.details} numberOfLines={2}>
-        {order.orderDetails}
-      </Text>
 
-      <View style={styles.divider} />
-
-      {/* Bottom Row */}
       <View style={styles.bottomRow}>
         <Text style={styles.price}>
           ₦
@@ -91,55 +93,88 @@ const OrderHistoryList = ({ order, refreshOrders }) => {
         <Text style={styles.transport}>{order.transportationType}</Text>
       </View>
 
-      <TouchableOpacity style={styles.trackButton} onPress={goToTracking}>
-        <Text style={styles.trackText}>Order Tracking</Text>
-      </TouchableOpacity>
+      <Text style={styles.expandHint}>
+        {expanded ? "Tap to collapse ▲" : "Tap to expand ▼"}
+      </Text>
 
-      {/* READY_FOR_PICKUP → Delete */}
-      {order.status === "READY_FOR_PICKUP" && (
-        <TouchableOpacity
-          style={styles.deleteButton}
-          onPress={() =>
-            Alert.alert(
-              "Delete Order",
-              "Are you sure you want to permanently delete this order?",
-              [
-                { text: "Cancel" },
-                {
-                  text: "Delete",
-                  style: "destructive",
-                  onPress: deleteOrder,
-                },
-              ],
-            )
-          }
-        >
-          <Text style={styles.deleteText}>Delete Order</Text>
-        </TouchableOpacity>
-      )}
+      {/* Expanded */}
+      <Collapsible collapsed={!expanded}>
+        <View style={styles.expandedContent}>
+          <Text style={styles.details}>{order.orderDetails}</Text>
 
-      {/* ACCEPTED → Cancel */}
-      {order.status === "ACCEPTED" && (
-        <TouchableOpacity
-          style={styles.cancelButton}
-          onPress={() =>
-            Alert.alert(
-              "Cancel Delivery",
-              "Do you want to cancel this delivery?",
-              [
-                { text: "No" },
-                {
-                  text: "Yes",
-                  style: "destructive",
-                  onPress: cancelOrder,
-                },
-              ],
-            )
-          }
-        >
-          <Text style={styles.cancelText}>Cancel Delivery</Text>
-        </TouchableOpacity>
-      )}
+          <View style={styles.divider} />
+
+          {/* Buttons Row */}
+          <View style={styles.buttonRow}>
+            <TouchableOpacity
+              style={styles.primaryButton}
+              onPress={(e) => {
+                e.stopPropagation();
+                goToTracking();
+              }}
+            >
+              <Text style={styles.primaryText}>Track</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.secondaryButton}
+              onPress={(e) => {
+                e.stopPropagation();
+                goToOrderDetails();
+              }}
+            >
+              <Text style={styles.secondaryText}>Details</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Conditional Actions */}
+          {order.status === "READY_FOR_PICKUP" && (
+            <TouchableOpacity
+              style={styles.dangerButton}
+              onPress={(e) => {
+                e.stopPropagation();
+                Alert.alert(
+                  "Delete Order",
+                  "Are you sure you want to permanently delete this order?",
+                  [
+                    { text: "Cancel" },
+                    {
+                      text: "Delete",
+                      style: "destructive",
+                      onPress: deleteOrder,
+                    },
+                  ],
+                );
+              }}
+            >
+              <Text style={styles.dangerText}>Delete Order</Text>
+            </TouchableOpacity>
+          )}
+
+          {order.status === "ACCEPTED" && (
+            <TouchableOpacity
+              style={styles.warningButton}
+              onPress={(e) => {
+                e.stopPropagation();
+                Alert.alert(
+                  "Cancel Delivery",
+                  "Do you want to cancel this delivery?",
+                  [
+                    { text: "No" },
+                    {
+                      text: "Yes",
+                      style: "destructive",
+                      onPress: cancelOrder,
+                    },
+                  ],
+                );
+              }}
+            >
+              <Text style={styles.warningText}>Cancel Delivery</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      </Collapsible>
     </TouchableOpacity>
   );
 };

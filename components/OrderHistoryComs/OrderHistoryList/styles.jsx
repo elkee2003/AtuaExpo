@@ -3,14 +3,14 @@ import { StyleSheet } from "react-native";
 const styles = StyleSheet.create({
   card: {
     backgroundColor: "#FFFFFF",
-    borderRadius: 16,
+    borderRadius: 18,
     padding: 18,
     marginBottom: 18,
     shadowColor: "#000",
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 3,
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 4,
   },
 
   cardActive: {
@@ -18,10 +18,15 @@ const styles = StyleSheet.create({
     borderColor: "#E5E7EB",
   },
 
+  expandHint: {
+    marginTop: 8,
+    fontSize: 12,
+    color: "#9CA3AF",
+  },
+
   topRow: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "center",
   },
 
   date: {
@@ -38,36 +43,25 @@ const styles = StyleSheet.create({
   statusText: {
     fontSize: 12,
     fontWeight: "600",
-    color: "#FFFFFF",
+    color: "#fff",
   },
 
-  statusDelivered: {
-    backgroundColor: "#16A34A",
-  },
-
-  statusActive: {
-    backgroundColor: "#2563EB",
-  },
-
-  statusPending: {
-    backgroundColor: "#F59E0B",
-  },
-
-  statusCancelled: {
-    backgroundColor: "#DC2626",
-  },
+  statusDelivered: { backgroundColor: "#16A34A" },
+  statusActive: { backgroundColor: "#2563EB" },
+  statusPending: { backgroundColor: "#F59E0B" },
+  statusCancelled: { backgroundColor: "#DC2626" },
 
   recipient: {
     fontSize: 18,
     fontWeight: "600",
-    marginTop: 14,
+    marginTop: 12,
     color: "#111827",
   },
 
   details: {
     fontSize: 14,
     color: "#6B7280",
-    marginTop: 6,
+    marginTop: 8,
     lineHeight: 20,
   },
 
@@ -80,7 +74,7 @@ const styles = StyleSheet.create({
   bottomRow: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "center",
+    marginTop: 10,
   },
 
   price: {
@@ -95,41 +89,63 @@ const styles = StyleSheet.create({
     textTransform: "capitalize",
   },
 
-  trackButton: {
-    marginTop: 16,
+  expandedContent: {
+    marginTop: 10,
+  },
+
+  buttonRow: {
+    flexDirection: "row",
+    gap: 10,
+  },
+
+  primaryButton: {
+    flex: 1,
     backgroundColor: "#2563EB",
-    paddingVertical: 10,
-    borderRadius: 10,
+    paddingVertical: 12,
+    borderRadius: 12,
     alignItems: "center",
   },
 
-  trackText: {
-    color: "#FFFFFF",
+  primaryText: {
+    color: "#fff",
     fontWeight: "600",
   },
 
-  deleteButton: {
-    marginTop: 16,
-    backgroundColor: "#FEF2F2",
-    paddingVertical: 10,
-    borderRadius: 10,
+  secondaryButton: {
+    flex: 1,
+    backgroundColor: "#F3F4F6",
+    paddingVertical: 12,
+    borderRadius: 12,
     alignItems: "center",
   },
 
-  deleteText: {
+  secondaryText: {
+    color: "#111827",
+    fontWeight: "600",
+  },
+
+  dangerButton: {
+    marginTop: 12,
+    backgroundColor: "#FEF2F2",
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignItems: "center",
+  },
+
+  dangerText: {
     color: "#DC2626",
     fontWeight: "600",
   },
 
-  cancelButton: {
-    marginTop: 16,
+  warningButton: {
+    marginTop: 12,
     backgroundColor: "#FFF7ED",
-    paddingVertical: 10,
-    borderRadius: 10,
+    paddingVertical: 12,
+    borderRadius: 12,
     alignItems: "center",
   },
 
-  cancelText: {
+  warningText: {
     color: "#EA580C",
     fontWeight: "600",
   },

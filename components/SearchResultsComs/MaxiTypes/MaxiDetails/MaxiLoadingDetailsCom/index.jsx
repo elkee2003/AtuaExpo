@@ -1,6 +1,6 @@
 import { useOrderContext } from "@/providers/OrderProvider";
 import { router } from "expo-router";
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { ScrollView, Switch, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import styles from "./styles";
@@ -33,6 +33,14 @@ export default function MaxiLoadingDetailsScreen() {
 
     unloadingFee,
     setUnloadingFee,
+
+    floorSurcharge,
+    setFloorSurcharge,
+
+    fragileSurcharge,
+    setFragileSurcharge,
+    extrasTotal,
+    setExtrasTotal,
 
     pickupLoadingResponsibility,
     setPickupLoadingResponsibility,
@@ -88,7 +96,7 @@ export default function MaxiLoadingDetailsScreen() {
     return true;
   };
 
-  const floorSurcharge = useMemo(() => {
+  const computedFloorSurcharge = useMemo(() => {
     const pickupCharge =
       pickupLoadingResponsibility === "Handle Myself"
         ? 0
@@ -113,7 +121,19 @@ export default function MaxiLoadingDetailsScreen() {
     dropoffUnloadingResponsibility,
   ]);
 
-  const extrasTotal = loadingFee + unloadingFee + floorSurcharge;
+  const computedExtrasTotal =
+    (loadingFee || 0) +
+    (unloadingFee || 0) +
+    (computedFloorSurcharge || 0) +
+    (fragileSurcharge || 0);
+
+  useEffect(() => {
+    setFloorSurcharge(computedFloorSurcharge);
+  }, [computedFloorSurcharge, setFloorSurcharge]);
+
+  useEffect(() => {
+    setExtrasTotal(computedExtrasTotal);
+  }, [computedExtrasTotal, setExtrasTotal]);
 
   return (
     <SafeAreaView style={styles.screen}>
@@ -230,7 +250,7 @@ export default function MaxiLoadingDetailsScreen() {
         {/* SUMMARY */}
         <View style={styles.summaryCard}>
           <Text style={styles.summaryText}>
-            Extras Total: ₦{extrasTotal.toLocaleString()}
+            Extras Total: ₦{computedExtrasTotal.toLocaleString()}
           </Text>
         </View>
       </ScrollView>

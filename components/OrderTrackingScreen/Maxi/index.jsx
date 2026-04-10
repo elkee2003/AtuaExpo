@@ -34,13 +34,11 @@ const MaxiBiddingSheet = ({
   const latestOfferId = latestOffer?.offer?.id;
 
   const isAcceptDisabled =
-    order?.status === "ACCEPTED" ||
-    !latestOffer ||
-    latestOffer?.offer?.senderType !== "COURIER";
+    order?.status === "ACCEPTED" || order?.lastOfferBy !== "COURIER";
 
   // useEffect for Waiting Logic
   useEffect(() => {
-    if (isWaiting && latestOffer && latestOffer.senderType === "COURIER") {
+    if (isWaiting && latestOffer?.offer?.senderType === "COURIER") {
       setIsWaiting(false);
     }
   }, [latestOffer, isWaiting]);
@@ -80,6 +78,7 @@ const MaxiBiddingSheet = ({
           <OfferCard
             offer={item.offer}
             courier={item.courier}
+            order={order}
             isLatest={item.offer.id === latestOfferId}
             isAcceptDisabled={isAcceptDisabled}
             onAccept={() => {

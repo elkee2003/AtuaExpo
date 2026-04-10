@@ -37,9 +37,9 @@ const OrderHistoryMain = () => {
 
       const ordersWithCouriers = await Promise.all(
         sortedOrders.map(async (order) => {
-          if (order.orderCourierId && order.status !== "DELIVERED") {
+          if (order.assignedCourierId && order.status !== "DELIVERED") {
             const courier = await DataStore.query(Courier, (c) =>
-              c.id.eq(order.orderCourierId),
+              c.id.eq(order.assignedCourierId),
             );
             return { ...order, courier: courier[0] || null };
           }

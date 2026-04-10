@@ -58,6 +58,12 @@ export const freightPricingEngine = ({
     referenceBase: finalPrice,
     minSuggested: Math.round(finalPrice * 0.95),
     maxSuggested: Math.round(finalPrice * 1.15),
+    extras: {
+      loadingFee,
+      unloadingFee,
+      floorSurcharge,
+      fragileSurcharge,
+    },
     extrasTotal,
     commissionRate: config.commissionRate,
     platformFee: config.platformFee,
