@@ -7,7 +7,9 @@ import React from "react";
 import {
   Alert,
   Image,
-  KeyboardAvoidingView, Platform,
+  KeyboardAvoidingView,
+  Platform,
+  RefreshControl,
   ScrollView,
   Text,
   TextInput,
@@ -17,7 +19,7 @@ import {
 import { useProfileContext } from "../../../providers/ProfileProvider";
 import styles from "./styles";
 
-const EditProfile = () => {
+const EditProfile = ({ onRefresh, refreshing }) => {
   const {
     firstName,
     setFirstName,
@@ -184,7 +186,12 @@ const EditProfile = () => {
           <Text style={styles.signoutTxt}>Sign Out</Text>
         </TouchableOpacity>
 
-        <ScrollView>
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          }
+        >
           {/* Upload Profile Picture */}
           <View style={styles.profilePicWrapper}>
             <TouchableOpacity

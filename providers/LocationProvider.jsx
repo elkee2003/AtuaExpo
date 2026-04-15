@@ -9,6 +9,7 @@ const LocationProvider = ({ children }) => {
   const [destinationAddress, setDestinationAddress] = useState(null);
   const [destinationLat, setDestinationLat] = useState(null);
   const [destinationLng, setDestinationLng] = useState(null);
+  const [isRouteReady, setIsRouteReady] = useState(false);
   const [lastDestination, setLastDestination] = useState(null);
   const [originState, setOriginState] = useState(null);
   const [destinationState, setDestinationState] = useState(null);
@@ -67,6 +68,8 @@ const LocationProvider = ({ children }) => {
         setDestinationLng,
         lastDestination,
         setLastDestination,
+        isRouteReady,
+        setIsRouteReady,
         originState,
         setOriginState,
         destinationState,

@@ -10,7 +10,7 @@ const OfferCard = ({
   isLatest,
   isAcceptDisabled,
 }) => {
-  const isUserTurn = isLatest && order?.lastOfferBy === "COURIER";
+  const isUserTurn = isLatest && offer.senderType === "COURIER";
 
   return (
     <View

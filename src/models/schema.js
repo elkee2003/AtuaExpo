@@ -269,6 +269,522 @@ export const schema = {
                 }
             ]
         },
+        "Payout": {
+            "name": "Payout",
+            "fields": {
+                "id": {
+                    "name": "id",
+                    "isArray": false,
+                    "type": "ID",
+                    "isRequired": true,
+                    "attributes": []
+                },
+                "courierID": {
+                    "name": "courierID",
+                    "isArray": false,
+                    "type": "ID",
+                    "isRequired": true,
+                    "attributes": []
+                },
+                "amount": {
+                    "name": "amount",
+                    "isArray": false,
+                    "type": "Float",
+                    "isRequired": true,
+                    "attributes": []
+                },
+                "status": {
+                    "name": "status",
+                    "isArray": false,
+                    "type": {
+                        "enum": "PayoutStatus"
+                    },
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "bankName": {
+                    "name": "bankName",
+                    "isArray": false,
+                    "type": "String",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "accountNumber": {
+                    "name": "accountNumber",
+                    "isArray": false,
+                    "type": "String",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "reference": {
+                    "name": "reference",
+                    "isArray": false,
+                    "type": "String",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "walletID": {
+                    "name": "walletID",
+                    "isArray": false,
+                    "type": "ID",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "createdAt": {
+                    "name": "createdAt",
+                    "isArray": false,
+                    "type": "AWSDateTime",
+                    "isRequired": false,
+                    "attributes": [],
+                    "isReadOnly": true
+                },
+                "updatedAt": {
+                    "name": "updatedAt",
+                    "isArray": false,
+                    "type": "AWSDateTime",
+                    "isRequired": false,
+                    "attributes": [],
+                    "isReadOnly": true
+                }
+            },
+            "syncable": true,
+            "pluralName": "Payouts",
+            "attributes": [
+                {
+                    "type": "model",
+                    "properties": {}
+                },
+                {
+                    "type": "key",
+                    "properties": {
+                        "name": "byCourier",
+                        "fields": [
+                            "courierID"
+                        ]
+                    }
+                },
+                {
+                    "type": "key",
+                    "properties": {
+                        "name": "byWallet",
+                        "fields": [
+                            "walletID"
+                        ]
+                    }
+                },
+                {
+                    "type": "auth",
+                    "properties": {
+                        "rules": [
+                            {
+                                "allow": "public",
+                                "operations": [
+                                    "create",
+                                    "update",
+                                    "delete",
+                                    "read"
+                                ]
+                            }
+                        ]
+                    }
+                }
+            ]
+        },
+        "Transaction": {
+            "name": "Transaction",
+            "fields": {
+                "id": {
+                    "name": "id",
+                    "isArray": false,
+                    "type": "ID",
+                    "isRequired": true,
+                    "attributes": []
+                },
+                "walletID": {
+                    "name": "walletID",
+                    "isArray": false,
+                    "type": "ID",
+                    "isRequired": true,
+                    "attributes": []
+                },
+                "type": {
+                    "name": "type",
+                    "isArray": false,
+                    "type": {
+                        "enum": "TransactionType"
+                    },
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "amount": {
+                    "name": "amount",
+                    "isArray": false,
+                    "type": "Float",
+                    "isRequired": true,
+                    "attributes": []
+                },
+                "description": {
+                    "name": "description",
+                    "isArray": false,
+                    "type": "String",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "orderID": {
+                    "name": "orderID",
+                    "isArray": false,
+                    "type": "ID",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "paymentID": {
+                    "name": "paymentID",
+                    "isArray": false,
+                    "type": "ID",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "status": {
+                    "name": "status",
+                    "isArray": false,
+                    "type": {
+                        "enum": "TransactionStatus"
+                    },
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "createdAt": {
+                    "name": "createdAt",
+                    "isArray": false,
+                    "type": "AWSDateTime",
+                    "isRequired": false,
+                    "attributes": [],
+                    "isReadOnly": true
+                },
+                "updatedAt": {
+                    "name": "updatedAt",
+                    "isArray": false,
+                    "type": "AWSDateTime",
+                    "isRequired": false,
+                    "attributes": [],
+                    "isReadOnly": true
+                }
+            },
+            "syncable": true,
+            "pluralName": "Transactions",
+            "attributes": [
+                {
+                    "type": "model",
+                    "properties": {}
+                },
+                {
+                    "type": "key",
+                    "properties": {
+                        "name": "byWallet",
+                        "fields": [
+                            "walletID"
+                        ]
+                    }
+                },
+                {
+                    "type": "key",
+                    "properties": {
+                        "name": "byOrder",
+                        "fields": [
+                            "orderID"
+                        ]
+                    }
+                },
+                {
+                    "type": "key",
+                    "properties": {
+                        "name": "byPayment",
+                        "fields": [
+                            "paymentID"
+                        ]
+                    }
+                },
+                {
+                    "type": "auth",
+                    "properties": {
+                        "rules": [
+                            {
+                                "allow": "public",
+                                "operations": [
+                                    "create",
+                                    "update",
+                                    "delete",
+                                    "read"
+                                ]
+                            }
+                        ]
+                    }
+                }
+            ]
+        },
+        "Wallet": {
+            "name": "Wallet",
+            "fields": {
+                "id": {
+                    "name": "id",
+                    "isArray": false,
+                    "type": "ID",
+                    "isRequired": true,
+                    "attributes": []
+                },
+                "ownerID": {
+                    "name": "ownerID",
+                    "isArray": false,
+                    "type": "ID",
+                    "isRequired": true,
+                    "attributes": []
+                },
+                "ownerType": {
+                    "name": "ownerType",
+                    "isArray": false,
+                    "type": {
+                        "enum": "OwnerType"
+                    },
+                    "isRequired": true,
+                    "attributes": []
+                },
+                "balance": {
+                    "name": "balance",
+                    "isArray": false,
+                    "type": "Float",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "pendingBalance": {
+                    "name": "pendingBalance",
+                    "isArray": false,
+                    "type": "Float",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "totalEarnings": {
+                    "name": "totalEarnings",
+                    "isArray": false,
+                    "type": "Float",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "transactions": {
+                    "name": "transactions",
+                    "isArray": true,
+                    "type": {
+                        "model": "Transaction"
+                    },
+                    "isRequired": false,
+                    "attributes": [],
+                    "isArrayNullable": true,
+                    "association": {
+                        "connectionType": "HAS_MANY",
+                        "associatedWith": [
+                            "walletID"
+                        ]
+                    }
+                },
+                "createdAt": {
+                    "name": "createdAt",
+                    "isArray": false,
+                    "type": "AWSDateTime",
+                    "isRequired": false,
+                    "attributes": [],
+                    "isReadOnly": true
+                },
+                "updatedAt": {
+                    "name": "updatedAt",
+                    "isArray": false,
+                    "type": "AWSDateTime",
+                    "isRequired": false,
+                    "attributes": [],
+                    "isReadOnly": true
+                }
+            },
+            "syncable": true,
+            "pluralName": "Wallets",
+            "attributes": [
+                {
+                    "type": "model",
+                    "properties": {}
+                },
+                {
+                    "type": "auth",
+                    "properties": {
+                        "rules": [
+                            {
+                                "allow": "public",
+                                "operations": [
+                                    "create",
+                                    "update",
+                                    "delete",
+                                    "read"
+                                ]
+                            }
+                        ]
+                    }
+                }
+            ]
+        },
+        "Payment": {
+            "name": "Payment",
+            "fields": {
+                "id": {
+                    "name": "id",
+                    "isArray": false,
+                    "type": "ID",
+                    "isRequired": true,
+                    "attributes": []
+                },
+                "orderID": {
+                    "name": "orderID",
+                    "isArray": false,
+                    "type": "ID",
+                    "isRequired": true,
+                    "attributes": []
+                },
+                "userID": {
+                    "name": "userID",
+                    "isArray": false,
+                    "type": "ID",
+                    "isRequired": true,
+                    "attributes": []
+                },
+                "amount": {
+                    "name": "amount",
+                    "isArray": false,
+                    "type": "Float",
+                    "isRequired": true,
+                    "attributes": []
+                },
+                "currency": {
+                    "name": "currency",
+                    "isArray": false,
+                    "type": "String",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "status": {
+                    "name": "status",
+                    "isArray": false,
+                    "type": {
+                        "enum": "PaymentStatus"
+                    },
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "paymentMethod": {
+                    "name": "paymentMethod",
+                    "isArray": false,
+                    "type": "String",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "provider": {
+                    "name": "provider",
+                    "isArray": false,
+                    "type": "String",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "reference": {
+                    "name": "reference",
+                    "isArray": false,
+                    "type": "String",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "order": {
+                    "name": "order",
+                    "isArray": false,
+                    "type": {
+                        "model": "Order"
+                    },
+                    "isRequired": false,
+                    "attributes": [],
+                    "association": {
+                        "connectionType": "BELONGS_TO",
+                        "targetNames": [
+                            "orderID"
+                        ]
+                    }
+                },
+                "user": {
+                    "name": "user",
+                    "isArray": false,
+                    "type": {
+                        "model": "User"
+                    },
+                    "isRequired": false,
+                    "attributes": [],
+                    "association": {
+                        "connectionType": "BELONGS_TO",
+                        "targetNames": [
+                            "userID"
+                        ]
+                    }
+                },
+                "createdAt": {
+                    "name": "createdAt",
+                    "isArray": false,
+                    "type": "AWSDateTime",
+                    "isRequired": false,
+                    "attributes": [],
+                    "isReadOnly": true
+                },
+                "updatedAt": {
+                    "name": "updatedAt",
+                    "isArray": false,
+                    "type": "AWSDateTime",
+                    "isRequired": false,
+                    "attributes": [],
+                    "isReadOnly": true
+                }
+            },
+            "syncable": true,
+            "pluralName": "Payments",
+            "attributes": [
+                {
+                    "type": "model",
+                    "properties": {}
+                },
+                {
+                    "type": "key",
+                    "properties": {
+                        "name": "byOrder",
+                        "fields": [
+                            "orderID"
+                        ]
+                    }
+                },
+                {
+                    "type": "key",
+                    "properties": {
+                        "name": "byUser",
+                        "fields": [
+                            "userID"
+                        ]
+                    }
+                },
+                {
+                    "type": "auth",
+                    "properties": {
+                        "rules": [
+                            {
+                                "allow": "public",
+                                "operations": [
+                                    "create",
+                                    "update",
+                                    "delete",
+                                    "read"
+                                ]
+                            }
+                        ]
+                    }
+                }
+            ]
+        },
         "Offer": {
             "name": "Offer",
             "fields": {
@@ -569,20 +1085,6 @@ export const schema = {
                     "name": "initialOfferPrice",
                     "isArray": false,
                     "type": "Float",
-                    "isRequired": false,
-                    "attributes": []
-                },
-                "currentOfferPrice": {
-                    "name": "currentOfferPrice",
-                    "isArray": false,
-                    "type": "Float",
-                    "isRequired": false,
-                    "attributes": []
-                },
-                "lastOfferBy": {
-                    "name": "lastOfferBy",
-                    "isArray": false,
-                    "type": "String",
                     "isRequired": false,
                     "attributes": []
                 },
@@ -951,6 +1453,40 @@ export const schema = {
                     "isRequired": false,
                     "attributes": []
                 },
+                "paymentStatus": {
+                    "name": "paymentStatus",
+                    "isArray": false,
+                    "type": {
+                        "enum": "OrderPaymentStatus"
+                    },
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "paymentID": {
+                    "name": "paymentID",
+                    "isArray": false,
+                    "type": "ID",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "payoutStatus": {
+                    "name": "payoutStatus",
+                    "isArray": false,
+                    "type": {
+                        "enum": "OrderPayoutStatus"
+                    },
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "fundsStatus": {
+                    "name": "fundsStatus",
+                    "isArray": false,
+                    "type": {
+                        "enum": "FundsStatus"
+                    },
+                    "isRequired": false,
+                    "attributes": []
+                },
                 "assignedCourierId": {
                     "name": "assignedCourierId",
                     "isArray": false,
@@ -1029,6 +1565,22 @@ export const schema = {
                         "connectionType": "BELONGS_TO",
                         "targetNames": [
                             "assignedCourierId"
+                        ]
+                    }
+                },
+                "payments": {
+                    "name": "payments",
+                    "isArray": true,
+                    "type": {
+                        "model": "Payment"
+                    },
+                    "isRequired": false,
+                    "attributes": [],
+                    "isArrayNullable": true,
+                    "association": {
+                        "connectionType": "HAS_MANY",
+                        "associatedWith": [
+                            "order"
                         ]
                     }
                 },
@@ -1386,6 +1938,13 @@ export const schema = {
                     "isRequired": false,
                     "attributes": []
                 },
+                "currentMaxiCount": {
+                    "name": "currentMaxiCount",
+                    "isArray": false,
+                    "type": "Int",
+                    "isRequired": false,
+                    "attributes": []
+                },
                 "lastBatchAssignedAt": {
                     "name": "lastBatchAssignedAt",
                     "isArray": false,
@@ -1429,6 +1988,31 @@ export const schema = {
                         "connectionType": "HAS_MANY",
                         "associatedWith": [
                             "assignedCourier"
+                        ]
+                    }
+                },
+                "walletID": {
+                    "name": "walletID",
+                    "isArray": false,
+                    "type": "ID",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "wallet": {
+                    "name": "wallet",
+                    "isArray": false,
+                    "type": {
+                        "model": "Wallet"
+                    },
+                    "isRequired": false,
+                    "attributes": [],
+                    "association": {
+                        "connectionType": "HAS_ONE",
+                        "associatedWith": [
+                            "id"
+                        ],
+                        "targetNames": [
+                            "walletID"
                         ]
                     }
                 },
@@ -1564,6 +2148,13 @@ export const schema = {
                     "isRequired": false,
                     "attributes": []
                 },
+                "isBlocked": {
+                    "name": "isBlocked",
+                    "isArray": false,
+                    "type": "Boolean",
+                    "isRequired": false,
+                    "attributes": []
+                },
                 "push_token": {
                     "name": "push_token",
                     "isArray": false,
@@ -1584,6 +2175,22 @@ export const schema = {
                         "connectionType": "HAS_MANY",
                         "associatedWith": [
                             "userID"
+                        ]
+                    }
+                },
+                "payments": {
+                    "name": "payments",
+                    "isArray": true,
+                    "type": {
+                        "model": "Payment"
+                    },
+                    "isRequired": false,
+                    "attributes": [],
+                    "isArrayNullable": true,
+                    "association": {
+                        "connectionType": "HAS_MANY",
+                        "associatedWith": [
+                            "user"
                         ]
                     }
                 },
@@ -1631,6 +2238,66 @@ export const schema = {
         }
     },
     "enums": {
+        "FundsStatus": {
+            "name": "FundsStatus",
+            "values": [
+                "HELD",
+                "RELEASED"
+            ]
+        },
+        "OrderPayoutStatus": {
+            "name": "OrderPayoutStatus",
+            "values": [
+                "NOT_PAID",
+                "PAID"
+            ]
+        },
+        "OrderPaymentStatus": {
+            "name": "OrderPaymentStatus",
+            "values": [
+                "PENDING",
+                "PAID"
+            ]
+        },
+        "PaymentStatus": {
+            "name": "PaymentStatus",
+            "values": [
+                "PENDING",
+                "SUCCESS",
+                "FAILED"
+            ]
+        },
+        "TransactionType": {
+            "name": "TransactionType",
+            "values": [
+                "CREDIT",
+                "DEBIT"
+            ]
+        },
+        "TransactionStatus": {
+            "name": "TransactionStatus",
+            "values": [
+                "PENDING",
+                "COMPLETED",
+                "FAILED"
+            ]
+        },
+        "PayoutStatus": {
+            "name": "PayoutStatus",
+            "values": [
+                "PENDING",
+                "PROCESSING",
+                "PAID",
+                "FAILED"
+            ]
+        },
+        "OwnerType": {
+            "name": "OwnerType",
+            "values": [
+                "COURIER",
+                "USER"
+            ]
+        },
         "OfferStatus": {
             "name": "OfferStatus",
             "values": [
@@ -1670,5 +2337,5 @@ export const schema = {
     },
     "nonModels": {},
     "codegenVersion": "3.4.4",
-    "version": "b493cc3880885d18a85f5f4376a0190f"
+    "version": "794fb68de9b58f81c6a5cf26f985b88d"
 };

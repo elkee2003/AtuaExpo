@@ -1,5 +1,7 @@
+import * as Clipboard from "expo-clipboard";
 import {
   ActivityIndicator,
+  Alert,
   Image,
   Modal,
   ScrollView,
@@ -44,6 +46,15 @@ const OrderDetails = ({ orderId }) => {
     load: false,
     evidence: false,
   });
+
+  // Copy code function
+  const copyToClipboard = async (text) => {
+    if (!text) return;
+
+    await Clipboard.setStringAsync(String(text));
+
+    Alert.alert("Copied", "Verification code copied");
+  };
 
   useEffect(() => {
     let isMounted = true;
@@ -249,6 +260,13 @@ const OrderDetails = ({ orderId }) => {
         )}
 
         <Text>Details: {order.orderDetails}</Text>
+        <TouchableOpacity
+          onPress={() => copyToClipboard(order?.deliveryVerificationCode)}
+        >
+          <Text style={{ fontWeight: "600" }}>
+            Verification Code: {order?.deliveryVerificationCode}
+          </Text>
+        </TouchableOpacity>
       </Section>
 
       <Section
@@ -380,7 +398,15 @@ const TimelineItem = ({ label, value }) => {
         <Text style={styles.timelineLabel}>{label}</Text>
 
         <Text style={styles.timelineTime}>
-          {value ? new Date(value).toLocaleString() : "-"}
+          {value
+            ? new Date(value).toLocaleString([], {
+                year: "numeric",
+                month: "short",
+                day: "2-digit",
+                hour: "2-digit",
+                minute: "2-digit",
+              })
+            : "-"}
         </Text>
       </View>
     </View>

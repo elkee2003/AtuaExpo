@@ -22,8 +22,13 @@ const ResultMap = () => {
   const [location, setLocation] = useState(null);
   const [errorMsg, setErrorMsg] = useState(null);
 
-  const { originAddress, destinationAddress, setTotalMins, setTotalKm } =
-    useLocationContext();
+  const {
+    originAddress,
+    destinationAddress,
+    setTotalMins,
+    setTotalKm,
+    setIsRouteReady,
+  } = useLocationContext();
 
   const originLoc = {
     latitude: originAddress?.details?.geometry?.location?.lat || 4.8089763,
@@ -58,6 +63,7 @@ const ResultMap = () => {
 
     setTotalKm(distance.toFixed(2));
     setTotalMins(duration.toFixed(0));
+    setIsRouteReady(true);
   };
 
   const fetchCouriers = async () => {
@@ -73,6 +79,11 @@ const ResultMap = () => {
       Alert.alert("Error", e.message);
     }
   };
+
+  // useEffect to rest when inputs change
+  useEffect(() => {
+    setIsRouteReady(false);
+  }, [originAddress, destinationAddress]);
 
   useEffect(() => {
     fetchCouriers();
@@ -121,8 +132,10 @@ const ResultMap = () => {
           // longitude:  7.0220555,
           // latitude: location.latitude,
           // longitude: location.longitude,
-          latitude: originAddress?.details.geometry.location.lat || 4.8089763,
-          longitude: originAddress?.details.geometry.location.lng || 7.0220555,
+          latitude:
+            originAddress?.details?.geometry?.location?.lat || 4.8089763,
+          longitude:
+            originAddress?.details?.geometry?.location?.lng || 7.0220555,
           latitudeDelta: 0.0922,
           longitudeDelta: 0.0421,
         }}

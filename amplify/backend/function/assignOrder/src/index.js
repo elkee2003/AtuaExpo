@@ -1,4 +1,5 @@
 // ================= AWS SDK v3 =================
+const { isTransportCompatible } = require("./transportLambda");
 const { DynamoDBClient } = require("@aws-sdk/client-dynamodb");
 const {
   DynamoDBDocumentClient,
@@ -81,6 +82,7 @@ async function assignNextCourier(order) {
     );
 
     for (let courier of sorted) {
+      if (!isTransportCompatible(order, courier)) continue;
       if (!canAccept(courier, order)) continue;
 
       const success = await assign(order, courier);

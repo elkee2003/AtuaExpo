@@ -98,7 +98,7 @@ const MaxiSubmit = () => {
       }
 
       const pricing = freightPricingEngine({
-        type: transportationType,
+        type: vehicleClass,
         distanceKm: totalKm,
         loadCategory,
         isInterState,
@@ -107,6 +107,12 @@ const MaxiSubmit = () => {
         floorSurcharge,
         fragileSurcharge,
       });
+
+      if (!pricing) {
+        Alert.alert("Error", "Unable to calculate pricing. Please try again.");
+        setSubmitting(false);
+        return;
+      }
 
       if (
         initialOfferPrice < estimatedMinPrice ||
@@ -169,7 +175,7 @@ const MaxiSubmit = () => {
 
           initialOfferPrice: parseFloat(initialOfferPrice),
 
-          lastOfferBy: "USER",
+          // lastOfferBy: "USER",
 
           loadingFee: pricing.extras.loadingFee,
           unloadingFee: pricing.extras.unloadingFee,
@@ -230,7 +236,7 @@ const MaxiSubmit = () => {
       );
 
       // Navigate
-      router.push(`/screens/orderTrackingScreen/${newOrder.id}`);
+      router.replace(`/screens/orderTrackingScreen/${newOrder.id}`);
 
       // 2️⃣ Upload evidence in background
       if (hasSenderMedia) {

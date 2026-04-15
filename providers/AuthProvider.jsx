@@ -24,6 +24,7 @@ const AuthProvider = ({ children }) => {
   const [dbUser, setDbUser] = useState(null);
   const [sub, setSub] = useState(null);
   const [userMail, setUserMail] = useState(null);
+  const [loadingUser, setLoadingUser] = useState(true);
 
   // ✅ Function to handle full logout and cleanup
   const handleUserDeleted = async () => {
@@ -50,7 +51,7 @@ const AuthProvider = ({ children }) => {
       // const subId = authUser?.userId;
       // setSub(subId);
       setSub(user.userId);
-      const email = authUser?.signInDetails?.loginId;
+      const email = user?.signInDetails?.loginId;
       setUserMail(email);
     } catch (err) {
       console.log("Auth check failed:", err.name);
@@ -70,7 +71,9 @@ const AuthProvider = ({ children }) => {
     if (!sub) return;
 
     try {
-      await waitForDataStoreReady(); // 🔥 THIS is the fix
+      setLoadingUser(true);
+
+      await waitForDataStoreReady();
 
       const users = await DataStore.query(User, (u) => u.sub.eq(sub));
 
@@ -81,30 +84,61 @@ const AuthProvider = ({ children }) => {
       }
     } catch (error) {
       console.error("Error getting dbuser: ", error);
+    } finally {
+      setLoadingUser(false);
+    }
+  };
+
+  // Refresh function
+  const refreshUser = async () => {
+    console.log("Manual refresh triggered");
+
+    if (!sub) return;
+
+    try {
+      setLoadingUser(true);
+      await DataStore.clear(); // force fresh sync
+      await DataStore.start();
+
+      await dbCurrentUser();
+    } catch (e) {
+      console.log("Refresh error:", e);
+    } finally {
+      setLoadingUser(false);
     }
   };
 
   useEffect(() => {
     currentAuthenticatedUser();
-  }, [sub]);
+  }, []);
 
   useEffect(() => {
+    const handleSignOutEvent = async () => {
+      try {
+        await DataStore.clear();
+      } catch (e) {
+        console.log("Error clearing DataStore:", e);
+      }
+
+      setAuthUser(null);
+      setDbUser(null);
+      setSub(null);
+      router.push("/login");
+    };
+
     const listener = (data) => {
       const { event } = data.payload;
+
       if (event === "signedIn") {
         currentAuthenticatedUser();
       } else if (event === "signedOut") {
-        setAuthUser(null); // Clear the authUser state
-        setSub(null); // Clear the sub state
-        router.push("/login"); // Navigate to the sign-in page
+        handleSignOutEvent(); // 👈 clean
       }
     };
 
-    // Start listening for authentication events
     const hubListener = Hub.listen("auth", listener);
 
-    // Cleanup the listener when the component unmounts
-    return () => hubListener(); // Stop listening for the events
+    return () => hubListener();
   }, []);
 
   useEffect(() => {
@@ -152,6 +186,8 @@ const AuthProvider = ({ children }) => {
         setDbUser,
         sub,
         userMail,
+        loadingUser,
+        refreshUser,
       }}
     >
       {children}

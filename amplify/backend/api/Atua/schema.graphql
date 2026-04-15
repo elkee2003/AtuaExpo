@@ -28,6 +28,51 @@ type CourierCompany @model @auth(rules: [{ allow: public }]) {
   push_token: String
 }
 
+# ---------------- ENUMS ----------------
+enum FundsStatus {
+  HELD
+  RELEASED
+}
+
+enum OrderPayoutStatus {
+  NOT_PAID
+  PAID
+}
+
+enum OrderPaymentStatus {
+  PENDING
+  PAID
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCESS
+  FAILED
+}
+
+enum TransactionType {
+  CREDIT
+  DEBIT
+}
+
+enum TransactionStatus {
+  PENDING
+  COMPLETED
+  FAILED
+}
+
+enum PayoutStatus {
+  PENDING
+  PROCESSING
+  PAID
+  FAILED
+}
+
+enum OwnerType {
+  COURIER
+  USER
+}
+
 enum OfferStatus {
   ACTIVE
   ACCEPTED
@@ -56,6 +101,68 @@ enum OrderStatus {
   IN_LOGISTICS_TRANSIT
   CANCELLED
   DISPUTED
+}
+
+# ---------------- MODELS ----------------
+type Payout @model @auth(rules: [{ allow: public }]) {
+  id: ID!
+
+  courierID: ID! @index(name: "byCourier")
+
+  amount: Float!
+
+  status: PayoutStatus # PENDING | PROCESSING | PAID | FAILED
+  bankName: String
+  accountNumber: String
+
+  reference: String
+  walletID: ID @index(name: "byWallet")
+}
+
+type Transaction @model @auth(rules: [{ allow: public }]) {
+  id: ID!
+
+  walletID: ID! @index(name: "byWallet")
+
+  type: TransactionType
+  # CREDIT | DEBIT
+  amount: Float!
+
+  description: String
+
+  orderID: ID @index(name: "byOrder")
+  paymentID: ID @index(name: "byPayment")
+
+  status: TransactionStatus # PENDING | COMPLETED
+}
+
+type Wallet @model @auth(rules: [{ allow: public }]) {
+  id: ID!
+
+  ownerID: ID!
+  ownerType: OwnerType!
+
+  balance: Float
+  pendingBalance: Float
+  totalEarnings: Float
+
+  transactions: [Transaction] @hasMany(indexName: "byWallet", fields: ["id"])
+}
+
+type Payment @model @auth(rules: [{ allow: public }]) {
+  id: ID!
+  orderID: ID! @index(name: "byOrder")
+  userID: ID! @index(name: "byUser")
+
+  amount: Float!
+  currency: String
+
+  status: PaymentStatus # PENDING | SUCCESS | FAILED
+  paymentMethod: String # CARD | TRANSFER | WALLET
+  provider: String # PAYSTACK, FLUTTERWAVE
+  reference: String # payment gateway ref
+  order: Order @belongsTo(fields: ["orderID"])
+  user: User @belongsTo(fields: ["userID"])
 }
 
 type Offer @model @auth(rules: [{ allow: public }]) {
@@ -106,8 +213,6 @@ type Order @model @auth(rules: [{ allow: public }]) {
   estimatedMaxPrice: Float
 
   initialOfferPrice: Float # first price user sends
-  currentOfferPrice: Float # latest active offer
-  lastOfferBy: String # "USER" or "COURIER"
   loadingFee: Float
   unloadingFee: Float
   floorSurcharge: Float
@@ -186,6 +291,12 @@ type Order @model @auth(rules: [{ allow: public }]) {
   # ---------------- OFFER ID THAT WAS ACCEPTED ----------------
   acceptedOfferID: ID
 
+  # ---------------- PAYMENT FIELDS ----------------
+  paymentStatus: OrderPaymentStatus # PENDING | PAID
+  paymentID: ID
+
+  payoutStatus: OrderPayoutStatus # NOT_PAID | PAID
+  fundsStatus: FundsStatus # HELD | RELEASED
   # ---------------- ASSIGNMENT FIELDS ----------------
   assignedCourierId: ID @index(name: "byAssignedCourier")
   #assignmentStatus: String
@@ -199,6 +310,7 @@ type Order @model @auth(rules: [{ allow: public }]) {
   userID: ID! @index(name: "byUser")
   offers: [Offer] @hasMany(indexName: "byOrder", fields: ["id"])
   assignedCourier: Courier @belongsTo(fields: ["assignedCourierId"])
+  payments: [Payment] @hasMany(indexName: "byOrder", fields: ["id"])
 }
 
 type Courier @model @auth(rules: [{ allow: public }]) {
@@ -242,11 +354,14 @@ type Courier @model @auth(rules: [{ allow: public }]) {
   approvedById: String
   currentBatchCount: Int
   currentExpressCount: Int
+  currentMaxiCount: Int
   lastBatchAssignedAt: AWSDateTime
 
   statusKey: String @index(name: "byStatus", queryField: "couriersByStatus")
   offers: [Offer] @hasMany(indexName: "byCourier", fields: ["id"])
   orders: [Order] @hasMany(indexName: "byAssignedCourier", fields: ["id"])
+  walletID: ID
+  wallet: Wallet @hasOne(fields: ["walletID"])
 }
 
 type User @model @auth(rules: [{ allow: public }]) {
@@ -261,6 +376,15 @@ type User @model @auth(rules: [{ allow: public }]) {
   exactAddress: String
   lat: Float
   lng: Float
+  isBlocked: Boolean
   push_token: String
   Orders: [Order] @hasMany(indexName: "byUser", fields: ["id"])
+  payments: [Payment] @hasMany(indexName: "byUser", fields: ["id"])
 }
+
+# ---------------- WALLET AND PAYMENT STRUCTURE ----------------
+# Courier - has one wallet
+# Wallet - belongs to courier - has many transactions
+# Transaction - belongs to wallet
+# Payment - belongs to order + user
+# Order - has many payments

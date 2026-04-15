@@ -119,7 +119,7 @@ const Checkout = () => {
       );
       resetAllOrderFields();
       resetAllLocationFields();
-      router.push(`/screens/orderTrackingScreen/${order.id}`);
+      router.replace(`/screens/orderTrackingScreen/${order.id}`);
     } catch (e) {
       Alert.alert("Error", e.message);
     } finally {

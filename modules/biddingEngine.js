@@ -1,7 +1,8 @@
 export const biddingEngine = ({
   order,
+  latestOffer, // 👈 THIS IS KEY
   newOffer,
-  offeredBy, // "SENDER" or "DRIVER"
+  offeredBy, // "USER" | "COURIER"
   minIncrement = 500,
 }) => {
   if (!order) {
@@ -12,62 +13,65 @@ export const biddingEngine = ({
     return { success: false, message: "Bidding is closed." };
   }
 
-  // Prevent same side offering twice
-  if (order.lastOfferBy === offeredBy) {
+  if (!newOffer || isNaN(newOffer)) {
+    return { success: false, message: "Invalid offer amount." };
+  }
+
+  // 🔥 TURN LOGIC (based on latest offer, NOT order)
+  if (latestOffer && latestOffer.senderType === offeredBy) {
     return {
       success: false,
       message: "Wait for the other party to respond.",
     };
   }
 
-  // Validate number
-  if (!newOffer || isNaN(newOffer)) {
-    return { success: false, message: "Invalid offer amount." };
+  const baseAmount = latestOffer?.amount ?? order.initialOfferPrice;
+
+  // 🔥 increment or decrement check
+  if (latestOffer) {
+    const difference = newOffer - baseAmount;
+
+    if (Math.abs(difference) < minIncrement) {
+      return {
+        success: false,
+        message:
+          difference > 0
+            ? `Increase by at least ₦${minIncrement}`
+            : difference < 0
+              ? `Reduce by at least ₦${minIncrement}`
+              : `Change amount by at least ₦${minIncrement}`,
+      };
+    }
   }
 
-  // Prevent ridiculous lowball
+  // 🔥 range checks
   if (newOffer < order.estimatedMinPrice * 0.7) {
     return {
       success: false,
-      message: "Offer too low compared to market estimate.",
+      message: "Offer too low",
     };
   }
 
-  // Enforce minimum increment
-  const difference = Math.abs(newOffer - order.currentOfferPrice);
-  if (difference < minIncrement) {
-    return {
-      success: false,
-      message: `Minimum increment is ₦${minIncrement}.`,
-    };
-  }
-
-  // Prevent insane jump (optional protection)
   if (newOffer > order.estimatedMaxPrice * 1.5) {
     return {
       success: false,
-      message: "Offer exceeds reasonable range.",
+      message: "Offer too high",
     };
   }
 
-  // ACCEPTANCE CONDITION
-  // If new offer equals current offer → agreement
-  if (newOffer === order.currentOfferPrice) {
+  // ✅ ACCEPT
+  if (latestOffer && newOffer === latestOffer.amount) {
     return {
       success: true,
-      action: "ACCEPTED",
+      action: "ACCEPT",
       finalPrice: newOffer,
     };
   }
 
-  // Valid counter offer
+  // ✅ COUNTER
   return {
     success: true,
-    action: "COUNTERED",
-    updatedOrder: {
-      ...order,
-      currentOfferPrice: newOffer,
-      lastOfferBy: offeredBy,
-    },
+    action: "COUNTER",
+    amount: newOffer,
   };
 };

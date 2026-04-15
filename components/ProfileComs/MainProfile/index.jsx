@@ -5,10 +5,12 @@ import { signOut } from "aws-amplify/auth";
 import { DataStore } from "aws-amplify/datastore";
 import { getUrl } from "aws-amplify/storage";
 import { router } from "expo-router";
+
 import React, { useEffect, useState } from "react";
 import {
   Alert,
   Image,
+  RefreshControl,
   ScrollView,
   Text,
   TouchableOpacity,
@@ -18,7 +20,7 @@ import Placeholder from "../../../assets/images/placeholder.png";
 import { useProfileContext } from "../../../providers/ProfileProvider";
 import styles from "./styles";
 
-const MainProfile = () => {
+const MainProfile = ({ onRefresh, refreshing }) => {
   const {
     firstName,
     lastName,
@@ -122,7 +124,12 @@ const MainProfile = () => {
         </TouchableOpacity>
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
+      >
         {/* Avatar Section */}
         <View style={styles.avatarSection}>
           <View style={styles.avatarWrapper}>

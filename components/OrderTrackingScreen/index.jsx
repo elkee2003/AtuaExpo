@@ -60,14 +60,14 @@ const OrderTrackingScreen = ({ orderId }) => {
       const result = await DataStore.query(Offer, (o) => o.orderID.eq(orderId));
 
       // ✅ ONLY COURIER OFFERS (ignore USER initial offer)
-      const courierOffers = result.filter(
-        (offer) => offer.senderType === "COURIER",
-      );
+      const allOffers = result;
 
       // ✅ group by courier (latest per courier)
       const latestByCourier = {};
 
-      courierOffers.forEach((offer) => {
+      allOffers.forEach((offer) => {
+        if (!offer.courierID) return; // 👈 skip USER offers for grouping
+
         const existing = latestByCourier[offer.courierID];
 
         if (
@@ -332,7 +332,7 @@ const OrderTrackingScreen = ({ orderId }) => {
               onAcceptOffer={async (offer) => {
                 if (order.status === "ACCEPTED") return;
 
-                if (order.lastOfferBy !== "COURIER") return;
+                if (offer.senderType !== "COURIER") return;
 
                 try {
                   await DataStore.save(
@@ -362,13 +362,6 @@ const OrderTrackingScreen = ({ orderId }) => {
                       senderType: "USER",
                       amount: offer.amount,
                       status: "ACTIVE",
-                    }),
-                  );
-
-                  // 2️⃣ ✅ UPDATE TURN (THIS IS WHAT YOU WERE MISSING)
-                  await DataStore.save(
-                    Order.copyOf(order, (updated) => {
-                      updated.lastOfferBy = "USER";
                     }),
                   );
                 } catch (e) {

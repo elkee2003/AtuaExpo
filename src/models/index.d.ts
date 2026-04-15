@@ -2,6 +2,50 @@ import { ModelInit, MutableModel, __modelMeta__, ManagedIdentifier } from "@aws-
 // @ts-ignore
 import { LazyLoading, LazyLoadingDisabled, AsyncCollection, AsyncItem } from "@aws-amplify/datastore";
 
+export enum FundsStatus {
+  HELD = "HELD",
+  RELEASED = "RELEASED"
+}
+
+export enum OrderPayoutStatus {
+  NOT_PAID = "NOT_PAID",
+  PAID = "PAID"
+}
+
+export enum OrderPaymentStatus {
+  PENDING = "PENDING",
+  PAID = "PAID"
+}
+
+export enum PaymentStatus {
+  PENDING = "PENDING",
+  SUCCESS = "SUCCESS",
+  FAILED = "FAILED"
+}
+
+export enum TransactionType {
+  CREDIT = "CREDIT",
+  DEBIT = "DEBIT"
+}
+
+export enum TransactionStatus {
+  PENDING = "PENDING",
+  COMPLETED = "COMPLETED",
+  FAILED = "FAILED"
+}
+
+export enum PayoutStatus {
+  PENDING = "PENDING",
+  PROCESSING = "PROCESSING",
+  PAID = "PAID",
+  FAILED = "FAILED"
+}
+
+export enum OwnerType {
+  COURIER = "COURIER",
+  USER = "USER"
+}
+
 export enum OfferStatus {
   ACTIVE = "ACTIVE",
   ACCEPTED = "ACCEPTED",
@@ -128,6 +172,170 @@ export declare const CourierCompany: (new (init: ModelInit<CourierCompany>) => C
   copyOf(source: CourierCompany, mutator: (draft: MutableModel<CourierCompany>) => MutableModel<CourierCompany> | void): CourierCompany;
 }
 
+type EagerPayout = {
+  readonly [__modelMeta__]: {
+    identifier: ManagedIdentifier<Payout, 'id'>;
+    readOnlyFields: 'createdAt' | 'updatedAt';
+  };
+  readonly id: string;
+  readonly courierID: string;
+  readonly amount: number;
+  readonly status?: PayoutStatus | keyof typeof PayoutStatus | null;
+  readonly bankName?: string | null;
+  readonly accountNumber?: string | null;
+  readonly reference?: string | null;
+  readonly walletID?: string | null;
+  readonly createdAt?: string | null;
+  readonly updatedAt?: string | null;
+}
+
+type LazyPayout = {
+  readonly [__modelMeta__]: {
+    identifier: ManagedIdentifier<Payout, 'id'>;
+    readOnlyFields: 'createdAt' | 'updatedAt';
+  };
+  readonly id: string;
+  readonly courierID: string;
+  readonly amount: number;
+  readonly status?: PayoutStatus | keyof typeof PayoutStatus | null;
+  readonly bankName?: string | null;
+  readonly accountNumber?: string | null;
+  readonly reference?: string | null;
+  readonly walletID?: string | null;
+  readonly createdAt?: string | null;
+  readonly updatedAt?: string | null;
+}
+
+export declare type Payout = LazyLoading extends LazyLoadingDisabled ? EagerPayout : LazyPayout
+
+export declare const Payout: (new (init: ModelInit<Payout>) => Payout) & {
+  copyOf(source: Payout, mutator: (draft: MutableModel<Payout>) => MutableModel<Payout> | void): Payout;
+}
+
+type EagerTransaction = {
+  readonly [__modelMeta__]: {
+    identifier: ManagedIdentifier<Transaction, 'id'>;
+    readOnlyFields: 'createdAt' | 'updatedAt';
+  };
+  readonly id: string;
+  readonly walletID: string;
+  readonly type?: TransactionType | keyof typeof TransactionType | null;
+  readonly amount: number;
+  readonly description?: string | null;
+  readonly orderID?: string | null;
+  readonly paymentID?: string | null;
+  readonly status?: TransactionStatus | keyof typeof TransactionStatus | null;
+  readonly createdAt?: string | null;
+  readonly updatedAt?: string | null;
+}
+
+type LazyTransaction = {
+  readonly [__modelMeta__]: {
+    identifier: ManagedIdentifier<Transaction, 'id'>;
+    readOnlyFields: 'createdAt' | 'updatedAt';
+  };
+  readonly id: string;
+  readonly walletID: string;
+  readonly type?: TransactionType | keyof typeof TransactionType | null;
+  readonly amount: number;
+  readonly description?: string | null;
+  readonly orderID?: string | null;
+  readonly paymentID?: string | null;
+  readonly status?: TransactionStatus | keyof typeof TransactionStatus | null;
+  readonly createdAt?: string | null;
+  readonly updatedAt?: string | null;
+}
+
+export declare type Transaction = LazyLoading extends LazyLoadingDisabled ? EagerTransaction : LazyTransaction
+
+export declare const Transaction: (new (init: ModelInit<Transaction>) => Transaction) & {
+  copyOf(source: Transaction, mutator: (draft: MutableModel<Transaction>) => MutableModel<Transaction> | void): Transaction;
+}
+
+type EagerWallet = {
+  readonly [__modelMeta__]: {
+    identifier: ManagedIdentifier<Wallet, 'id'>;
+    readOnlyFields: 'createdAt' | 'updatedAt';
+  };
+  readonly id: string;
+  readonly ownerID: string;
+  readonly ownerType: OwnerType | keyof typeof OwnerType;
+  readonly balance?: number | null;
+  readonly pendingBalance?: number | null;
+  readonly totalEarnings?: number | null;
+  readonly transactions?: (Transaction | null)[] | null;
+  readonly createdAt?: string | null;
+  readonly updatedAt?: string | null;
+}
+
+type LazyWallet = {
+  readonly [__modelMeta__]: {
+    identifier: ManagedIdentifier<Wallet, 'id'>;
+    readOnlyFields: 'createdAt' | 'updatedAt';
+  };
+  readonly id: string;
+  readonly ownerID: string;
+  readonly ownerType: OwnerType | keyof typeof OwnerType;
+  readonly balance?: number | null;
+  readonly pendingBalance?: number | null;
+  readonly totalEarnings?: number | null;
+  readonly transactions: AsyncCollection<Transaction>;
+  readonly createdAt?: string | null;
+  readonly updatedAt?: string | null;
+}
+
+export declare type Wallet = LazyLoading extends LazyLoadingDisabled ? EagerWallet : LazyWallet
+
+export declare const Wallet: (new (init: ModelInit<Wallet>) => Wallet) & {
+  copyOf(source: Wallet, mutator: (draft: MutableModel<Wallet>) => MutableModel<Wallet> | void): Wallet;
+}
+
+type EagerPayment = {
+  readonly [__modelMeta__]: {
+    identifier: ManagedIdentifier<Payment, 'id'>;
+    readOnlyFields: 'createdAt' | 'updatedAt';
+  };
+  readonly id: string;
+  readonly orderID: string;
+  readonly userID: string;
+  readonly amount: number;
+  readonly currency?: string | null;
+  readonly status?: PaymentStatus | keyof typeof PaymentStatus | null;
+  readonly paymentMethod?: string | null;
+  readonly provider?: string | null;
+  readonly reference?: string | null;
+  readonly order?: Order | null;
+  readonly user?: User | null;
+  readonly createdAt?: string | null;
+  readonly updatedAt?: string | null;
+}
+
+type LazyPayment = {
+  readonly [__modelMeta__]: {
+    identifier: ManagedIdentifier<Payment, 'id'>;
+    readOnlyFields: 'createdAt' | 'updatedAt';
+  };
+  readonly id: string;
+  readonly orderID: string;
+  readonly userID: string;
+  readonly amount: number;
+  readonly currency?: string | null;
+  readonly status?: PaymentStatus | keyof typeof PaymentStatus | null;
+  readonly paymentMethod?: string | null;
+  readonly provider?: string | null;
+  readonly reference?: string | null;
+  readonly order: AsyncItem<Order | undefined>;
+  readonly user: AsyncItem<User | undefined>;
+  readonly createdAt?: string | null;
+  readonly updatedAt?: string | null;
+}
+
+export declare type Payment = LazyLoading extends LazyLoadingDisabled ? EagerPayment : LazyPayment
+
+export declare const Payment: (new (init: ModelInit<Payment>) => Payment) & {
+  copyOf(source: Payment, mutator: (draft: MutableModel<Payment>) => MutableModel<Payment> | void): Payment;
+}
+
 type EagerOffer = {
   readonly [__modelMeta__]: {
     identifier: ManagedIdentifier<Offer, 'id'>;
@@ -196,8 +404,6 @@ type EagerOrder = {
   readonly estimatedMinPrice?: number | null;
   readonly estimatedMaxPrice?: number | null;
   readonly initialOfferPrice?: number | null;
-  readonly currentOfferPrice?: number | null;
-  readonly lastOfferBy?: string | null;
   readonly loadingFee?: number | null;
   readonly unloadingFee?: number | null;
   readonly floorSurcharge?: number | null;
@@ -249,6 +455,10 @@ type EagerOrder = {
   readonly handedOverToLogisticsAt?: string | null;
   readonly logisticsIntakeConfirmedAt?: string | null;
   readonly acceptedOfferID?: string | null;
+  readonly paymentStatus?: OrderPaymentStatus | keyof typeof OrderPaymentStatus | null;
+  readonly paymentID?: string | null;
+  readonly payoutStatus?: OrderPayoutStatus | keyof typeof OrderPayoutStatus | null;
+  readonly fundsStatus?: FundsStatus | keyof typeof FundsStatus | null;
   readonly assignedCourierId?: string | null;
   readonly assignmentExpiresAt?: string | null;
   readonly assignmentAttempts?: number | null;
@@ -258,6 +468,7 @@ type EagerOrder = {
   readonly userID: string;
   readonly offers?: (Offer | null)[] | null;
   readonly assignedCourier?: Courier | null;
+  readonly payments?: (Payment | null)[] | null;
   readonly createdAt?: string | null;
   readonly updatedAt?: string | null;
 }
@@ -290,8 +501,6 @@ type LazyOrder = {
   readonly estimatedMinPrice?: number | null;
   readonly estimatedMaxPrice?: number | null;
   readonly initialOfferPrice?: number | null;
-  readonly currentOfferPrice?: number | null;
-  readonly lastOfferBy?: string | null;
   readonly loadingFee?: number | null;
   readonly unloadingFee?: number | null;
   readonly floorSurcharge?: number | null;
@@ -343,6 +552,10 @@ type LazyOrder = {
   readonly handedOverToLogisticsAt?: string | null;
   readonly logisticsIntakeConfirmedAt?: string | null;
   readonly acceptedOfferID?: string | null;
+  readonly paymentStatus?: OrderPaymentStatus | keyof typeof OrderPaymentStatus | null;
+  readonly paymentID?: string | null;
+  readonly payoutStatus?: OrderPayoutStatus | keyof typeof OrderPayoutStatus | null;
+  readonly fundsStatus?: FundsStatus | keyof typeof FundsStatus | null;
   readonly assignedCourierId?: string | null;
   readonly assignmentExpiresAt?: string | null;
   readonly assignmentAttempts?: number | null;
@@ -352,6 +565,7 @@ type LazyOrder = {
   readonly userID: string;
   readonly offers: AsyncCollection<Offer>;
   readonly assignedCourier: AsyncItem<Courier | undefined>;
+  readonly payments: AsyncCollection<Payment>;
   readonly createdAt?: string | null;
   readonly updatedAt?: string | null;
 }
@@ -407,10 +621,13 @@ type EagerCourier = {
   readonly approvedById?: string | null;
   readonly currentBatchCount?: number | null;
   readonly currentExpressCount?: number | null;
+  readonly currentMaxiCount?: number | null;
   readonly lastBatchAssignedAt?: string | null;
   readonly statusKey?: string | null;
   readonly offers?: (Offer | null)[] | null;
   readonly orders?: (Order | null)[] | null;
+  readonly walletID?: string | null;
+  readonly wallet?: Wallet | null;
   readonly createdAt?: string | null;
   readonly updatedAt?: string | null;
 }
@@ -460,10 +677,13 @@ type LazyCourier = {
   readonly approvedById?: string | null;
   readonly currentBatchCount?: number | null;
   readonly currentExpressCount?: number | null;
+  readonly currentMaxiCount?: number | null;
   readonly lastBatchAssignedAt?: string | null;
   readonly statusKey?: string | null;
   readonly offers: AsyncCollection<Offer>;
   readonly orders: AsyncCollection<Order>;
+  readonly walletID?: string | null;
+  readonly wallet: AsyncItem<Wallet | undefined>;
   readonly createdAt?: string | null;
   readonly updatedAt?: string | null;
 }
@@ -490,8 +710,10 @@ type EagerUser = {
   readonly exactAddress?: string | null;
   readonly lat?: number | null;
   readonly lng?: number | null;
+  readonly isBlocked?: boolean | null;
   readonly push_token?: string | null;
   readonly Orders?: (Order | null)[] | null;
+  readonly payments?: (Payment | null)[] | null;
   readonly createdAt?: string | null;
   readonly updatedAt?: string | null;
 }
@@ -512,8 +734,10 @@ type LazyUser = {
   readonly exactAddress?: string | null;
   readonly lat?: number | null;
   readonly lng?: number | null;
+  readonly isBlocked?: boolean | null;
   readonly push_token?: string | null;
   readonly Orders: AsyncCollection<Order>;
+  readonly payments: AsyncCollection<Payment>;
   readonly createdAt?: string | null;
   readonly updatedAt?: string | null;
 }

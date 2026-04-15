@@ -1,5 +1,6 @@
 // components/maxi/MaxiBiddingSheet.js
 
+import { biddingEngine } from "@/modules/biddingEngine";
 import { router } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import {
@@ -30,15 +31,15 @@ const MaxiBiddingSheet = ({
   const [counterAmount, setCounterAmount] = useState("");
   const [selectedOffer, setSelectedOffer] = useState(null);
 
-  const latestOffer = offers[0];
-  const latestOfferId = latestOffer?.offer?.id;
+  const latestOffer = offers[0]?.offer;
+  const latestOfferId = latestOffer?.id;
 
   const isAcceptDisabled =
-    order?.status === "ACCEPTED" || order?.lastOfferBy !== "COURIER";
+    order?.status === "ACCEPTED" || latestOffer?.senderType !== "COURIER";
 
   // useEffect for Waiting Logic
   useEffect(() => {
-    if (isWaiting && latestOffer?.offer?.senderType === "COURIER") {
+    if (isWaiting && latestOffer?.senderType === "COURIER") {
       setIsWaiting(false);
     }
   }, [latestOffer, isWaiting]);
@@ -60,6 +61,13 @@ const MaxiBiddingSheet = ({
       setSelectedOffer(null);
     }
   }, [offers]);
+
+  // useEffect for prepopulation with the latest offer
+  useEffect(() => {
+    if (selectedOffer && !isWaiting) {
+      setCounterAmount(selectedOffer.amount.toString());
+    }
+  }, [selectedOffer, isWaiting]);
 
   return (
     <View style={styles.container}>
@@ -100,6 +108,7 @@ const MaxiBiddingSheet = ({
           <TextInput
             value={counterAmount}
             onChangeText={setCounterAmount}
+            autoFocus
             editable={!isWaiting}
             keyboardType="numeric"
             placeholder="Enter counter offer"
@@ -113,16 +122,26 @@ const MaxiBiddingSheet = ({
               const num = Number(counterAmount);
               if (!num || num <= 0) return;
 
-              const minPrice = order?.estimatedMinPrice;
-              const maxPrice = order?.estimatedMaxPrice;
+              const latestOffer = offers[0]?.offer;
 
-              if (num < minPrice || num > maxPrice) {
-                alert(
-                  `Offer must be between ₦${minPrice?.toLocaleString()} and ₦${maxPrice?.toLocaleString()}`,
-                );
+              const result = biddingEngine({
+                order,
+                latestOffer,
+                newOffer: num,
+                offeredBy: "USER",
+              });
+
+              if (!result.success) {
+                alert(result.message);
                 return;
               }
 
+              if (result.action === "ACCEPT") {
+                onAcceptOffer(latestOffer); // 👈 user matches price → accept
+                return;
+              }
+
+              // ✅ COUNTER FLOW
               setWaitingCourierName(
                 selectedOffer?.courier?.firstName || "Courier",
               );

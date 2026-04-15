@@ -2,6 +2,50 @@
 import { initSchema } from '@aws-amplify/datastore';
 import { schema } from './schema';
 
+const FundsStatus = {
+  "HELD": "HELD",
+  "RELEASED": "RELEASED"
+};
+
+const OrderPayoutStatus = {
+  "NOT_PAID": "NOT_PAID",
+  "PAID": "PAID"
+};
+
+const OrderPaymentStatus = {
+  "PENDING": "PENDING",
+  "PAID": "PAID"
+};
+
+const PaymentStatus = {
+  "PENDING": "PENDING",
+  "SUCCESS": "SUCCESS",
+  "FAILED": "FAILED"
+};
+
+const TransactionType = {
+  "CREDIT": "CREDIT",
+  "DEBIT": "DEBIT"
+};
+
+const TransactionStatus = {
+  "PENDING": "PENDING",
+  "COMPLETED": "COMPLETED",
+  "FAILED": "FAILED"
+};
+
+const PayoutStatus = {
+  "PENDING": "PENDING",
+  "PROCESSING": "PROCESSING",
+  "PAID": "PAID",
+  "FAILED": "FAILED"
+};
+
+const OwnerType = {
+  "COURIER": "COURIER",
+  "USER": "USER"
+};
+
 const OfferStatus = {
   "ACTIVE": "ACTIVE",
   "ACCEPTED": "ACCEPTED",
@@ -32,15 +76,27 @@ const OrderStatus = {
   "DISPUTED": "DISPUTED"
 };
 
-const { CompanyVehicle, CourierCompany, Offer, Order, Courier, User } = initSchema(schema);
+const { CompanyVehicle, CourierCompany, Payout, Transaction, Wallet, Payment, Offer, Order, Courier, User } = initSchema(schema);
 
 export {
   CompanyVehicle,
   CourierCompany,
+  Payout,
+  Transaction,
+  Wallet,
+  Payment,
   Offer,
   Order,
   Courier,
   User,
+  FundsStatus,
+  OrderPayoutStatus,
+  OrderPaymentStatus,
+  PaymentStatus,
+  TransactionType,
+  TransactionStatus,
+  PayoutStatus,
+  OwnerType,
   OfferStatus,
   MediaUploadStatus,
   OrderStatus

@@ -35,7 +35,10 @@ const AtuaTypes = ({ selectedType, setSelectedType }) => {
     resetOrderByTransportType,
   } = useOrderContext();
 
-  const { totalKm, totalMins } = useLocationContext();
+  const { totalKm, totalMins, isRouteReady } = useLocationContext();
+
+  const canContinue =
+    selectedType && isRouteReady && totalKm > 0 && totalMins > 0;
 
   // Filter allowed services by distance rules
   const availableServiceTypes = getAvailableServices(totalKm);
@@ -85,18 +88,21 @@ const AtuaTypes = ({ selectedType, setSelectedType }) => {
       case TRANSPORT_TYPES.MAXI:
         Alert.alert(
           "Freight / Van",
-          "Best for bulky or large items. Drivers will bid for your delivery.",
+          "Large-item delivery using vans, pickup trucks, etc. Drivers will bid for your delivery.",
         );
         break;
 
       case TRANSPORT_TYPES.MOTO_BATCH:
-        Alert.alert("Moto Batch", "Lower cost delivery with grouped orders.");
+        Alert.alert(
+          "Moto Batch",
+          "Cost-saving delivery using motorcycles or cars. Delivery with grouped orders.",
+        );
         break;
 
       case TRANSPORT_TYPES.MICRO_BATCH:
         Alert.alert(
           "Micro Batch",
-          "Budget-friendly eco delivery grouped with other orders.",
+          "Eco-friendly delivery using bicycles or scooters. Best for short distances. Delivery with grouped orders.",
         );
         break;
     }
@@ -196,7 +202,7 @@ const AtuaTypes = ({ selectedType, setSelectedType }) => {
 
       <View style={styles.bottomBar}>
         <TouchableOpacity
-          disabled={!selectedType}
+          disabled={!canContinue}
           onPress={() => {
             const selectedMedium = filteredDeliveryMediums.find(
               (m) => m.type === selectedType,
@@ -206,13 +212,14 @@ const AtuaTypes = ({ selectedType, setSelectedType }) => {
 
             onConfirm(selectedMedium);
           }}
-          style={[
-            styles.confirmBtn,
-            !selectedType && styles.confirmBtnDisabled,
-          ]}
+          style={[styles.confirmBtn, !canContinue && styles.confirmBtnDisabled]}
         >
           <Text style={styles.confirmTxt}>
-            {selectedType ? "Continue" : "Select a Service"}
+            {!isRouteReady
+              ? "Calculating route..."
+              : !selectedType
+                ? "Select a Service"
+                : "Continue"}
           </Text>
         </TouchableOpacity>
       </View>
