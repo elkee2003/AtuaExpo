@@ -52,6 +52,27 @@ export enum OfferStatus {
   REJECTED = "REJECTED"
 }
 
+export enum CourierPreTransferUploadStatus {
+  PENDING = "PENDING",
+  UPLOADING = "UPLOADING",
+  COMPLETE = "COMPLETE",
+  FAILED = "FAILED"
+}
+
+export enum CourierPostLoadingUploadStatus {
+  PENDING = "PENDING",
+  UPLOADING = "UPLOADING",
+  COMPLETE = "COMPLETE",
+  FAILED = "FAILED"
+}
+
+export enum DropoffUploadStatus {
+  PENDING = "PENDING",
+  UPLOADING = "UPLOADING",
+  COMPLETE = "COMPLETE",
+  FAILED = "FAILED"
+}
+
 export enum MediaUploadStatus {
   PENDING = "PENDING",
   UPLOADING = "UPLOADING",
@@ -399,6 +420,9 @@ type EagerOrder = {
   readonly transportationType?: string | null;
   readonly vehicleClass?: string | null;
   readonly status?: OrderStatus | keyof typeof OrderStatus | null;
+  readonly hasNewOffer?: boolean | null;
+  readonly lastOfferAt?: string | null;
+  readonly lastOfferSenderType?: string | null;
   readonly loadCategory?: string | null;
   readonly isInterState?: boolean | null;
   readonly estimatedMinPrice?: number | null;
@@ -410,6 +434,7 @@ type EagerOrder = {
   readonly fragileSurcharge?: number | null;
   readonly extrasTotal?: number | null;
   readonly totalPrice?: number | null;
+  readonly operationalFare?: number | null;
   readonly courierEarnings?: number | null;
   readonly commissionAmount?: number | null;
   readonly platformFee?: number | null;
@@ -424,13 +449,22 @@ type EagerOrder = {
   readonly senderPreTransferLocalPhotos?: (string | null)[] | null;
   readonly senderPreTransferLocalVideo?: string | null;
   readonly mediaUploadStatus?: MediaUploadStatus | keyof typeof MediaUploadStatus | null;
+  readonly courierPreTransferUploadStatus?: CourierPreTransferUploadStatus | keyof typeof CourierPreTransferUploadStatus | null;
+  readonly courierPostLoadingUploadStatus?: CourierPostLoadingUploadStatus | keyof typeof CourierPostLoadingUploadStatus | null;
+  readonly dropoffUploadStatus?: DropoffUploadStatus | keyof typeof DropoffUploadStatus | null;
   readonly courierPreTransferPhotos?: (string | null)[] | null;
   readonly courierPreTransferVideo?: string | null;
   readonly courierPreTransferRecordedAt?: string | null;
+  readonly courierPreTransferLocalPhotos?: (string | null)[] | null;
+  readonly courierPreTransferLocalVideo?: string | null;
   readonly courierPostLoadingPhotos?: (string | null)[] | null;
   readonly courierPostLoadingVideo?: string | null;
+  readonly courierPostLoadingLocalPhotos?: (string | null)[] | null;
+  readonly courierPostLoadingLocalVideo?: string | null;
   readonly dropoffArrivalPhotos?: (string | null)[] | null;
   readonly dropoffArrivalVideo?: string | null;
+  readonly dropoffArrivalLocalPhotos?: (string | null)[] | null;
+  readonly dropoffArrivalLocalVideo?: string | null;
   readonly postDeliveryPhotos?: (string | null)[] | null;
   readonly postDeliveryVideo?: string | null;
   readonly pickupLoadingResponsibility?: string | null;
@@ -496,6 +530,9 @@ type LazyOrder = {
   readonly transportationType?: string | null;
   readonly vehicleClass?: string | null;
   readonly status?: OrderStatus | keyof typeof OrderStatus | null;
+  readonly hasNewOffer?: boolean | null;
+  readonly lastOfferAt?: string | null;
+  readonly lastOfferSenderType?: string | null;
   readonly loadCategory?: string | null;
   readonly isInterState?: boolean | null;
   readonly estimatedMinPrice?: number | null;
@@ -507,6 +544,7 @@ type LazyOrder = {
   readonly fragileSurcharge?: number | null;
   readonly extrasTotal?: number | null;
   readonly totalPrice?: number | null;
+  readonly operationalFare?: number | null;
   readonly courierEarnings?: number | null;
   readonly commissionAmount?: number | null;
   readonly platformFee?: number | null;
@@ -521,13 +559,22 @@ type LazyOrder = {
   readonly senderPreTransferLocalPhotos?: (string | null)[] | null;
   readonly senderPreTransferLocalVideo?: string | null;
   readonly mediaUploadStatus?: MediaUploadStatus | keyof typeof MediaUploadStatus | null;
+  readonly courierPreTransferUploadStatus?: CourierPreTransferUploadStatus | keyof typeof CourierPreTransferUploadStatus | null;
+  readonly courierPostLoadingUploadStatus?: CourierPostLoadingUploadStatus | keyof typeof CourierPostLoadingUploadStatus | null;
+  readonly dropoffUploadStatus?: DropoffUploadStatus | keyof typeof DropoffUploadStatus | null;
   readonly courierPreTransferPhotos?: (string | null)[] | null;
   readonly courierPreTransferVideo?: string | null;
   readonly courierPreTransferRecordedAt?: string | null;
+  readonly courierPreTransferLocalPhotos?: (string | null)[] | null;
+  readonly courierPreTransferLocalVideo?: string | null;
   readonly courierPostLoadingPhotos?: (string | null)[] | null;
   readonly courierPostLoadingVideo?: string | null;
+  readonly courierPostLoadingLocalPhotos?: (string | null)[] | null;
+  readonly courierPostLoadingLocalVideo?: string | null;
   readonly dropoffArrivalPhotos?: (string | null)[] | null;
   readonly dropoffArrivalVideo?: string | null;
+  readonly dropoffArrivalLocalPhotos?: (string | null)[] | null;
+  readonly dropoffArrivalLocalVideo?: string | null;
   readonly postDeliveryPhotos?: (string | null)[] | null;
   readonly postDeliveryVideo?: string | null;
   readonly pickupLoadingResponsibility?: string | null;

@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "api": {
+      "Atua": [
+        "Query",
+        "Mutation"
+      ]
+    }
+  },
+  "lambdaLayers": [],
+  "environmentVariableList": [
+    {
+      "cloudFormationParameterName": "paystackSecretKey",
+      "environmentVariableName": "PAYSTACK_SECRET_KEY"
+    }
+  ]
+}

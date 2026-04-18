@@ -67,7 +67,7 @@ const ReviewUser = () => {
             {firstName} {lastName}
           </Text>
 
-          <Text style={styles.subtitle}>Verified Account</Text>
+          {/* <Text style={styles.subtitle}>Verified Account</Text> */}
         </View>
 
         {/* CONTACT SECTION */}

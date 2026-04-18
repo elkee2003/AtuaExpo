@@ -6,25 +6,57 @@ export default StyleSheet.create({
   },
 
   header: {
-    marginBottom: 20,
+    marginBottom: 16,
+    paddingHorizontal: 4,
   },
 
   title: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: "700",
-    color: "#111",
+    color: "#0F172A",
+    letterSpacing: 0.2,
   },
 
-  subtitle: {
-    fontSize: 14,
-    color: "#6b7280",
-    marginTop: 4,
+  statusPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-start",
+
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 999,
+
+    marginBottom: 10,
   },
 
-  countdown: {
-    fontSize: 14,
-    color: "#ef4444",
-    marginBottom: 20,
+  statusPillWaiting: {
+    backgroundColor: "#FFF7ED",
+  },
+
+  statusPillActive: {
+    backgroundColor: "#ECFDF5",
+  },
+
+  statusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    marginRight: 6,
+  },
+
+  dotWaiting: {
+    backgroundColor: "#F59E0B",
+  },
+
+  dotActive: {
+    backgroundColor: "#10B981",
+  },
+
+  statusText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#374151",
+    letterSpacing: 0.2,
   },
 
   card: {

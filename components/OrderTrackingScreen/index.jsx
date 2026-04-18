@@ -3,9 +3,10 @@ import { Courier, Offer, Order } from "@/src/models";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import BottomSheet, { BottomSheetView } from "@gorhom/bottom-sheet";
 import { DataStore } from "aws-amplify/datastore";
+import { getUrl } from "aws-amplify/storage";
 import { router } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, Animated, Image, View } from "react-native";
+import { ActivityIndicator, Animated, Image, Text, View } from "react-native";
 import MapView, { Marker, PROVIDER_GOOGLE } from "react-native-maps";
 import MapViewDirections from "react-native-maps-directions";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -29,13 +30,13 @@ const OrderTrackingScreen = ({ orderId }) => {
 
   const [order, setOrder] = useState(null);
   const [courier, setCourier] = useState(null);
+  const [courierImageUrl, setCourierImageUrl] = useState(null);
 
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const driverCardAnim = useRef(new Animated.Value(0)).current;
 
   // Maxi states
   const [offers, setOffers] = useState([]);
-  const [notifiedDriversCount, setNotifiedDriversCount] = useState(0);
 
   /* ================= FETCH ORDER ================= */
 
@@ -88,9 +89,30 @@ const OrderTrackingScreen = ({ orderId }) => {
       const enriched = await Promise.all(
         sorted.map(async (offer) => {
           const courier = await DataStore.query(Courier, offer.courierID);
+
+          let imageUrl = null;
+
+          if (courier?.profilePic) {
+            try {
+              const result = await getUrl({
+                path: courier.profilePic,
+                options: {
+                  validateObjectExistence: true,
+                },
+              });
+
+              imageUrl = result.url.toString();
+            } catch (e) {
+              imageUrl = null;
+            }
+          }
+
           return {
             offer,
-            courier,
+            courier: {
+              ...courier,
+              imageUrl, // 👈 attach ready-to-use URL
+            },
           };
         }),
       );
@@ -134,6 +156,29 @@ const OrderTrackingScreen = ({ orderId }) => {
       if (subscription) subscription.unsubscribe();
     };
   }, [order?.assignedCourierId]);
+
+  // FETCH COURIER PROFILE IMAGE
+  useEffect(() => {
+    const fetchCourierImage = async () => {
+      if (!courier?.profilePic) {
+        setCourierImageUrl(null);
+        return;
+      }
+
+      try {
+        const result = await getUrl({
+          path: courier.profilePic,
+          options: { validateObjectExistence: true },
+        });
+
+        setCourierImageUrl(result.url.toString());
+      } catch (e) {
+        setCourierImageUrl(null);
+      }
+    };
+
+    fetchCourierImage();
+  }, [courier?.profilePic]);
 
   useEffect(() => {
     if (!courier?.lat || !courier?.lng) return;
@@ -212,6 +257,25 @@ const OrderTrackingScreen = ({ orderId }) => {
     }
   }, [order?.status, courier]);
 
+  /* ================= USEEFFECT TO CLEAR LIVE ORDER BADGE================= */
+  useEffect(() => {
+    if (!order) return;
+
+    if (order.hasNewOffer && order.lastOfferSenderType === "COURIER") {
+      const timer = setTimeout(async () => {
+        const latestOrder = await DataStore.query(Order, order.id);
+
+        await DataStore.save(
+          Order.copyOf(latestOrder, (updated) => {
+            updated.hasNewOffer = false;
+          }),
+        );
+      }, 1500);
+
+      return () => clearTimeout(timer);
+    }
+  }, [order?.id, order?.hasNewOffer]);
+
   /* ================= LOADING ================= */
 
   if (!order) {
@@ -233,10 +297,12 @@ const OrderTrackingScreen = ({ orderId }) => {
   };
 
   // Condition to start bidding
+
+  // I have removed this (uploadFinished) as a condition for canStartBidding
   const uploadFinished =
     !order.mediaUploadStatus || order.mediaUploadStatus === "COMPLETE";
 
-  const canStartBidding = order.transportationType === "MAXI" && uploadFinished;
+  const canStartBidding = order.transportationType === "MAXI";
 
   /* ================= UI ================= */
 
@@ -302,7 +368,11 @@ const OrderTrackingScreen = ({ orderId }) => {
             }}
           >
             <Image
-              source={{ uri: courier.profilePic }}
+              source={
+                courierImageUrl
+                  ? { uri: courierImageUrl }
+                  : require("../../assets/images/placeholder.png")
+              }
               style={styles.courierAvatar}
             />
           </Marker.Animated>
@@ -322,11 +392,17 @@ const OrderTrackingScreen = ({ orderId }) => {
             <RetryUploadBanner order={order} />
           )}
 
+          {order.mediaUploadStatus === "UPLOADING" && (
+            <View style={styles.uploadContainer}>
+              <ActivityIndicator size="small" color="#2E7D32" />
+              <Text style={styles.uploadText}>Uploading package images...</Text>
+            </View>
+          )}
+
           {canStartBidding && order.status === "BIDDING" ? (
             <MaxiBiddingSheet
               order={order}
               offers={offers}
-              notifiedDriversCount={notifiedDriversCount}
               expiresAt={order.offerExpiresAt}
               bottomSheetRef={bottomSheetRef}
               onAcceptOffer={async (offer) => {
@@ -341,6 +417,7 @@ const OrderTrackingScreen = ({ orderId }) => {
                       updated.totalPrice = offer.amount;
                       updated.acceptedOfferID = offer.id;
                       updated.assignedCourierId = offer.courierID;
+                      updated.hasNewOffer = false;
                     }),
                   );
 
@@ -364,6 +441,17 @@ const OrderTrackingScreen = ({ orderId }) => {
                       status: "ACTIVE",
                     }),
                   );
+
+                  // ✅ Notify courier
+                  const latestOrder = await DataStore.query(Order, order.id);
+
+                  await DataStore.save(
+                    Order.copyOf(latestOrder, (updated) => {
+                      updated.hasNewOffer = true;
+                      updated.lastOfferAt = new Date().toISOString();
+                      updated.lastOfferSenderType = "USER";
+                    }),
+                  );
                 } catch (e) {
                   console.log(e);
                 }
@@ -374,6 +462,7 @@ const OrderTrackingScreen = ({ orderId }) => {
             <DefaultTrackingSheet
               order={order}
               courier={courier}
+              courierImageUrl={courierImageUrl}
               driverCardAnim={driverCardAnim}
               onCancel={() => router.back()}
             />

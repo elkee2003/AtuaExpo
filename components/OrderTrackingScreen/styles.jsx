@@ -55,4 +55,24 @@ export default StyleSheet.create({
     borderWidth: 3,
     borderColor: "#fff",
   },
+
+  uploadContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    marginHorizontal: 16,
+    marginBottom: 8,
+
+    backgroundColor: "#E8F5E9", // light green background
+    borderRadius: 12,
+  },
+
+  uploadText: {
+    marginLeft: 8,
+    fontSize: 13,
+    fontWeight: "500",
+    color: "#2E7D32", // darker green
+  },
 });

@@ -9,6 +9,12 @@ import styles from "./styles";
 const OrderHistoryList = ({ order, refreshOrders }) => {
   const [expanded, setExpanded] = useState(false);
 
+  const showLiveBadge =
+    order.transportationType === "MAXI" &&
+    order.status === "BIDDING" &&
+    order.hasNewOffer &&
+    order.lastOfferSenderType !== "USER";
+
   const isLive = order.status === "ACCEPTED";
 
   const toggleExpand = () => {
@@ -76,8 +82,19 @@ const OrderHistoryList = ({ order, refreshOrders }) => {
       <View style={styles.topRow}>
         <Text style={styles.date}>{order?.createdAt?.substring(0, 10)}</Text>
 
-        <View style={[styles.statusBadge, getStatusStyle()]}>
-          <Text style={styles.statusText}>{order.status}</Text>
+        {/* LIVE OFFER BADGE AND STATUS */}
+        <View style={{ flexDirection: "row", alignItems: "center" }}>
+          {/* Live Order display */}
+          {showLiveBadge && (
+            <View style={styles.liveBadge}>
+              <Text style={styles.liveText}>LIVE</Text>
+            </View>
+          )}
+
+          {/* Status display */}
+          <View style={[styles.statusBadge, getStatusStyle()]}>
+            <Text style={styles.statusText}>{order.status}</Text>
+          </View>
         </View>
       </View>
 

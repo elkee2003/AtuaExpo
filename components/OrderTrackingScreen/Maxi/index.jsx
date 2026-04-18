@@ -11,14 +11,13 @@ import {
   View,
 } from "react-native";
 import OfferCard from "./OfferCard";
-import OfferCountdown from "./OfferCountdown";
+// import OfferCountdown from "./OfferCountdown";
 import OfferHeader from "./OfferHeader";
 import styles from "./styles";
 
 const MaxiBiddingSheet = ({
   order,
   offers,
-  notifiedDriversCount,
   onAcceptOffer,
   onCounterOffer,
   onCancel,
@@ -71,12 +70,9 @@ const MaxiBiddingSheet = ({
 
   return (
     <View style={styles.container}>
-      <OfferHeader
-        offersCount={offers.length}
-        notifiedDriversCount={notifiedDriversCount}
-      />
+      <OfferHeader offersCount={offers.length} />
 
-      {offers.length === 0 && <OfferCountdown expiresAt={expiresAt} />}
+      {/* {offers.length === 0 && <OfferCountdown expiresAt={expiresAt} />} */}
 
       <FlatList
         ref={flatListRef}

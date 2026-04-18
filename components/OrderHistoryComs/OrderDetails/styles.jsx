@@ -81,6 +81,30 @@ export default StyleSheet.create({
     borderRadius: 12,
   },
 
+  // Row style
+  row: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 8,
+  },
+
+  rowLabel: {
+    color: "#666",
+    fontSize: 13,
+  },
+
+  rowValue: {
+    fontWeight: "600",
+    maxWidth: "60%",
+    textAlign: "right",
+  },
+
+  copyText: {
+    color: "#2563EB",
+    marginTop: 6,
+    fontWeight: "600",
+  },
+
   sectionTitle: {
     fontWeight: "700",
     marginBottom: 10,

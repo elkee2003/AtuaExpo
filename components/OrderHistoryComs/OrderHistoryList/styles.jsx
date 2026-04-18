@@ -34,6 +34,20 @@ const styles = StyleSheet.create({
     color: "#6B7280",
   },
 
+  liveBadge: {
+    backgroundColor: "#FF3B30",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    marginLeft: 8,
+  },
+
+  liveText: {
+    color: "white",
+    fontSize: 10,
+    fontWeight: "700",
+  },
+
   statusBadge: {
     paddingHorizontal: 10,
     paddingVertical: 4,

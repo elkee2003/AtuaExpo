@@ -7,40 +7,67 @@ export default StyleSheet.create({
     paddingTop: 10,
   },
 
-  /* 🏷 Status */
-
   statusTitle: {
-    fontSize: 20,
+    fontSize: 21,
     fontWeight: "700",
-    color: "#111",
-    marginBottom: 6,
+    color: "#0F172A",
+    letterSpacing: 0.2,
   },
 
   statusSubtitle: {
-    fontSize: 14,
-    color: "#666",
-    marginBottom: 15,
+    fontSize: 13,
+    color: "#64748B",
+    marginTop: 6,
+    lineHeight: 18,
+  },
+
+  statusContainer: {
+    marginBottom: 16,
+    paddingVertical: 6,
+  },
+
+  statusRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "#10B981",
+    marginRight: 8,
+
+    shadowColor: "#10B981",
+    shadowOpacity: 0.4,
+    shadowRadius: 6,
   },
 
   orderText: {
     textAlign: "center",
-    color: "#252424",
-    marginTop: 20,
+    color: "#334155",
     fontWeight: "600",
-    backgroundColor: "rgb(240, 240, 240)",
-    padding: 10,
-    marginHorizontal: 80,
-    borderRadius: 20,
+
+    backgroundColor: "#F8FAFC",
+    paddingVertical: 10,
+    borderRadius: 999,
+    marginBottom: 20,
+
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+
+    overflow: "hidden",
   },
 
-  /* ❌ Cancel Button */
-
   cancelBtn: {
-    marginTop: 10,
     paddingVertical: 14,
-    borderRadius: 12,
-    backgroundColor: "#F2F2F2",
+    borderRadius: 14,
+    backgroundColor: "#FEF2F2",
+
     alignItems: "center",
+
+    borderWidth: 1,
+    borderColor: "#FECACA",
   },
 
   cancelText: {
@@ -49,20 +76,22 @@ export default StyleSheet.create({
     color: "#D64545",
   },
 
-  /* 🚗 Driver Card */
-
   driverCard: {
     flexDirection: "row",
-    alignItems: "center",
     padding: 16,
-    borderRadius: 18,
-    backgroundColor: "#fff",
+    borderRadius: 20,
+    backgroundColor: "#FFFFFF",
+    marginTop: 16,
+
+    borderWidth: 1,
+    borderColor: "#F1F5F9",
+
     shadowColor: "#000",
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
+    shadowOpacity: 0.06,
+    shadowRadius: 14,
     shadowOffset: { width: 0, height: 6 },
-    elevation: 5,
-    marginTop: 12,
+
+    elevation: 4,
   },
 
   driverImage: {
@@ -70,7 +99,7 @@ export default StyleSheet.create({
     height: 60,
     borderRadius: 30,
     marginRight: 14,
-    backgroundColor: "#eee", // fallback feel
+    backgroundColor: "#eee",
   },
 
   driverInfo: {
@@ -95,15 +124,25 @@ export default StyleSheet.create({
     marginTop: 2,
   },
 
-  /* 💰 Price badge */
+  phoneText: {
+    marginTop: 8,
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#2563EB",
+  },
+
+  copyHint: {
+    fontSize: 11,
+    color: "#999",
+  },
 
   priceBadge: {
-    marginTop: 8,
-    alignSelf: "flex-start",
+    marginTop: 10,
     backgroundColor: "#E8F5E9",
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 8,
+    alignSelf: "flex-start",
   },
 
   priceText: {

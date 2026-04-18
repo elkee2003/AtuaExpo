@@ -110,7 +110,55 @@
       "providerPlugin": "awscloudformation",
       "service": "Lambda"
     },
+    "processPaymentAndWallet": {
+      "build": true,
+      "dependsOn": [
+        {
+          "attributes": [
+            "GraphQLAPIIdOutput",
+            "GraphQLAPIEndpointOutput",
+            "GraphQLAPIKeyOutput"
+          ],
+          "category": "api",
+          "resourceName": "Atua"
+        }
+      ],
+      "providerPlugin": "awscloudformation",
+      "service": "Lambda"
+    },
+    "processPayouts": {
+      "build": true,
+      "dependsOn": [
+        {
+          "attributes": [
+            "GraphQLAPIIdOutput",
+            "GraphQLAPIEndpointOutput",
+            "GraphQLAPIKeyOutput"
+          ],
+          "category": "api",
+          "resourceName": "Atua"
+        }
+      ],
+      "providerPlugin": "awscloudformation",
+      "service": "Lambda"
+    },
     "reassignOrder": {
+      "build": true,
+      "dependsOn": [
+        {
+          "attributes": [
+            "GraphQLAPIIdOutput",
+            "GraphQLAPIEndpointOutput",
+            "GraphQLAPIKeyOutput"
+          ],
+          "category": "api",
+          "resourceName": "Atua"
+        }
+      ],
+      "providerPlugin": "awscloudformation",
+      "service": "Lambda"
+    },
+    "releaseFunds": {
       "build": true,
       "dependsOn": [
         {
@@ -208,6 +256,38 @@
         }
       ]
     },
+    "AMPLIFY_function_processPaymentAndWallet_deploymentBucketName": {
+      "usedBy": [
+        {
+          "category": "function",
+          "resourceName": "processPaymentAndWallet"
+        }
+      ]
+    },
+    "AMPLIFY_function_processPaymentAndWallet_s3Key": {
+      "usedBy": [
+        {
+          "category": "function",
+          "resourceName": "processPaymentAndWallet"
+        }
+      ]
+    },
+    "AMPLIFY_function_processPayouts_deploymentBucketName": {
+      "usedBy": [
+        {
+          "category": "function",
+          "resourceName": "processPayouts"
+        }
+      ]
+    },
+    "AMPLIFY_function_processPayouts_s3Key": {
+      "usedBy": [
+        {
+          "category": "function",
+          "resourceName": "processPayouts"
+        }
+      ]
+    },
     "AMPLIFY_function_reassignOrder_deploymentBucketName": {
       "usedBy": [
         {
@@ -221,6 +301,22 @@
         {
           "category": "function",
           "resourceName": "reassignOrder"
+        }
+      ]
+    },
+    "AMPLIFY_function_releaseFunds_deploymentBucketName": {
+      "usedBy": [
+        {
+          "category": "function",
+          "resourceName": "releaseFunds"
+        }
+      ]
+    },
+    "AMPLIFY_function_releaseFunds_s3Key": {
+      "usedBy": [
+        {
+          "category": "function",
+          "resourceName": "releaseFunds"
         }
       ]
     },

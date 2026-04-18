@@ -52,6 +52,27 @@ const OfferStatus = {
   "REJECTED": "REJECTED"
 };
 
+const CourierPreTransferUploadStatus = {
+  "PENDING": "PENDING",
+  "UPLOADING": "UPLOADING",
+  "COMPLETE": "COMPLETE",
+  "FAILED": "FAILED"
+};
+
+const CourierPostLoadingUploadStatus = {
+  "PENDING": "PENDING",
+  "UPLOADING": "UPLOADING",
+  "COMPLETE": "COMPLETE",
+  "FAILED": "FAILED"
+};
+
+const DropoffUploadStatus = {
+  "PENDING": "PENDING",
+  "UPLOADING": "UPLOADING",
+  "COMPLETE": "COMPLETE",
+  "FAILED": "FAILED"
+};
+
 const MediaUploadStatus = {
   "PENDING": "PENDING",
   "UPLOADING": "UPLOADING",
@@ -98,6 +119,9 @@ export {
   PayoutStatus,
   OwnerType,
   OfferStatus,
+  CourierPreTransferUploadStatus,
+  CourierPostLoadingUploadStatus,
+  DropoffUploadStatus,
   MediaUploadStatus,
   OrderStatus
 };

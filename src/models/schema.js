@@ -1053,6 +1053,27 @@ export const schema = {
                     "isRequired": false,
                     "attributes": []
                 },
+                "hasNewOffer": {
+                    "name": "hasNewOffer",
+                    "isArray": false,
+                    "type": "Boolean",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "lastOfferAt": {
+                    "name": "lastOfferAt",
+                    "isArray": false,
+                    "type": "AWSDateTime",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "lastOfferSenderType": {
+                    "name": "lastOfferSenderType",
+                    "isArray": false,
+                    "type": "String",
+                    "isRequired": false,
+                    "attributes": []
+                },
                 "loadCategory": {
                     "name": "loadCategory",
                     "isArray": false,
@@ -1125,6 +1146,13 @@ export const schema = {
                 },
                 "totalPrice": {
                     "name": "totalPrice",
+                    "isArray": false,
+                    "type": "Float",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "operationalFare": {
+                    "name": "operationalFare",
                     "isArray": false,
                     "type": "Float",
                     "isRequired": false,
@@ -1232,6 +1260,33 @@ export const schema = {
                     "isRequired": false,
                     "attributes": []
                 },
+                "courierPreTransferUploadStatus": {
+                    "name": "courierPreTransferUploadStatus",
+                    "isArray": false,
+                    "type": {
+                        "enum": "CourierPreTransferUploadStatus"
+                    },
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "courierPostLoadingUploadStatus": {
+                    "name": "courierPostLoadingUploadStatus",
+                    "isArray": false,
+                    "type": {
+                        "enum": "CourierPostLoadingUploadStatus"
+                    },
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "dropoffUploadStatus": {
+                    "name": "dropoffUploadStatus",
+                    "isArray": false,
+                    "type": {
+                        "enum": "DropoffUploadStatus"
+                    },
+                    "isRequired": false,
+                    "attributes": []
+                },
                 "courierPreTransferPhotos": {
                     "name": "courierPreTransferPhotos",
                     "isArray": true,
@@ -1254,6 +1309,21 @@ export const schema = {
                     "isRequired": false,
                     "attributes": []
                 },
+                "courierPreTransferLocalPhotos": {
+                    "name": "courierPreTransferLocalPhotos",
+                    "isArray": true,
+                    "type": "String",
+                    "isRequired": false,
+                    "attributes": [],
+                    "isArrayNullable": true
+                },
+                "courierPreTransferLocalVideo": {
+                    "name": "courierPreTransferLocalVideo",
+                    "isArray": false,
+                    "type": "String",
+                    "isRequired": false,
+                    "attributes": []
+                },
                 "courierPostLoadingPhotos": {
                     "name": "courierPostLoadingPhotos",
                     "isArray": true,
@@ -1269,6 +1339,21 @@ export const schema = {
                     "isRequired": false,
                     "attributes": []
                 },
+                "courierPostLoadingLocalPhotos": {
+                    "name": "courierPostLoadingLocalPhotos",
+                    "isArray": true,
+                    "type": "String",
+                    "isRequired": false,
+                    "attributes": [],
+                    "isArrayNullable": true
+                },
+                "courierPostLoadingLocalVideo": {
+                    "name": "courierPostLoadingLocalVideo",
+                    "isArray": false,
+                    "type": "String",
+                    "isRequired": false,
+                    "attributes": []
+                },
                 "dropoffArrivalPhotos": {
                     "name": "dropoffArrivalPhotos",
                     "isArray": true,
@@ -1279,6 +1364,21 @@ export const schema = {
                 },
                 "dropoffArrivalVideo": {
                     "name": "dropoffArrivalVideo",
+                    "isArray": false,
+                    "type": "String",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "dropoffArrivalLocalPhotos": {
+                    "name": "dropoffArrivalLocalPhotos",
+                    "isArray": true,
+                    "type": "String",
+                    "isRequired": false,
+                    "attributes": [],
+                    "isArrayNullable": true
+                },
+                "dropoffArrivalLocalVideo": {
+                    "name": "dropoffArrivalLocalVideo",
                     "isArray": false,
                     "type": "String",
                     "isRequired": false,
@@ -2306,6 +2406,33 @@ export const schema = {
                 "REJECTED"
             ]
         },
+        "CourierPreTransferUploadStatus": {
+            "name": "CourierPreTransferUploadStatus",
+            "values": [
+                "PENDING",
+                "UPLOADING",
+                "COMPLETE",
+                "FAILED"
+            ]
+        },
+        "CourierPostLoadingUploadStatus": {
+            "name": "CourierPostLoadingUploadStatus",
+            "values": [
+                "PENDING",
+                "UPLOADING",
+                "COMPLETE",
+                "FAILED"
+            ]
+        },
+        "DropoffUploadStatus": {
+            "name": "DropoffUploadStatus",
+            "values": [
+                "PENDING",
+                "UPLOADING",
+                "COMPLETE",
+                "FAILED"
+            ]
+        },
         "MediaUploadStatus": {
             "name": "MediaUploadStatus",
             "values": [
@@ -2337,5 +2464,5 @@ export const schema = {
     },
     "nonModels": {},
     "codegenVersion": "3.4.4",
-    "version": "794fb68de9b58f81c6a5cf26f985b88d"
+    "version": "8ef13fd786b603c985c31424dcfe685d"
 };

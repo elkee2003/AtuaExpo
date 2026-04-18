@@ -40,6 +40,18 @@
         "resetCourierIfIdle": {
           "deploymentBucketName": "amplify-atua-staging-19d66-deployment",
           "s3Key": "amplify-builds/resetCourierIfIdle-494b38367052737a505a-build.zip"
+        },
+        "processPaymentAndWallet": {
+          "deploymentBucketName": "amplify-atua-staging-19d66-deployment",
+          "s3Key": "amplify-builds/processPaymentAndWallet-6c776168626450372f31-build.zip"
+        },
+        "releaseFunds": {
+          "deploymentBucketName": "amplify-atua-staging-19d66-deployment",
+          "s3Key": "amplify-builds/releaseFunds-727a48642b6642793446-build.zip"
+        },
+        "processPayouts": {
+          "deploymentBucketName": "amplify-atua-staging-19d66-deployment",
+          "s3Key": "amplify-builds/processPayouts-7541797a4d2f32437668-build.zip"
         }
       },
       "storage": {

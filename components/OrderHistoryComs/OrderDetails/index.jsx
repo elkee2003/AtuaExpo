@@ -12,7 +12,7 @@ import {
 
 import MapView, { Marker } from "react-native-maps";
 
-import { Courier, Order } from "@/src/models";
+import { Order } from "@/src/models";
 import { DataStore } from "aws-amplify/datastore";
 import { getUrl } from "aws-amplify/storage";
 import { useEffect, useState } from "react";
@@ -45,15 +45,14 @@ const OrderDetails = ({ orderId }) => {
     pricing: false,
     load: false,
     evidence: false,
+    recipient: true,
   });
 
-  // Copy code function
-  const copyToClipboard = async (text) => {
+  // ✅ COPY FUNCTION (REUSABLE)
+  const copyToClipboard = async (text, label = "Copied") => {
     if (!text) return;
-
     await Clipboard.setStringAsync(String(text));
-
-    Alert.alert("Copied", "Verification code copied");
+    Alert.alert(label, "Copied to clipboard");
   };
 
   useEffect(() => {
@@ -66,11 +65,9 @@ const OrderDetails = ({ orderId }) => {
 
         setOrder(orderData);
 
-        if (orderData?.Courier?.id) {
-          const courierData = await DataStore.query(
-            Courier,
-            orderData.Courier.id,
-          );
+        // ✅ FIXED: use relationship instead of manual query
+        if (orderData?.assignedCourierId) {
+          const courierData = await orderData.assignedCourier;
 
           if (!isMounted) return;
 
@@ -94,7 +91,7 @@ const OrderDetails = ({ orderId }) => {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [orderId]);
 
   //   Load Courier Image
   const loadCourierImage = async (courier, isMounted) => {
@@ -118,16 +115,11 @@ const OrderDetails = ({ orderId }) => {
         order?.postDeliveryPhotos || [],
       ];
 
-      const allImages = groups.flat().filter(Boolean);
       const urls = [];
 
-      for (const img of allImages) {
-        try {
-          const url = await getUrl({ path: img });
-          urls.push({ uri: url.url });
-        } catch (e) {
-          console.log("Image error:", e);
-        }
+      for (const img of groups.flat().filter(Boolean)) {
+        const url = await getUrl({ path: img });
+        urls.push({ uri: url.url });
       }
 
       if (isMounted) setEvidence(urls);
@@ -143,14 +135,14 @@ const OrderDetails = ({ orderId }) => {
     }));
   };
 
-  const reorder = () => {
-    if (!order?.id) return;
+  // const reorder = () => {
+  //   if (!order?.id) return;
 
-    router.push({
-      pathname: "/screens/createOrder",
-      params: { reorderId: order.id },
-    });
-  };
+  //   router.push({
+  //     pathname: "/screens/createOrder",
+  //     params: { reorderId: order.id },
+  //   });
+  // };
 
   if (loading) {
     return (
@@ -207,7 +199,6 @@ const OrderDetails = ({ orderId }) => {
         <View style={styles.courierCard}>
           <Image
             source={profileImage ? { uri: profileImage } : Placeholder}
-            defaultSource={Placeholder}
             style={styles.avatar}
           />
 
@@ -219,11 +210,20 @@ const OrderDetails = ({ orderId }) => {
             <Text style={styles.vehicle}>
               {courier.vehicleClass} • {courier.plateNumber}
             </Text>
-          </View>
 
-          <TouchableOpacity style={styles.contactButton}>
-            <Text style={{ color: "#fff" }}>Call</Text>
-          </TouchableOpacity>
+            {/* ✅ PHONE + COPY */}
+            {courier.phoneNumber && (
+              <TouchableOpacity
+                onPress={() =>
+                  copyToClipboard(courier.phoneNumber, "Phone copied")
+                }
+              >
+                <Text style={styles.copyText}>
+                  Tap to copy: {courier.phoneNumber}
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
       )}
 
@@ -237,71 +237,80 @@ const OrderDetails = ({ orderId }) => {
         <TimelineItem label="Delivered" value={order.unloadingCompletedAt} />
       </View>
 
+      {/* RECIPIENT DETAILS */}
+      <Section
+        title="Recipient Details"
+        open={sections.recipient}
+        toggle={() => toggleSection("recipient")}
+      >
+        <RowItem label="Name" value={order.recipientName} />
+        <RowItem label="Phone" value={order.recipientNumber} />
+        {order.recipientNumber2 && (
+          <RowItem label="Alt Phone" value={order.recipientNumber2} />
+        )}
+      </Section>
+
+      {/* ROUTE */}
       <Section
         title="Route"
         open={sections.route}
         toggle={() => toggleSection("route")}
       >
-        <Text>Pickup: {order.originAddress}</Text>
-        <Text>Dropoff: {order.destinationAddress}</Text>
+        <RowItem label="Pickup" value={order.originAddress} />
+        <RowItem label="Dropoff" value={order.destinationAddress} />
+        <RowItem label="Trip Type" value={order.tripType} />
       </Section>
 
+      {/* PARCEL */}
       <Section
         title="Parcel Details"
         open={sections.load}
         toggle={() => toggleSection("load")}
       >
-        {order.loadCategory ? <Text>Category: {order.loadCategory}</Text> : ""}
+        <RowItem label="Category" value={order.loadCategory} />
+        <RowItem label="Vehicle Class" value={order?.vehicleClass} />
+        <RowItem label="Weight" value={order.declaredWeightBracket} />
+        <RowItem label="Details" value={order.orderDetails} />
 
-        {order.declaredWeightBracket ? (
-          <Text>Weight: {order.declaredWeightBracket}</Text>
-        ) : (
-          ""
-        )}
-
-        <Text>Details: {order.orderDetails}</Text>
         <TouchableOpacity
-          onPress={() => copyToClipboard(order?.deliveryVerificationCode)}
+          onPress={() =>
+            copyToClipboard(order?.deliveryVerificationCode, "Code copied")
+          }
         >
-          <Text style={{ fontWeight: "600" }}>
-            Verification Code: {order?.deliveryVerificationCode}
+          <Text style={styles.copyText}>
+            Code: {order.deliveryVerificationCode}
           </Text>
         </TouchableOpacity>
       </Section>
 
+      {/* PRICE */}
       <Section
         title="Price Breakdown"
         open={sections.pricing}
         toggle={() => toggleSection("pricing")}
       >
-        {order.initialOfferPrice ? (
-          <Text>Offer: ₦{order.initialOfferPrice}</Text>
-        ) : (
-          ""
-        )}
-
-        {order.loadingFee ? <Text>Loading Fee: ₦{order.loadingFee}</Text> : ""}
-
-        {order.unloadingFee ? (
-          <Text>Unloading Fee: ₦{order.unloadingFee}</Text>
-        ) : (
-          ""
-        )}
-
-        {order.platformFee ? (
-          <Text>Platform Fee: ₦{order.platformFee}</Text>
-        ) : (
-          ""
-        )}
-
-        {order.vatAmount ? <Text>VAT: ₦{order.vatAmount}</Text> : ""}
+        <RowItem
+          label="Offer"
+          value={
+            order.initialOfferPrice
+              ? `₦${order.initialOfferPrice.toLocaleString()}`
+              : "-"
+          }
+        />
+        <RowItem
+          label="Operational Fare"
+          value={order.operationalFare ? `₦${order.operationalFare}` : "-"}
+        />
+        <RowItem label="Loading" value={`₦${order.loadingFee}`} />
+        <RowItem label="Unloading" value={`₦${order.unloadingFee}`} />
+        <RowItem label="VAT" value={`₦${order.vatAmount}`} />
 
         <Text style={styles.total}>
           Total: ₦{order.totalPrice?.toLocaleString()}
         </Text>
       </Section>
 
-      {evidence.length > 0 && (
+      {evidence?.length > 0 && (
         <Section
           title="Delivery Evidence"
           open={sections.evidence}
@@ -342,16 +351,15 @@ const OrderDetails = ({ orderId }) => {
                 router.push(`/screens/orderTrackingScreen/${order.id}`)
               }
             />
-            <Button title="Contact Courier" type="outline" />
           </>
         )}
 
-        {order.status === "DELIVERED" && (
+        {/* {order.status === "DELIVERED" && (
           <>
             <Button title="Report Issue" />
             <Button title="Reorder" onPress={reorder} type="outline" />
           </>
-        )}
+        )} */}
       </View>
 
       <Modal visible={showViewer} transparent>
@@ -367,7 +375,7 @@ const OrderDetails = ({ orderId }) => {
             style={styles.viewerPager}
             initialPage={Math.min(selectedImage, evidence.length - 1)}
           >
-            {evidence.map((img, i) => (
+            {evidence?.map((img, i) => (
               <View key={i} style={styles.viewerPage}>
                 <Image
                   source={img}
@@ -421,6 +429,17 @@ const Section = ({ title, open, toggle, children }) => {
       </TouchableOpacity>
 
       <Collapsible collapsed={!open}>{children}</Collapsible>
+    </View>
+  );
+};
+
+const RowItem = ({ label, value }) => {
+  if (value === null || value === undefined) return null;
+
+  return (
+    <View style={styles.row}>
+      <Text style={styles.rowLabel}>{label}</Text>
+      <Text style={styles.rowValue}>{value}</Text>
     </View>
   );
 };

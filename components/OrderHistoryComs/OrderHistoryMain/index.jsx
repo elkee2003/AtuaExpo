@@ -1,6 +1,6 @@
 import { useAuthContext } from "@/providers/AuthProvider";
 import { DataStore } from "aws-amplify/datastore";
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -9,7 +9,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Courier, Order } from "../../../src/models";
+import { Order } from "../../../src/models";
 import OrderHistoryList from "../OrderHistoryList";
 import styles from "./styles";
 
@@ -20,56 +20,50 @@ const OrderHistoryMain = () => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  const fetchOrders = useCallback(async () => {
+  useEffect(() => {
     if (!dbUser?.id) return;
 
-    try {
-      setLoading(true);
+    const subscription = DataStore.observeQuery(Order, (order) =>
+      order.userID.eq(dbUser.id),
+    ).subscribe(async ({ items }) => {
+      try {
+        // ✅ Sort orders
+        const sortedOrders = items.sort(
+          (a, b) =>
+            new Date(b.createdAt ?? 0).getTime() -
+            new Date(a.createdAt ?? 0).getTime(),
+        );
 
-      const userOrders = await DataStore.query(Order, (order) =>
-        order.userID.eq(dbUser.id),
-      );
+        // ✅ Attach courier using relationship (NO extra queries)
+        const ordersWithCouriers = await Promise.all(
+          sortedOrders.map(async (order) => {
+            let courier = null;
 
-      const sortedOrders = userOrders.sort(
-        (a, b) =>
-          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-      );
+            if (order.assignedCourierId && order.status !== "DELIVERED") {
+              courier = await order.assignedCourier; // ✅ FIXED
+            }
 
-      const ordersWithCouriers = await Promise.all(
-        sortedOrders.map(async (order) => {
-          if (order.assignedCourierId && order.status !== "DELIVERED") {
-            const courier = await DataStore.query(Courier, (c) =>
-              c.id.eq(order.assignedCourierId),
-            );
-            return { ...order, courier: courier[0] || null };
-          }
-          return { ...order, courier: null };
-        }),
-      );
+            return { ...order, courier };
+          }),
+        );
 
-      setOrders(ordersWithCouriers);
-    } catch (error) {
-      console.log("Error fetching orders:", error);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, [dbUser]);
-
-  const onRefresh = async () => {
-    setRefreshing(true);
-    await fetchOrders();
-  };
-
-  useEffect(() => {
-    fetchOrders();
-
-    const subscription = DataStore.observe(Order).subscribe(() => {
-      fetchOrders();
+        setOrders(ordersWithCouriers);
+      } catch (error) {
+        console.log("Error processing orders:", error);
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
+      }
     });
 
     return () => subscription.unsubscribe();
-  }, [fetchOrders]);
+  }, [dbUser?.id]);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    // observeQuery auto-refreshes, so just stop loader
+    setTimeout(() => setRefreshing(false), 500);
+  };
 
   if (loading) {
     return (
@@ -110,9 +104,7 @@ const OrderHistoryMain = () => {
               />
             }
             contentContainerStyle={styles.listContent}
-            renderItem={({ item }) => (
-              <OrderHistoryList order={item} refreshOrders={fetchOrders} />
-            )}
+            renderItem={({ item }) => <OrderHistoryList order={item} />}
           />
         )}
       </View>

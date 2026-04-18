@@ -23,7 +23,14 @@ const OfferCard = ({
         },
       ]}
     >
-      <Image source={{ uri: courier?.profilePic }} style={styles.avatar} />
+      <Image
+        source={
+          courier?.imageUrl
+            ? { uri: courier.imageUrl }
+            : require("../../../assets/images/placeholder.png")
+        }
+        style={styles.avatar}
+      />
 
       <View style={{ flex: 1 }}>
         <Text style={styles.name}>

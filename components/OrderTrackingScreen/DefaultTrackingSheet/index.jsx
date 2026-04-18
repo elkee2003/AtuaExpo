@@ -1,21 +1,26 @@
-import { getUrl } from "aws-amplify/storage";
+import * as Clipboard from "expo-clipboard";
 import { router } from "expo-router";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Animated, Image, Text, TouchableOpacity, View } from "react-native";
 import styles from "./styles";
 
-// note I have to show bidding and the current offer when user navigates to the tracking page or when waiting for courier to accept order
+const DefaultTrackingSheet = ({
+  order,
+  courier,
+  courierImageUrl,
+  driverCardAnim,
+  onCancel,
+}) => {
+  const [copied, setCopied] = useState(false);
 
-const DefaultTrackingSheet = ({ order, courier, driverCardAnim, onCancel }) => {
-  const [courierImage, setCourierImage] = useState(null);
-  const [loadingImage, setLoadingImage] = useState(true);
+  /* ================= STATUS ================= */
 
   const renderStatusTitle = () => {
     switch (order.status) {
       case "READY_FOR_PICKUP":
         return "Searching for a courier...";
       case "ACCEPTED":
-        return "Driver is on the way";
+        return "Courier is on the way";
       case "IN_TRANSIT":
         return "Package in transit";
       case "DELIVERED":
@@ -29,62 +34,67 @@ const DefaultTrackingSheet = ({ order, courier, driverCardAnim, onCancel }) => {
     if (order.status === "READY_FOR_PICKUP") {
       return "Notifying nearby couriers.";
     }
+
     if (order.status === "ACCEPTED") {
       return `${courier?.firstName || "Courier"} is heading to pickup`;
     }
+
+    if (order.status === "IN_TRANSIT") {
+      return "Your package is on the way to its destination";
+    }
+
+    if (order.status === "DELIVERED") {
+      return "Delivery completed successfully";
+    }
+
     return null;
   };
 
-  // useEffect to fetch Courier Profile Image
-  useEffect(() => {
-    const fetchCourierImage = async () => {
-      if (!courier?.profilePic) {
-        setCourierImage(null);
-        setLoadingImage(false);
-        return;
-      }
+  /* ================= COPY PHONE ================= */
 
-      try {
-        const result = await getUrl({
-          path: courier.profilePic,
-          options: {
-            validateObjectExistence: true,
-          },
-        });
+  const copyPhone = async () => {
+    if (!courier?.phoneNumber) return;
 
-        setCourierImage(result.url.toString());
-      } catch (e) {
-        console.log("Error fetching courier image:", e);
-        setCourierImage(null);
-      } finally {
-        setLoadingImage(false);
-      }
-    };
+    await Clipboard.setStringAsync(courier.phoneNumber);
+    setCopied(true);
 
-    fetchCourierImage();
-  }, [courier?.profilePic]);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  /* ================= CONDITIONS ================= */
+
+  const showDriverCard =
+    ["ACCEPTED", "IN_TRANSIT"].includes(order.status) && courier;
 
   return (
     <View style={styles.sheetContent}>
-      <Text style={styles.statusTitle}>{renderStatusTitle()}</Text>
-      <Text style={styles.statusSubtitle}>{renderSubtitle()}</Text>
+      {/* STATUS */}
+      <View style={styles.statusContainer}>
+        <View style={styles.statusRow}>
+          <View style={styles.statusDot} />
+          <Text style={styles.statusTitle}>{renderStatusTitle()}</Text>
+        </View>
 
+        <Text style={styles.statusSubtitle}>{renderSubtitle()}</Text>
+      </View>
+
+      {/* ORDER HISTORY */}
       <Text
         style={styles.orderText}
-        onPress={() => {
-          router.push("/orderhistory");
-        }}
+        onPress={() => router.push("/orderhistory")}
       >
         Order History
       </Text>
 
+      {/* CANCEL */}
       {order.status === "READY_FOR_PICKUP" && (
         <TouchableOpacity style={styles.cancelBtn} onPress={onCancel}>
           <Text style={styles.cancelText}>Cancel Order</Text>
         </TouchableOpacity>
       )}
 
-      {order.status === "ACCEPTED" && courier && (
+      {/* DRIVER CARD */}
+      {showDriverCard && (
         <Animated.View
           style={[
             styles.driverCard,
@@ -101,23 +111,20 @@ const DefaultTrackingSheet = ({ order, courier, driverCardAnim, onCancel }) => {
             },
           ]}
         >
+          {/* IMAGE */}
           <Image
             source={
-              loadingImage || !courierImage
-                ? require("../../../assets/images/placeholder.png")
-                : { uri: courierImage }
+              courierImageUrl
+                ? { uri: courierImageUrl }
+                : require("../../../assets/images/placeholder.png")
             }
             style={styles.driverImage}
           />
 
+          {/* INFO */}
           <View style={styles.driverInfo}>
-            {/* Name */}
-            <Text style={styles.driverName}>
-              {courier.firstName}
-              {/* {courier.lastName} */}
-            </Text>
+            <Text style={styles.driverName}>{courier.firstName}</Text>
 
-            {/* Vehicle */}
             <Text style={styles.driverSub}>
               {courier.transportationType} • {courier.vehicleClass}
             </Text>
@@ -128,7 +135,17 @@ const DefaultTrackingSheet = ({ order, courier, driverCardAnim, onCancel }) => {
               </Text>
             )}
 
-            {/* Price badge */}
+            {/* PHONE */}
+            {courier?.phoneNumber && (
+              <TouchableOpacity onPress={copyPhone}>
+                <Text style={styles.phoneText}>{courier.phoneNumber}</Text>
+                <Text style={styles.copyHint}>
+                  {copied ? "Copied!" : "Tap to copy"}
+                </Text>
+              </TouchableOpacity>
+            )}
+
+            {/* PRICE */}
             <View style={styles.priceBadge}>
               <Text style={styles.priceText}>
                 ₦{order?.totalPrice?.toLocaleString()}

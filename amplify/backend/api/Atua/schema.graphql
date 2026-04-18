@@ -79,6 +79,27 @@ enum OfferStatus {
   REJECTED
 }
 
+enum CourierPreTransferUploadStatus {
+  PENDING
+  UPLOADING
+  COMPLETE
+  FAILED
+}
+
+enum CourierPostLoadingUploadStatus {
+  PENDING
+  UPLOADING
+  COMPLETE
+  FAILED
+}
+
+enum DropoffUploadStatus {
+  PENDING
+  UPLOADING
+  COMPLETE
+  FAILED
+}
+
 enum MediaUploadStatus {
   PENDING
   UPLOADING
@@ -205,6 +226,11 @@ type Order @model @auth(rules: [{ allow: public }]) {
   vehicleClass: String
   status: OrderStatus
 
+  # ------- FOR MAXI -------
+  hasNewOffer: Boolean
+  lastOfferAt: AWSDateTime
+  lastOfferSenderType: String
+
   # ---------------- PRICING ----------------
   # ------- FOR MAXI -------
   loadCategory: String
@@ -222,6 +248,7 @@ type Order @model @auth(rules: [{ allow: public }]) {
 
   # ------- General -------
   totalPrice: Float # final agreed price
+  operationalFare: Float # combination of distance and transportationType etc
   courierEarnings: Float
   commissionAmount: Float
   platformFee: Float
@@ -244,18 +271,32 @@ type Order @model @auth(rules: [{ allow: public }]) {
   senderPreTransferLocalPhotos: [String]
   senderPreTransferLocalVideo: String
 
-  # ---------------- MEDIA UPLOAD STATUS ----------------
+  # ---------------- USER MEDIA UPLOAD STATUS ----------------
   mediaUploadStatus: MediaUploadStatus
+
+  # ---------------- COURIER MEDIA UPLOAD STATUS ----------------
+  courierPreTransferUploadStatus: CourierPreTransferUploadStatus
+  courierPostLoadingUploadStatus: CourierPostLoadingUploadStatus
+  dropoffUploadStatus: DropoffUploadStatus
 
   courierPreTransferPhotos: [String]
   courierPreTransferVideo: String
   courierPreTransferRecordedAt: AWSDateTime
 
+  courierPreTransferLocalPhotos: [String]
+  courierPreTransferLocalVideo: String
+
   courierPostLoadingPhotos: [String]
   courierPostLoadingVideo: String
 
+  courierPostLoadingLocalPhotos: [String]
+  courierPostLoadingLocalVideo: String
+
   dropoffArrivalPhotos: [String]
   dropoffArrivalVideo: String
+
+  dropoffArrivalLocalPhotos: [String]
+  dropoffArrivalLocalVideo: String
 
   postDeliveryPhotos: [String]
   postDeliveryVideo: String
