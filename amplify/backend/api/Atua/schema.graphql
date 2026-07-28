@@ -124,6 +124,13 @@ enum OrderStatus {
   DISPUTED
 }
 
+enum CourierReportStatus {
+  OPEN
+  UNDER_REVIEW
+  RESOLVED
+  DISMISSED
+}
+
 # ---------------- MODELS ----------------
 type Payout @model @auth(rules: [{ allow: public }]) {
   id: ID!
@@ -349,9 +356,53 @@ type Order @model @auth(rules: [{ allow: public }]) {
   assignmentStatus: String
     @index(name: "byAssignmentStatus", sortKeyFields: ["assignmentExpiresAt"])
   userID: ID! @index(name: "byUser")
+  reviews: [CourierReview] @hasMany(indexName: "byOrder", fields: ["id"])
+
+  reports: [CourierReport] @hasMany(indexName: "byOrder", fields: ["id"])
   offers: [Offer] @hasMany(indexName: "byOrder", fields: ["id"])
   assignedCourier: Courier @belongsTo(fields: ["assignedCourierId"])
   payments: [Payment] @hasMany(indexName: "byOrder", fields: ["id"])
+}
+
+type CourierReport @model @auth(rules: [{ allow: public }]) {
+  id: ID!
+
+  courierID: ID! @index(name: "byCourier")
+  courier: Courier @belongsTo(fields: ["courierID"])
+
+  userID: ID! @index(name: "byUser")
+  user: User @belongsTo(fields: ["userID"])
+
+  orderID: ID! @index(name: "byOrder")
+  order: Order @belongsTo(fields: ["orderID"])
+
+  reason: String!
+
+  description: String
+
+  evidencePhotos: [String]
+
+  evidenceVideo: String
+
+  status: CourierReportStatus
+
+  adminComment: String
+}
+
+type CourierReview @model @auth(rules: [{ allow: public }]) {
+  id: ID!
+
+  courierID: ID! @index(name: "byCourier")
+  courier: Courier @belongsTo(fields: ["courierID"])
+
+  userID: ID! @index(name: "byUser")
+  user: User @belongsTo(fields: ["userID"])
+
+  orderID: ID! @index(name: "byOrder")
+  order: Order @belongsTo(fields: ["orderID"])
+
+  rating: Int! # 1-5
+  comment: String
 }
 
 type Courier @model @auth(rules: [{ allow: public }]) {
@@ -398,6 +449,13 @@ type Courier @model @auth(rules: [{ allow: public }]) {
   currentMaxiCount: Int
   lastBatchAssignedAt: AWSDateTime
 
+  averageRating: Float
+  reviewCount: Int
+  totalReports: Int
+
+  reviews: [CourierReview] @hasMany(indexName: "byCourier", fields: ["id"])
+  reports: [CourierReport] @hasMany(indexName: "byCourier", fields: ["id"])
+
   statusKey: String @index(name: "byStatus", queryField: "couriersByStatus")
   offers: [Offer] @hasMany(indexName: "byCourier", fields: ["id"])
   orders: [Order] @hasMany(indexName: "byAssignedCourier", fields: ["id"])
@@ -419,6 +477,9 @@ type User @model @auth(rules: [{ allow: public }]) {
   lng: Float
   isBlocked: Boolean
   push_token: String
+
+  courierReviews: [CourierReview] @hasMany(indexName: "byUser", fields: ["id"])
+  courierReports: [CourierReport] @hasMany(indexName: "byUser", fields: ["id"])
   Orders: [Order] @hasMany(indexName: "byUser", fields: ["id"])
   payments: [Payment] @hasMany(indexName: "byUser", fields: ["id"])
 }
@@ -429,3 +490,29 @@ type User @model @auth(rules: [{ allow: public }]) {
 # Transaction - belongs to wallet
 # Payment - belongs to order + user
 # Order - has many payments
+
+# ---------------- PAYSTACK PAYMENT VERIFICATION ----------------
+
+type VerifyAtuaPaymentResult {
+  success: Boolean!
+  verified: Boolean
+  alreadyPaid: Boolean
+  message: String!
+  orderId: ID
+  deliveryVerificationCode: String
+  payment: VerifiedPaymentDetails
+}
+
+type VerifiedPaymentDetails {
+  reference: String
+  amount: Float
+  currency: String
+  status: String
+  channel: String
+  paidAt: AWSDateTime
+}
+
+type Mutation {
+  verifyAtuaPayment(orderId: ID!, reference: String!): VerifyAtuaPaymentResult
+    @function(name: "verifyAtuaPayment-${env}")
+}

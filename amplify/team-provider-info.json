@@ -43,7 +43,8 @@
         },
         "processPaymentAndWallet": {
           "deploymentBucketName": "amplify-atua-staging-19d66-deployment",
-          "s3Key": "amplify-builds/processPaymentAndWallet-6c776168626450372f31-build.zip"
+          "s3Key": "amplify-builds/processPaymentAndWallet-6c776168626450372f31-build.zip",
+          "paystackSecretKey": ""
         },
         "releaseFunds": {
           "deploymentBucketName": "amplify-atua-staging-19d66-deployment",
@@ -51,14 +52,26 @@
         },
         "processPayouts": {
           "deploymentBucketName": "amplify-atua-staging-19d66-deployment",
-          "s3Key": "amplify-builds/processPayouts-7541797a4d2f32437668-build.zip"
+          "s3Key": "amplify-builds/processPayouts-7541797a4d2f32437668-build.zip",
+          "paystackSecretKey": ""
+        },
+        "verifyAtuaPayment": {
+          "secretsPathAmplifyAppId": "d4d2e6dwzso4a",
+          "deploymentBucketName": "amplify-atua-staging-19d66-deployment",
+          "s3Key": "amplify-builds/verifyAtuaPayment-6e585050355a4a6d3572-build.zip"
+        },
+        "paystackWebhook": {
+          "secretsPathAmplifyAppId": "d4d2e6dwzso4a",
+          "deploymentBucketName": "amplify-atua-staging-19d66-deployment",
+          "s3Key": "amplify-builds/paystackWebhook-56657a62547a74497268-build.zip"
         }
       },
       "storage": {
         "atuaStorage": {}
       },
       "api": {
-        "Atua": {}
+        "Atua": {},
+        "atuaPaystackWebhookApi": {}
       }
     }
   }

@@ -1,14 +1,24 @@
+// I have to make a UI for rating the courier
+
 import { GOOGLE_API_KEY } from "@/keys";
 import { Courier, Offer, Order } from "@/src/models";
+
 import Ionicons from "@expo/vector-icons/Ionicons";
 import BottomSheet, { BottomSheetView } from "@gorhom/bottom-sheet";
+
 import { DataStore } from "aws-amplify/datastore";
 import { getUrl } from "aws-amplify/storage";
+
 import { router } from "expo-router";
+
 import { useEffect, useMemo, useRef, useState } from "react";
+
 import { ActivityIndicator, Animated, Image, Text, View } from "react-native";
+
 import MapView, { Marker, PROVIDER_GOOGLE } from "react-native-maps";
+
 import MapViewDirections from "react-native-maps-directions";
+
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import DefaultTrackingSheet from "./DefaultTrackingSheet";
@@ -17,199 +27,503 @@ import RetryUploadBanner from "./Maxi/RetryUploadBanner";
 
 import styles from "./styles";
 
+//==================================================
+// COORDINATE HELPERS
+//==================================================
+
+const toCoordinate = (value) => {
+  //-----------------------------------------
+  // Missing Value
+  //-----------------------------------------
+
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+
+  //-----------------------------------------
+  // Convert To Number
+  //-----------------------------------------
+
+  const number = Number(value);
+
+  if (!Number.isFinite(number)) {
+    return null;
+  }
+
+  return number;
+};
+
+//==================================================
+// VALIDATE COORDINATE
+//==================================================
+
+const isValidCoordinate = (latitude, longitude) => {
+  return (
+    Number.isFinite(latitude) &&
+    Number.isFinite(longitude) &&
+    latitude >= -90 &&
+    latitude <= 90 &&
+    longitude >= -180 &&
+    longitude <= 180
+  );
+};
+
+//==================================================
+// ORDER TRACKING SCREEN
+//==================================================
+
 const OrderTrackingScreen = ({ orderId }) => {
+  //-----------------------------------------
+  // Refs
+  //-----------------------------------------
+
   const bottomSheetRef = useRef(null);
+
   const mapRef = useRef(null);
+
+  //-----------------------------------------
+  // Courier Animated Coordinates
+  //-----------------------------------------
 
   const courierAnim = useRef({
     latitude: new Animated.Value(0),
+
     longitude: new Animated.Value(0),
   }).current;
 
+  //-----------------------------------------
+  // Bottom Sheet
+  //-----------------------------------------
+
   const snapPoints = useMemo(() => ["35%", "60%", "85%"], []);
 
+  //-----------------------------------------
+  // State
+  //-----------------------------------------
+
   const [order, setOrder] = useState(null);
+
   const [courier, setCourier] = useState(null);
+
   const [courierImageUrl, setCourierImageUrl] = useState(null);
 
-  const pulseAnim = useRef(new Animated.Value(1)).current;
-  const driverCardAnim = useRef(new Animated.Value(0)).current;
-
-  // Maxi states
   const [offers, setOffers] = useState([]);
 
-  /* ================= FETCH ORDER ================= */
+  //-----------------------------------------
+  // Animations
+  //-----------------------------------------
+
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+
+  const driverCardAnim = useRef(new Animated.Value(0)).current;
+
+  //================================================
+  // FETCH ORDER
+  //================================================
 
   useEffect(() => {
+    if (!orderId) {
+      return;
+    }
+
+    let subscription;
+
     const fetchOrder = async () => {
-      const data = await DataStore.query(Order, orderId);
-      setOrder(data);
+      try {
+        const data = await DataStore.query(Order, orderId);
+
+        if (!data) {
+          console.log("ORDER NOT FOUND:", orderId);
+
+          return;
+        }
+
+        setOrder(data);
+      } catch (error) {
+        console.log("FETCH ORDER ERROR:", error);
+      }
     };
+
+    //-------------------------------------
+    // Initial Fetch
+    //-------------------------------------
 
     fetchOrder();
 
-    const subscription = DataStore.observe(Order, orderId).subscribe((msg) => {
-      setOrder(msg.element);
+    //-------------------------------------
+    // Observe Order
+    //-------------------------------------
+
+    subscription = DataStore.observe(Order, orderId).subscribe({
+      next: (msg) => {
+        if (msg?.element) {
+          setOrder(msg.element);
+        }
+      },
+
+      error: (error) => {
+        console.log("ORDER SUBSCRIPTION ERROR:", error);
+      },
     });
 
-    return () => subscription.unsubscribe();
+    //-------------------------------------
+    // Cleanup
+    //-------------------------------------
+
+    return () => {
+      subscription?.unsubscribe();
+    };
   }, [orderId]);
 
-  /* ================= FETCH OFFER ================= */
+  //================================================
+  // FETCH OFFERS
+  //================================================
+
   useEffect(() => {
+    if (!orderId) {
+      return;
+    }
+
+    let subscription;
+
     const fetchOffers = async () => {
-      const result = await DataStore.query(Offer, (o) => o.orderID.eq(orderId));
+      try {
+        const result = await DataStore.query(Offer, (o) =>
+          o.orderID.eq(orderId),
+        );
 
-      // ✅ ONLY COURIER OFFERS (ignore USER initial offer)
-      const allOffers = result;
+        //---------------------------------
+        // Latest Offer Per Courier
+        //---------------------------------
 
-      // ✅ group by courier (latest per courier)
-      const latestByCourier = {};
+        const latestByCourier = {};
 
-      allOffers.forEach((offer) => {
-        if (!offer.courierID) return; // 👈 skip USER offers for grouping
+        result.forEach((offer) => {
+          //---------------------------------
+          // Ignore User Initial Offers
+          //---------------------------------
 
-        const existing = latestByCourier[offer.courierID];
-
-        if (
-          !existing ||
-          new Date(offer.createdAt) > new Date(existing.createdAt)
-        ) {
-          latestByCourier[offer.courierID] = offer;
-        }
-      });
-
-      const latestOffers = Object.values(latestByCourier);
-
-      const sorted = latestOffers.sort(
-        (a, b) => new Date(b.createdAt) - new Date(a.createdAt),
-      );
-
-      // ✅ attach courier data
-      const enriched = await Promise.all(
-        sorted.map(async (offer) => {
-          const courier = await DataStore.query(Courier, offer.courierID);
-
-          let imageUrl = null;
-
-          if (courier?.profilePic) {
-            try {
-              const result = await getUrl({
-                path: courier.profilePic,
-                options: {
-                  validateObjectExistence: true,
-                },
-              });
-
-              imageUrl = result.url.toString();
-            } catch (e) {
-              imageUrl = null;
-            }
+          if (!offer.courierID) {
+            return;
           }
 
-          return {
-            offer,
-            courier: {
-              ...courier,
-              imageUrl, // 👈 attach ready-to-use URL
-            },
-          };
-        }),
-      );
+          const existing = latestByCourier[offer.courierID];
 
-      setOffers(enriched);
+          if (
+            !existing ||
+            new Date(offer.createdAt) > new Date(existing.createdAt)
+          ) {
+            latestByCourier[offer.courierID] = offer;
+          }
+        });
+
+        //---------------------------------
+        // Convert To Array
+        //---------------------------------
+
+        const latestOffers = Object.values(latestByCourier);
+
+        //---------------------------------
+        // Sort Newest First
+        //---------------------------------
+
+        const sorted = latestOffers.sort(
+          (a, b) => new Date(b.createdAt) - new Date(a.createdAt),
+        );
+
+        //---------------------------------
+        // Attach Courier Information
+        //---------------------------------
+
+        const enriched = await Promise.all(
+          sorted.map(async (offer) => {
+            const offerCourier = await DataStore.query(
+              Courier,
+              offer.courierID,
+            );
+
+            let imageUrl = null;
+
+            //---------------------------------
+            // Courier Image
+            //---------------------------------
+
+            if (offerCourier?.profilePic) {
+              try {
+                const imageResult = await getUrl({
+                  path: offerCourier.profilePic,
+
+                  options: {
+                    validateObjectExistence: true,
+                  },
+                });
+
+                imageUrl = imageResult.url.toString();
+              } catch (error) {
+                console.log("OFFER COURIER IMAGE ERROR:", error);
+
+                imageUrl = null;
+              }
+            }
+
+            return {
+              offer,
+
+              courier: {
+                ...offerCourier,
+                imageUrl,
+              },
+            };
+          }),
+        );
+
+        setOffers(enriched);
+      } catch (error) {
+        console.log("FETCH OFFERS ERROR:", error);
+      }
     };
+
+    //-------------------------------------
+    // Initial Fetch
+    //-------------------------------------
 
     fetchOffers();
 
-    const sub = DataStore.observe(Offer).subscribe((msg) => {
-      if (msg.element.orderID === orderId) {
-        fetchOffers();
-      }
+    //-------------------------------------
+    // Observe Offers
+    //-------------------------------------
+
+    subscription = DataStore.observe(Offer).subscribe({
+      next: (msg) => {
+        if (msg?.element?.orderID === orderId) {
+          fetchOffers();
+        }
+      },
+
+      error: (error) => {
+        console.log("OFFER SUBSCRIPTION ERROR:", error);
+      },
     });
 
-    return () => sub.unsubscribe();
+    //-------------------------------------
+    // Cleanup
+    //-------------------------------------
+
+    return () => {
+      subscription?.unsubscribe();
+    };
   }, [orderId]);
 
-  /* ================= FETCH COURIER ================= */
+  //================================================
+  // FETCH ASSIGNED COURIER
+  //================================================
 
   useEffect(() => {
-    if (!order?.assignedCourierId) return;
+    //-------------------------------------
+    // No Courier Yet
+    //-------------------------------------
+
+    if (!order?.assignedCourierId) {
+      setCourier(null);
+      setCourierImageUrl(null);
+
+      return;
+    }
 
     let subscription;
 
     const fetchCourier = async () => {
-      const data = await DataStore.query(Courier, order.assignedCourierId);
-      setCourier(data);
+      try {
+        const data = await DataStore.query(Courier, order.assignedCourierId);
+
+        setCourier(data || null);
+      } catch (error) {
+        console.log("FETCH COURIER ERROR:", error);
+      }
     };
 
+    //-------------------------------------
+    // Initial Fetch
+    //-------------------------------------
+
     fetchCourier();
+
+    //-------------------------------------
+    // Observe Courier
+    //-------------------------------------
 
     subscription = DataStore.observe(
       Courier,
       order.assignedCourierId,
-    ).subscribe((msg) => {
-      setCourier(msg.element);
+    ).subscribe({
+      next: (msg) => {
+        if (msg?.element) {
+          setCourier(msg.element);
+        }
+      },
+
+      error: (error) => {
+        console.log("COURIER SUBSCRIPTION ERROR:", error);
+      },
     });
 
+    //-------------------------------------
+    // Cleanup
+    //-------------------------------------
+
     return () => {
-      if (subscription) subscription.unsubscribe();
+      subscription?.unsubscribe();
     };
   }, [order?.assignedCourierId]);
 
+  //================================================
   // FETCH COURIER PROFILE IMAGE
+  //================================================
+
   useEffect(() => {
+    let active = true;
+
     const fetchCourierImage = async () => {
+      //---------------------------------
+      // No Profile Image
+      //---------------------------------
+
       if (!courier?.profilePic) {
-        setCourierImageUrl(null);
+        if (active) {
+          setCourierImageUrl(null);
+        }
+
         return;
       }
+
+      //---------------------------------
+      // Get S3 URL
+      //---------------------------------
 
       try {
         const result = await getUrl({
           path: courier.profilePic,
-          options: { validateObjectExistence: true },
+
+          options: {
+            validateObjectExistence: true,
+          },
         });
 
-        setCourierImageUrl(result.url.toString());
-      } catch (e) {
-        setCourierImageUrl(null);
+        if (active) {
+          setCourierImageUrl(result.url.toString());
+        }
+      } catch (error) {
+        console.log("COURIER IMAGE ERROR:", error);
+
+        if (active) {
+          setCourierImageUrl(null);
+        }
       }
     };
 
     fetchCourierImage();
+
+    //-------------------------------------
+    // Cleanup
+    //-------------------------------------
+
+    return () => {
+      active = false;
+    };
   }, [courier?.profilePic]);
 
+  //================================================
+  // SET INITIAL COURIER LOCATION
+  //================================================
+
   useEffect(() => {
-    if (!courier?.lat || !courier?.lng) return;
+    //-------------------------------------
+    // Convert Coordinates
+    //-------------------------------------
+
+    const courierLat = toCoordinate(courier?.lat);
+
+    const courierLng = toCoordinate(courier?.lng);
+
+    //-------------------------------------
+    // Validate
+    //-------------------------------------
+
+    if (!isValidCoordinate(courierLat, courierLng)) {
+      return;
+    }
+
+    //-------------------------------------
+    // Set Immediately
+    //-------------------------------------
+
+    courierAnim.latitude.setValue(courierLat);
+
+    courierAnim.longitude.setValue(courierLng);
+  }, [courier?.id, courierAnim]);
+
+  //================================================
+  // ANIMATE COURIER LOCATION
+  //================================================
+
+  useEffect(() => {
+    //-------------------------------------
+    // Convert Coordinates
+    //-------------------------------------
+
+    const courierLat = toCoordinate(courier?.lat);
+
+    const courierLng = toCoordinate(courier?.lng);
+
+    //-------------------------------------
+    // Validate
+    //-------------------------------------
+
+    if (!isValidCoordinate(courierLat, courierLng)) {
+      return;
+    }
+
+    //-------------------------------------
+    // Animate Marker
+    //-------------------------------------
 
     Animated.parallel([
       Animated.timing(courierAnim.latitude, {
-        toValue: courier.lat,
+        toValue: courierLat,
+
         duration: 500,
+
         useNativeDriver: false,
       }),
+
       Animated.timing(courierAnim.longitude, {
-        toValue: courier.lng,
+        toValue: courierLng,
+
         duration: 500,
+
         useNativeDriver: false,
       }),
     ]).start();
-  }, [courier?.lat, courier?.lng]);
+  }, [courier?.lat, courier?.lng, courierAnim]);
+
+  //================================================
+  // SEARCH PULSE
+  //================================================
 
   useEffect(() => {
-    if (!courier?.lat || !courier?.lng) return;
+    //-------------------------------------
+    // Only Pulse While Searching/Bidding
+    //-------------------------------------
 
-    // ✅ FIRST TIME: set immediately (no animation jump)
-    courierAnim.latitude.setValue(courier.lat);
-    courierAnim.longitude.setValue(courier.lng);
-  }, [courier?.id]); // only when courier first appears
+    if (order?.status !== "READY_FOR_PICKUP" && order?.status !== "BIDDING") {
+      pulseAnim.setValue(1);
 
-  /* ================= SEARCH PULSE ================= */
-
-  useEffect(() => {
-    if (order?.status !== "READY_FOR_PICKUP" && order?.status !== "BIDDING")
       return;
+    }
+
+    //-------------------------------------
+    // Animation
+    //-------------------------------------
 
     const animation = Animated.loop(
       Animated.sequence([
@@ -218,6 +532,7 @@ const OrderTrackingScreen = ({ orderId }) => {
           duration: 500,
           useNativeDriver: true,
         }),
+
         Animated.timing(pulseAnim, {
           toValue: 1,
           duration: 500,
@@ -228,156 +543,498 @@ const OrderTrackingScreen = ({ orderId }) => {
 
     animation.start();
 
-    return () => animation.stop();
-  }, [order?.status]);
+    //-------------------------------------
+    // Cleanup
+    //-------------------------------------
 
-  /* ================= DRIVER ACCEPTED ANIMATION ================= */
+    return () => {
+      animation.stop();
+    };
+  }, [order?.status, pulseAnim]);
+
+  //================================================
+  // DRIVER ACCEPTED ANIMATION
+  //================================================
 
   useEffect(() => {
-    if (order?.status === "ACCEPTED" && courier?.lat && courier?.lng) {
-      // 1️⃣ Animate driver card
-      Animated.spring(driverCardAnim, {
-        toValue: 1,
-        useNativeDriver: true,
-      }).start();
+    //-------------------------------------
+    // Only When Accepted
+    //-------------------------------------
 
-      // 2️⃣ Expand bottom sheet
-      bottomSheetRef.current?.expand();
-
-      // 3️⃣ Animate map zoom
-      mapRef.current?.animateToRegion(
-        {
-          latitude: courier.lat,
-          longitude: courier.lng,
-          latitudeDelta: 0.02,
-          longitudeDelta: 0.02,
-        },
-        1000,
-      );
+    if (order?.status !== "ACCEPTED") {
+      return;
     }
-  }, [order?.status, courier]);
 
-  /* ================= USEEFFECT TO CLEAR LIVE ORDER BADGE================= */
+    //-------------------------------------
+    // Convert Courier Coordinates
+    //-------------------------------------
+
+    const courierLat = toCoordinate(courier?.lat);
+
+    const courierLng = toCoordinate(courier?.lng);
+
+    //-------------------------------------
+    // Validate
+    //-------------------------------------
+
+    if (!isValidCoordinate(courierLat, courierLng)) {
+      return;
+    }
+
+    //-------------------------------------
+    // Animate Driver Card
+    //-------------------------------------
+
+    Animated.spring(driverCardAnim, {
+      toValue: 1,
+
+      useNativeDriver: true,
+    }).start();
+
+    //-------------------------------------
+    // Expand Bottom Sheet
+    //-------------------------------------
+
+    bottomSheetRef.current?.expand();
+
+    //-------------------------------------
+    // Move Map To Courier
+    //-------------------------------------
+
+    mapRef.current?.animateToRegion(
+      {
+        latitude: courierLat,
+
+        longitude: courierLng,
+
+        latitudeDelta: 0.02,
+
+        longitudeDelta: 0.02,
+      },
+
+      1000,
+    );
+  }, [order?.status, courier?.lat, courier?.lng, driverCardAnim]);
+
+  //================================================
+  // CLEAR LIVE ORDER BADGE
+  //================================================
+
   useEffect(() => {
-    if (!order) return;
+    if (!order) {
+      return;
+    }
 
-    if (order.hasNewOffer && order.lastOfferSenderType === "COURIER") {
-      const timer = setTimeout(async () => {
+    if (!order.hasNewOffer || order.lastOfferSenderType !== "COURIER") {
+      return;
+    }
+
+    //-------------------------------------
+    // Clear Badge After Delay
+    //-------------------------------------
+
+    const timer = setTimeout(async () => {
+      try {
         const latestOrder = await DataStore.query(Order, order.id);
 
+        if (!latestOrder) {
+          return;
+        }
+
         await DataStore.save(
-          Order.copyOf(latestOrder, (updated) => {
-            updated.hasNewOffer = false;
-          }),
+          Order.copyOf(
+            latestOrder,
+
+            (updated) => {
+              updated.hasNewOffer = false;
+            },
+          ),
         );
-      }, 1500);
+      } catch (error) {
+        console.log("CLEAR OFFER BADGE ERROR:", error);
+      }
+    }, 1500);
 
-      return () => clearTimeout(timer);
-    }
-  }, [order?.id, order?.hasNewOffer]);
+    //-------------------------------------
+    // Cleanup
+    //-------------------------------------
 
-  /* ================= LOADING ================= */
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [order?.id, order?.hasNewOffer, order?.lastOfferSenderType]);
+
+  //================================================
+  // LOADING ORDER
+  //================================================
 
   if (!order) {
     return (
       <View style={styles.loader}>
         <ActivityIndicator size="large" />
+
+        <Text>Loading order...</Text>
       </View>
     );
   }
 
-  const origin = {
-    latitude: order.originLat,
-    longitude: order.originLng,
-  };
+  //================================================
+  // ORDER COORDINATES
+  //================================================
 
-  const destination = {
-    latitude: order.destinationLat,
-    longitude: order.destinationLng,
-  };
+  const originLatitude = toCoordinate(order.originLat);
 
-  // Condition to start bidding
+  const originLongitude = toCoordinate(order.originLng);
 
-  // I have removed this (uploadFinished) as a condition for canStartBidding
-  const uploadFinished =
-    !order.mediaUploadStatus || order.mediaUploadStatus === "COMPLETE";
+  const destinationLatitude = toCoordinate(order.destinationLat);
+
+  const destinationLongitude = toCoordinate(order.destinationLng);
+
+  //-----------------------------------------
+  // Validate Origin
+  //-----------------------------------------
+
+  const hasValidOrigin = isValidCoordinate(originLatitude, originLongitude);
+
+  //-----------------------------------------
+  // Validate Destination
+  //-----------------------------------------
+
+  const hasValidDestination = isValidCoordinate(
+    destinationLatitude,
+    destinationLongitude,
+  );
+
+  //-----------------------------------------
+  // Build Origin
+  //-----------------------------------------
+
+  const origin = hasValidOrigin
+    ? {
+        latitude: originLatitude,
+
+        longitude: originLongitude,
+      }
+    : null;
+
+  //-----------------------------------------
+  // Build Destination
+  //-----------------------------------------
+
+  const destination = hasValidDestination
+    ? {
+        latitude: destinationLatitude,
+
+        longitude: destinationLongitude,
+      }
+    : null;
+
+  //-----------------------------------------
+  // Can Render Map
+  //-----------------------------------------
+
+  const canRenderMap = Boolean(origin && destination);
+
+  //================================================
+  // COURIER COORDINATES
+  //================================================
+
+  const courierLatitude = toCoordinate(courier?.lat);
+
+  const courierLongitude = toCoordinate(courier?.lng);
+
+  const hasValidCourierLocation = isValidCoordinate(
+    courierLatitude,
+    courierLongitude,
+  );
+
+  //================================================
+  // MAXI CONDITIONS
+  //================================================
 
   const canStartBidding = order.transportationType === "MAXI";
 
-  /* ================= UI ================= */
+  //================================================
+  // ACCEPT MAXI OFFER
+  //================================================
+
+  const handleAcceptOffer = async (offer) => {
+    //-------------------------------------
+    // Already Accepted
+    //-------------------------------------
+
+    if (order.status === "ACCEPTED") {
+      return;
+    }
+
+    //-------------------------------------
+    // Must Be Courier Offer
+    //-------------------------------------
+
+    if (offer.senderType !== "COURIER") {
+      return;
+    }
+
+    //-------------------------------------
+    // Save
+    //-------------------------------------
+
+    try {
+      //---------------------------------
+      // Get Latest Order
+      //---------------------------------
+
+      const latestOrder = await DataStore.query(Order, order.id);
+
+      if (!latestOrder) {
+        return;
+      }
+
+      //---------------------------------
+      // Update Order
+      //---------------------------------
+
+      await DataStore.save(
+        Order.copyOf(
+          latestOrder,
+
+          (updated) => {
+            updated.status = "ACCEPTED";
+
+            updated.totalPrice = offer.amount;
+
+            updated.acceptedOfferID = offer.id;
+
+            updated.assignedCourierId = offer.courierID;
+
+            updated.hasNewOffer = false;
+          },
+        ),
+      );
+
+      //---------------------------------
+      // Get Latest Offer
+      //---------------------------------
+
+      const latestOffer = await DataStore.query(Offer, offer.id);
+
+      if (latestOffer) {
+        //---------------------------------
+        // Update Offer
+        //---------------------------------
+
+        await DataStore.save(
+          Offer.copyOf(
+            latestOffer,
+
+            (updated) => {
+              updated.status = "ACCEPTED";
+            },
+          ),
+        );
+      }
+    } catch (error) {
+      console.log("ACCEPT OFFER ERROR:", error);
+    }
+  };
+
+  //================================================
+  // COUNTER MAXI OFFER
+  //================================================
+
+  const handleCounterOffer = async (offer) => {
+    try {
+      //-------------------------------------
+      // Create User Counter Offer
+      //-------------------------------------
+
+      await DataStore.save(
+        new Offer({
+          orderID: order.id,
+
+          courierID: offer.courierID,
+
+          senderType: "USER",
+
+          amount: offer.amount,
+
+          status: "ACTIVE",
+        }),
+      );
+
+      //-------------------------------------
+      // Get Latest Order
+      //-------------------------------------
+
+      const latestOrder = await DataStore.query(Order, order.id);
+
+      if (!latestOrder) {
+        return;
+      }
+
+      //-------------------------------------
+      // Notify Courier
+      //-------------------------------------
+
+      await DataStore.save(
+        Order.copyOf(
+          latestOrder,
+
+          (updated) => {
+            updated.hasNewOffer = true;
+
+            updated.lastOfferAt = new Date().toISOString();
+
+            updated.lastOfferSenderType = "USER";
+          },
+        ),
+      );
+    } catch (error) {
+      console.log("COUNTER OFFER ERROR:", error);
+    }
+  };
+
+  //================================================
+  // UI
+  //================================================
 
   return (
-    // Normally I would have wrapped this in a GestureHandlerRootView here, but instead I wrapped my whole project in the root (where AuthProvider, OrderProvider etc are), so I can just use BottomSheet
     <SafeAreaView style={styles.container}>
-      <MapView
-        ref={mapRef}
-        style={styles.map}
-        provider={PROVIDER_GOOGLE}
-        initialRegion={{
-          ...origin,
-          latitudeDelta: 0.05,
-          longitudeDelta: 0.05,
-        }}
-      >
-        <MapViewDirections
-          origin={origin}
-          destination={destination}
-          apikey={GOOGLE_API_KEY}
-          strokeWidth={4}
-          strokeColor="red"
-        />
+      {/* =====================================
+          MAP
+      ===================================== */}
 
-        {/* Pickup Marker */}
-        <Marker
-          coordinate={origin}
-          anchor={{ x: 0.5, y: 0.5 }}
-          tracksViewChanges={true}
+      {canRenderMap ? (
+        <MapView
+          ref={mapRef}
+          style={styles.map}
+          provider={PROVIDER_GOOGLE}
+          initialRegion={{
+            latitude: origin.latitude,
+
+            longitude: origin.longitude,
+
+            latitudeDelta: 0.05,
+
+            longitudeDelta: 0.05,
+          }}
         >
-          {order.status === "READY_FOR_PICKUP" || order.status === "BIDDING" ? (
-            <View style={{ height: "120", width: "120" }}>
-              <Animated.View
-                style={[
-                  styles.pulseRing,
-                  {
-                    transform: [{ scale: pulseAnim }],
-                    opacity: pulseAnim.interpolate({
-                      inputRange: [1, 1.4],
-                      outputRange: [0.6, 0],
-                    }),
-                  },
-                ]}
-              />
-              <View style={styles.pulseCore} />
-            </View>
-          ) : (
-            <Ionicons name="ellipse" size={18} color="green" />
-          )}
-        </Marker>
+          {/* =================================
+              ROUTE
+          ================================= */}
 
-        {/* Destination Marker */}
-        <Marker coordinate={destination} anchor={{ x: 0.5, y: 0.5 }}>
-          <Ionicons name="location" size={22} color="red" />
-        </Marker>
+          <MapViewDirections
+            origin={origin}
+            destination={destination}
+            apikey={GOOGLE_API_KEY}
+            strokeWidth={4}
+            strokeColor="red"
+            onError={(error) => {
+              console.log("MAP DIRECTIONS ERROR:", error);
+            }}
+          />
 
-        {/* Courier Marker */}
-        {courier?.lat && courier?.lng && (
-          <Marker.Animated
-            coordinate={{
-              latitude: courierAnim.latitude,
-              longitude: courierAnim.longitude,
+          {/* =================================
+              PICKUP MARKER
+          ================================= */}
+
+          <Marker
+            coordinate={origin}
+            anchor={{
+              x: 0.5,
+              y: 0.5,
+            }}
+            tracksViewChanges={true}
+          >
+            {order.status === "READY_FOR_PICKUP" ||
+            order.status === "BIDDING" ? (
+              <View
+                style={{
+                  height: 120,
+                  width: 120,
+                }}
+              >
+                <Animated.View
+                  style={[
+                    styles.pulseRing,
+
+                    {
+                      transform: [
+                        {
+                          scale: pulseAnim,
+                        },
+                      ],
+
+                      opacity: pulseAnim.interpolate({
+                        inputRange: [1, 1.4],
+
+                        outputRange: [0.6, 0],
+                      }),
+                    },
+                  ]}
+                />
+
+                <View style={styles.pulseCore} />
+              </View>
+            ) : (
+              <Ionicons name="ellipse" size={18} color="green" />
+            )}
+          </Marker>
+
+          {/* =================================
+              DESTINATION MARKER
+          ================================= */}
+
+          <Marker
+            coordinate={destination}
+            anchor={{
+              x: 0.5,
+              y: 0.5,
             }}
           >
-            <Image
-              source={
-                courierImageUrl
-                  ? { uri: courierImageUrl }
-                  : require("../../assets/images/placeholder.png")
-              }
-              style={styles.courierAvatar}
-            />
-          </Marker.Animated>
-        )}
-      </MapView>
+            <Ionicons name="location" size={22} color="red" />
+          </Marker>
+
+          {/* =================================
+              COURIER MARKER
+          ================================= */}
+
+          {hasValidCourierLocation && (
+            <Marker.Animated
+              coordinate={{
+                latitude: courierAnim.latitude,
+
+                longitude: courierAnim.longitude,
+              }}
+            >
+              <Image
+                source={
+                  courierImageUrl
+                    ? {
+                        uri: courierImageUrl,
+                      }
+                    : require("../../assets/images/placeholder.png")
+                }
+                style={styles.courierAvatar}
+              />
+            </Marker.Animated>
+          )}
+        </MapView>
+      ) : (
+        /* =====================================
+           INVALID / MISSING MAP COORDINATES
+        ===================================== */
+
+        <View style={styles.loader}>
+          <ActivityIndicator size="large" />
+
+          <Text>Loading delivery map...</Text>
+        </View>
+      )}
+
+      {/* =====================================
+          BOTTOM SHEET
+      ===================================== */}
 
       <BottomSheet
         ref={bottomSheetRef}
@@ -388,16 +1045,29 @@ const OrderTrackingScreen = ({ orderId }) => {
         keyboardBlurBehavior="restore"
       >
         <BottomSheetView>
+          {/* =================================
+              FAILED MEDIA UPLOAD
+          ================================= */}
+
           {order.mediaUploadStatus === "FAILED" && (
             <RetryUploadBanner order={order} />
           )}
 
+          {/* =================================
+              MEDIA UPLOADING
+          ================================= */}
+
           {order.mediaUploadStatus === "UPLOADING" && (
             <View style={styles.uploadContainer}>
               <ActivityIndicator size="small" color="#2E7D32" />
+
               <Text style={styles.uploadText}>Uploading package images...</Text>
             </View>
           )}
+
+          {/* =================================
+              MAXI BIDDING
+          ================================= */}
 
           {canStartBidding && order.status === "BIDDING" ? (
             <MaxiBiddingSheet
@@ -405,60 +1075,15 @@ const OrderTrackingScreen = ({ orderId }) => {
               offers={offers}
               expiresAt={order.offerExpiresAt}
               bottomSheetRef={bottomSheetRef}
-              onAcceptOffer={async (offer) => {
-                if (order.status === "ACCEPTED") return;
-
-                if (offer.senderType !== "COURIER") return;
-
-                try {
-                  await DataStore.save(
-                    Order.copyOf(order, (updated) => {
-                      updated.status = "ACCEPTED";
-                      updated.totalPrice = offer.amount;
-                      updated.acceptedOfferID = offer.id;
-                      updated.assignedCourierId = offer.courierID;
-                      updated.hasNewOffer = false;
-                    }),
-                  );
-
-                  await DataStore.save(
-                    Offer.copyOf(offer, (updated) => {
-                      updated.status = "ACCEPTED";
-                    }),
-                  );
-                } catch (e) {
-                  console.log(e);
-                }
-              }}
-              onCounterOffer={async (offer) => {
-                try {
-                  await DataStore.save(
-                    new Offer({
-                      orderID: order.id,
-                      courierID: offer.courierID,
-                      senderType: "USER",
-                      amount: offer.amount,
-                      status: "ACTIVE",
-                    }),
-                  );
-
-                  // ✅ Notify courier
-                  const latestOrder = await DataStore.query(Order, order.id);
-
-                  await DataStore.save(
-                    Order.copyOf(latestOrder, (updated) => {
-                      updated.hasNewOffer = true;
-                      updated.lastOfferAt = new Date().toISOString();
-                      updated.lastOfferSenderType = "USER";
-                    }),
-                  );
-                } catch (e) {
-                  console.log(e);
-                }
-              }}
+              onAcceptOffer={handleAcceptOffer}
+              onCounterOffer={handleCounterOffer}
               onCancel={() => router.back()}
             />
           ) : (
+            /* =================================
+               NORMAL TRACKING
+            ================================= */
+
             <DefaultTrackingSheet
               order={order}
               courier={courier}

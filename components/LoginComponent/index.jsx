@@ -1,3 +1,4 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { fetchAuthSession, signIn, signOut } from "aws-amplify/auth";
 import { router } from "expo-router";
 import { useState } from "react";
@@ -28,14 +29,47 @@ const SignIn = () => {
     setLoading(true);
 
     try {
-      const { isSignedIn } = await signIn({
+      const result = await signIn({
         username: data.email,
         password: data.password,
       });
 
+      const { isSignedIn, nextStep } = result;
+
+      if (!isSignedIn) {
+        if (nextStep?.signInStep === "CONFIRM_SIGN_UP") {
+          await AsyncStorage.setItem(
+            "pendingVerificationEmail",
+            data.email.toLowerCase(),
+          );
+
+          Alert.alert(
+            "Email Not Verified",
+            "Please verify your email before signing in.",
+            [
+              {
+                text: "OK",
+                onPress: () =>
+                  router.push({
+                    pathname: "/login/confirmemail",
+                    params: {
+                      username: data.email,
+                    },
+                  }),
+              },
+            ],
+          );
+
+          return;
+        }
+      }
+
       if (isSignedIn) {
         const session = await fetchAuthSession();
         const accessToken = session.tokens?.accessToken?.toString();
+
+        if (!accessToken) throw new Error("Unable to fetch access token");
+
         const payload = JSON.parse(atob(accessToken.split(".")[1]));
         const userGroups = payload["cognito:groups"] || [];
         const userRole = payload["custom:role"] || "";
@@ -50,10 +84,10 @@ const SignIn = () => {
         }
       }
     } catch (error) {
-      Alert.alert("Sign In Failed", error.message);
+      Alert.alert("Sign In Failed", error.message || "Something went wrong.");
+    } finally {
+      setLoading(false);
     }
-
-    setLoading(false);
   };
 
   return (

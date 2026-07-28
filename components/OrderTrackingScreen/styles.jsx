@@ -12,6 +12,12 @@ export default StyleSheet.create({
     flex: 1,
   },
 
+  markerImage: {
+    width: 40,
+    height: 50,
+    resizeMode: "contain",
+  },
+
   loader: {
     flex: 1,
     justifyContent: "center",

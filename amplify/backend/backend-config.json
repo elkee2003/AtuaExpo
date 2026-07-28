@@ -11,8 +11,9 @@
           ],
           "defaultAuthentication": {
             "apiKeyConfig": {
-              "apiKeyExpirationDays": 30,
-              "description": "api key description"
+              "apiKeyExpirationDate": "2027-06-11T07:16:26.610Z",
+              "apiKeyExpirationDays": 365,
+              "description": "2026/2027 API Key"
             },
             "authenticationType": "API_KEY"
           }
@@ -20,6 +21,20 @@
       },
       "providerPlugin": "awscloudformation",
       "service": "AppSync"
+    },
+    "atuaPaystackWebhookApi": {
+      "dependsOn": [
+        {
+          "attributes": [
+            "Name",
+            "Arn"
+          ],
+          "category": "function",
+          "resourceName": "paystackWebhook"
+        }
+      ],
+      "providerPlugin": "awscloudformation",
+      "service": "API Gateway"
     }
   },
   "auth": {
@@ -95,6 +110,22 @@
       "service": "Lambda"
     },
     "forceDispatch": {
+      "build": true,
+      "dependsOn": [
+        {
+          "attributes": [
+            "GraphQLAPIIdOutput",
+            "GraphQLAPIEndpointOutput",
+            "GraphQLAPIKeyOutput"
+          ],
+          "category": "api",
+          "resourceName": "Atua"
+        }
+      ],
+      "providerPlugin": "awscloudformation",
+      "service": "Lambda"
+    },
+    "paystackWebhook": {
       "build": true,
       "dependsOn": [
         {
@@ -189,6 +220,22 @@
       ],
       "providerPlugin": "awscloudformation",
       "service": "Lambda"
+    },
+    "verifyAtuaPayment": {
+      "build": true,
+      "dependsOn": [
+        {
+          "attributes": [
+            "GraphQLAPIIdOutput",
+            "GraphQLAPIEndpointOutput",
+            "GraphQLAPIKeyOutput"
+          ],
+          "category": "api",
+          "resourceName": "Atua"
+        }
+      ],
+      "providerPlugin": "awscloudformation",
+      "service": "Lambda"
     }
   },
   "parameters": {
@@ -256,7 +303,39 @@
         }
       ]
     },
+    "AMPLIFY_function_paystackWebhook_deploymentBucketName": {
+      "usedBy": [
+        {
+          "category": "function",
+          "resourceName": "paystackWebhook"
+        }
+      ]
+    },
+    "AMPLIFY_function_paystackWebhook_s3Key": {
+      "usedBy": [
+        {
+          "category": "function",
+          "resourceName": "paystackWebhook"
+        }
+      ]
+    },
+    "AMPLIFY_function_paystackWebhook_secretsPathAmplifyAppId": {
+      "usedBy": [
+        {
+          "category": "function",
+          "resourceName": "paystackWebhook"
+        }
+      ]
+    },
     "AMPLIFY_function_processPaymentAndWallet_deploymentBucketName": {
+      "usedBy": [
+        {
+          "category": "function",
+          "resourceName": "processPaymentAndWallet"
+        }
+      ]
+    },
+    "AMPLIFY_function_processPaymentAndWallet_paystackSecretKey": {
       "usedBy": [
         {
           "category": "function",
@@ -273,6 +352,14 @@
       ]
     },
     "AMPLIFY_function_processPayouts_deploymentBucketName": {
+      "usedBy": [
+        {
+          "category": "function",
+          "resourceName": "processPayouts"
+        }
+      ]
+    },
+    "AMPLIFY_function_processPayouts_paystackSecretKey": {
       "usedBy": [
         {
           "category": "function",
@@ -333,6 +420,30 @@
         {
           "category": "function",
           "resourceName": "resetCourierIfIdle"
+        }
+      ]
+    },
+    "AMPLIFY_function_verifyAtuaPayment_deploymentBucketName": {
+      "usedBy": [
+        {
+          "category": "function",
+          "resourceName": "verifyAtuaPayment"
+        }
+      ]
+    },
+    "AMPLIFY_function_verifyAtuaPayment_s3Key": {
+      "usedBy": [
+        {
+          "category": "function",
+          "resourceName": "verifyAtuaPayment"
+        }
+      ]
+    },
+    "AMPLIFY_function_verifyAtuaPayment_secretsPathAmplifyAppId": {
+      "usedBy": [
+        {
+          "category": "function",
+          "resourceName": "verifyAtuaPayment"
         }
       ]
     }

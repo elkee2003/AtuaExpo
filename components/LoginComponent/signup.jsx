@@ -1,15 +1,16 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { signUp } from "aws-amplify/auth";
 import Checkbox from "expo-checkbox";
 import { router } from "expo-router";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import {
-    Alert,
-    KeyboardAvoidingView,
-    Platform,
-    ScrollView,
-    Text,
-    View,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  Text,
+  View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -24,6 +25,8 @@ const SignUp = () => {
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
   const [isConfirmVisible, setIsConfirmVisible] = useState(false);
 
+  const role = "user";
+
   const onSignUp = async (data) => {
     if (!agree) {
       Alert.alert("Please agree to terms.");
@@ -33,27 +36,31 @@ const SignUp = () => {
     setLoading(true);
 
     try {
+      const email = data.email.trim().toLowerCase();
       await signUp({
-        username: data.email,
+        username: email,
         password: data.password,
         options: {
           userAttributes: {
-            email: data.email,
-            "custom:role": "user",
+            email: email,
+            "custom:role": role,
           },
           autoSignIn: true,
         },
       });
 
+      // Save email locally
+      await AsyncStorage.setItem("pendingVerificationEmail", email);
+
       router.push({
         pathname: "/login/confirmemail",
-        params: { username: data.email },
+        params: { username: email },
       });
     } catch (error) {
       Alert.alert("Sign Up Failed", error.message);
+    } finally {
+      setLoading(false);
     }
-
-    setLoading(false);
   };
 
   return (
@@ -75,7 +82,14 @@ const SignUp = () => {
               name="email"
               label="Email"
               placeholder="Enter your email"
-              rules={{ required: "Email is required" }}
+              rules={{
+                required: "Email is required",
+                // I commented it out because with the format of.trim(), it will automatically remove the white space
+                // pattern: {
+                //   value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
+                //   message: "Enter a valid email",
+                // },
+              }}
             />
 
             <CustomInput
@@ -138,3 +152,10 @@ const SignUp = () => {
 };
 
 export default SignUp;
+
+// Thanks to the async storage:
+// User signs up → email saved.
+// User leaves app → email still saved.
+// Android kills app → email still saved.
+// User comes back → verification screen still knows the email.
+// User tries signing in before verifying → app sends them straight back to the verification screen without losing the email.

@@ -39,6 +39,25 @@ const styles = StyleSheet.create({
     lineHeight: 22,
   },
 
+  emailTip: {
+    marginTop: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: "#F3F4F6",
+    fontSize: 13,
+    lineHeight: 18,
+    color: "#4B5563",
+    textAlign: "center",
+  },
+
+  verificationHelpText: {
+    marginTop: 10,
+    textAlign: "center",
+    color: "#6B7280",
+    fontSize: 13,
+  },
+
   bold: {
     fontWeight: "600",
     color: "#111827",

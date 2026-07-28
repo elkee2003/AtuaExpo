@@ -1,3 +1,4 @@
+import { TRANSPORT_TYPES } from "@/constants/transportTypes";
 import { useLocationContext } from "@/providers/LocationProvider";
 import { Courier } from "@/src/models";
 import FontAwesome6 from "@expo/vector-icons/FontAwesome6";
@@ -42,19 +43,25 @@ const ResultMap = () => {
   };
 
   const getImage = (type) => {
-    if (type === "Micro") {
-      return require("../../../assets/atuaImages/Bicycle.png");
+    switch (type) {
+      case TRANSPORT_TYPES.MICRO_EXPRESS:
+        return require("../../../assets/atuaImages/AtuaMicroX.png");
+
+      case TRANSPORT_TYPES.MICRO_BATCH:
+        return require("../../../assets/atuaImages/AtuaMicroBatch.png");
+
+      case TRANSPORT_TYPES.MOTO_EXPRESS:
+        return require("../../../assets/atuaImages/AtuaMotoX.png");
+
+      case TRANSPORT_TYPES.MOTO_BATCH:
+        return require("../../../assets/atuaImages/AtuaMotoBatch.png");
+
+      case TRANSPORT_TYPES.MAXI:
+        return require("../../../assets/atuaImages/AtuaMaxi.png");
+
+      default:
+        return require("../../../assets/atuaImages/AtuaMicroBatch.png");
     }
-    if (type === "Moto") {
-      return require("../../../assets/atuaImages/Bike.jpg");
-    }
-    if (type === "Maxi") {
-      return require("../../../assets/atuaImages/top-UberXL.png");
-    }
-    // if (type === "Maxi") {
-    //   return require("../../../assets/atuaImages/Deliverybicycle.png");
-    // }
-    return require("../../../assets/atuaImages/Walk.png");
   };
 
   const onDirectionReady = (result) => {
@@ -184,7 +191,7 @@ const ResultMap = () => {
               coordinate={{ latitude: courier?.lat, longitude: courier?.lng }}
             >
               <Image
-                style={{ width: 50, height: 70, resizeMode: "contain" }}
+                style={styles.markerImage}
                 source={getImage(courier.transportationType)}
               />
             </Marker>

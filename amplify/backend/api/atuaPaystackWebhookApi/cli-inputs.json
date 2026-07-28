@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "paths": {
+    "/paystack-webhook": {
+      "name": "/paystack-webhook",
+      "lambdaFunction": "paystackWebhook",
+      "permissions": {
+        "setting": "open"
+      }
+    }
+  }
+}

@@ -1,11 +1,12 @@
+import { TRANSPORT_TYPES } from "@/constants/transportTypes";
 import BottomSheet, { BottomSheetView } from "@gorhom/bottom-sheet";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-    Image,
-    Pressable,
-    Text,
-    useWindowDimensions,
-    View
+  Image,
+  Pressable,
+  Text,
+  useWindowDimensions,
+  View,
 } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import MapView, { Marker, PROVIDER_GOOGLE } from "react-native-maps";
@@ -27,19 +28,25 @@ const OrderLiveUpdate = ({ order, courier }) => {
   const [location, setLocation] = useState(null);
 
   const getImage = (type) => {
-    if (type === "Micro X") {
-      return require("../../assets/atuaImages/Bicycle.png");
+    switch (type) {
+      case TRANSPORT_TYPES.MICRO_EXPRESS:
+        return require("../../assets/atuaImages/AtuaMicroX.png");
+
+      case TRANSPORT_TYPES.MICRO_BATCH:
+        return require("../../assets/atuaImages/AtuaMicroBatch.png");
+
+      case TRANSPORT_TYPES.MOTO_EXPRESS:
+        return require("../../assets/atuaImages/AtuaMotoX.png");
+
+      case TRANSPORT_TYPES.MOTO_BATCH:
+        return require("../../assets/atuaImages/AtuaMotoBatch.png");
+
+      case TRANSPORT_TYPES.MAXI:
+        return require("../../assets/atuaImages/AtuaMaxi.png");
+
+      default:
+        return require("../../assets/atuaImages/AtuaMicroBatch.png");
     }
-    if (type === "Moto X") {
-      return require("../../assets/atuaImages/Bike.jpg");
-    }
-    if (type === "Maxi Batch") {
-      return require("../../assets/atuaImages/top-UberXL.png");
-    }
-    if (type === "Maxi") {
-      return require("../../assets/atuaImages/Deliverybicycle.png");
-    }
-    return require("../../assets/atuaImages/Walk.png");
   };
 
   const originLoc = {
@@ -118,7 +125,7 @@ const OrderLiveUpdate = ({ order, courier }) => {
         {courier?.lat && (
           <Marker title={courier.firstName} coordinate={courierLoc}>
             <Image
-              style={{ width: 50, height: 70, resizeMode: "contain" }}
+              style={styles.markerImage}
               source={getImage(courier.transportationType)}
             />
           </Marker>

@@ -1,10 +1,6 @@
 import { useAuthContext } from "@/providers/AuthProvider";
 import React, { useState } from "react";
-import {
-  ActivityIndicator,
-  Text,
-  View
-} from "react-native";
+import { ActivityIndicator, Text, View } from "react-native";
 import EditProfile from "../../../components/ProfileComs/EditProfile";
 import MainProfile from "../../../components/ProfileComs/MainProfile";
 
@@ -26,8 +22,16 @@ const ProfilePage = () => {
 
         <Text style={{ marginTop: 10 }}>Setting up your account...</Text>
 
-        <Text style={{ marginTop: 10, color: "blue" }} onPress={refreshUser}>
+        {/* <Text style={{ marginTop: 10, color: "blue" }} onPress={refreshUser}>
           Tap here if it's taking too long
+        </Text> */}
+
+        <Text
+          style={{ textAlign: "center", marginTop: 10, color: "grey" }}
+          onPress={refreshUser}
+        >
+          Please wait while we finish setting up your account. If this takes
+          longer than 1 minute, completely close the app and reopen it.
         </Text>
       </View>
     );

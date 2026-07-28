@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "api": {
+      "Atua": [
+        "Query",
+        "Mutation"
+      ]
+    }
+  },
+  "lambdaLayers": [],
+  "secretNames": [
+    "PAYSTACK_SECRET_KEY"
+  ]
+}
