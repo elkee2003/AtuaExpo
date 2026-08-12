@@ -2,8 +2,16 @@ import { ModelInit, MutableModel, __modelMeta__, ManagedIdentifier } from "@aws-
 // @ts-ignore
 import { LazyLoading, LazyLoadingDisabled, AsyncCollection, AsyncItem } from "@aws-amplify/datastore";
 
+export enum EarningsAllocationStatus {
+  NOT_ALLOCATED = "NOT_ALLOCATED",
+  PROCESSING = "PROCESSING",
+  ALLOCATED = "ALLOCATED",
+  FAILED = "FAILED"
+}
+
 export enum FundsStatus {
   HELD = "HELD",
+  PARTIALLY_RELEASED = "PARTIALLY_RELEASED",
   RELEASED = "RELEASED"
 }
 
@@ -14,11 +22,14 @@ export enum OrderPayoutStatus {
 
 export enum OrderPaymentStatus {
   PENDING = "PENDING",
-  PAID = "PAID"
+  PROCESSING = "PROCESSING",
+  PAID = "PAID",
+  FAILED = "FAILED"
 }
 
 export enum PaymentStatus {
   PENDING = "PENDING",
+  PROCESSING = "PROCESSING",
   SUCCESS = "SUCCESS",
   FAILED = "FAILED"
 }
@@ -251,12 +262,19 @@ type EagerPayout = {
   };
   readonly id: string;
   readonly courierID: string;
+  readonly walletID?: string | null;
   readonly amount: number;
   readonly status?: PayoutStatus | keyof typeof PayoutStatus | null;
   readonly bankName?: string | null;
   readonly accountNumber?: string | null;
   readonly reference?: string | null;
-  readonly walletID?: string | null;
+  readonly transferCode?: string | null;
+  readonly transferID?: string | null;
+  readonly failureReason?: string | null;
+  readonly payoutMethod?: string | null;
+  readonly processedAt?: string | null;
+  readonly paidAt?: string | null;
+  readonly failedAt?: string | null;
   readonly createdAt?: string | null;
   readonly updatedAt?: string | null;
 }
@@ -268,12 +286,19 @@ type LazyPayout = {
   };
   readonly id: string;
   readonly courierID: string;
+  readonly walletID?: string | null;
   readonly amount: number;
   readonly status?: PayoutStatus | keyof typeof PayoutStatus | null;
   readonly bankName?: string | null;
   readonly accountNumber?: string | null;
   readonly reference?: string | null;
-  readonly walletID?: string | null;
+  readonly transferCode?: string | null;
+  readonly transferID?: string | null;
+  readonly failureReason?: string | null;
+  readonly payoutMethod?: string | null;
+  readonly processedAt?: string | null;
+  readonly paidAt?: string | null;
+  readonly failedAt?: string | null;
   readonly createdAt?: string | null;
   readonly updatedAt?: string | null;
 }
@@ -296,6 +321,7 @@ type EagerTransaction = {
   readonly description?: string | null;
   readonly orderID?: string | null;
   readonly paymentID?: string | null;
+  readonly reference?: string | null;
   readonly status?: TransactionStatus | keyof typeof TransactionStatus | null;
   readonly createdAt?: string | null;
   readonly updatedAt?: string | null;
@@ -313,6 +339,7 @@ type LazyTransaction = {
   readonly description?: string | null;
   readonly orderID?: string | null;
   readonly paymentID?: string | null;
+  readonly reference?: string | null;
   readonly status?: TransactionStatus | keyof typeof TransactionStatus | null;
   readonly createdAt?: string | null;
   readonly updatedAt?: string | null;
@@ -332,9 +359,9 @@ type EagerWallet = {
   readonly id: string;
   readonly ownerID: string;
   readonly ownerType: OwnerType | keyof typeof OwnerType;
-  readonly balance?: number | null;
+  readonly availableBalance?: number | null;
   readonly pendingBalance?: number | null;
-  readonly totalEarnings?: number | null;
+  readonly lifetimeEarnings?: number | null;
   readonly transactions?: (Transaction | null)[] | null;
   readonly createdAt?: string | null;
   readonly updatedAt?: string | null;
@@ -348,9 +375,9 @@ type LazyWallet = {
   readonly id: string;
   readonly ownerID: string;
   readonly ownerType: OwnerType | keyof typeof OwnerType;
-  readonly balance?: number | null;
+  readonly availableBalance?: number | null;
   readonly pendingBalance?: number | null;
-  readonly totalEarnings?: number | null;
+  readonly lifetimeEarnings?: number | null;
   readonly transactions: AsyncCollection<Transaction>;
   readonly createdAt?: string | null;
   readonly updatedAt?: string | null;
@@ -542,8 +569,19 @@ type EagerOrder = {
   readonly acceptedOfferID?: string | null;
   readonly paymentStatus?: OrderPaymentStatus | keyof typeof OrderPaymentStatus | null;
   readonly paymentID?: string | null;
+  readonly paymentReference?: string | null;
   readonly payoutStatus?: OrderPayoutStatus | keyof typeof OrderPayoutStatus | null;
   readonly fundsStatus?: FundsStatus | keyof typeof FundsStatus | null;
+  readonly earningsAllocationStatus?: EarningsAllocationStatus | keyof typeof EarningsAllocationStatus | null;
+  readonly earningsAllocatedAt?: string | null;
+  readonly fundsReleaseBlocked?: boolean | null;
+  readonly fundsHoldReason?: string | null;
+  readonly fundsHeldBy?: string | null;
+  readonly fundsHeldAt?: string | null;
+  readonly fundsReleasedAmount?: number | null;
+  readonly pickupFundsReleasedAt?: string | null;
+  readonly fundsReleasedAt?: string | null;
+  readonly fundsReleaseType?: string | null;
   readonly assignedCourierId?: string | null;
   readonly assignmentExpiresAt?: string | null;
   readonly assignmentAttempts?: number | null;
@@ -654,8 +692,19 @@ type LazyOrder = {
   readonly acceptedOfferID?: string | null;
   readonly paymentStatus?: OrderPaymentStatus | keyof typeof OrderPaymentStatus | null;
   readonly paymentID?: string | null;
+  readonly paymentReference?: string | null;
   readonly payoutStatus?: OrderPayoutStatus | keyof typeof OrderPayoutStatus | null;
   readonly fundsStatus?: FundsStatus | keyof typeof FundsStatus | null;
+  readonly earningsAllocationStatus?: EarningsAllocationStatus | keyof typeof EarningsAllocationStatus | null;
+  readonly earningsAllocatedAt?: string | null;
+  readonly fundsReleaseBlocked?: boolean | null;
+  readonly fundsHoldReason?: string | null;
+  readonly fundsHeldBy?: string | null;
+  readonly fundsHeldAt?: string | null;
+  readonly fundsReleasedAmount?: number | null;
+  readonly pickupFundsReleasedAt?: string | null;
+  readonly fundsReleasedAt?: string | null;
+  readonly fundsReleaseType?: string | null;
   readonly assignedCourierId?: string | null;
   readonly assignmentExpiresAt?: string | null;
   readonly assignmentAttempts?: number | null;

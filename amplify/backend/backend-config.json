@@ -74,6 +74,22 @@
     }
   },
   "function": {
+    "allocateCourierEarnings": {
+      "build": true,
+      "dependsOn": [
+        {
+          "attributes": [
+            "GraphQLAPIIdOutput",
+            "GraphQLAPIEndpointOutput",
+            "GraphQLAPIKeyOutput"
+          ],
+          "category": "api",
+          "resourceName": "Atua"
+        }
+      ],
+      "providerPlugin": "awscloudformation",
+      "service": "Lambda"
+    },
     "assignOrder": {
       "build": true,
       "dependsOn": [
@@ -141,22 +157,6 @@
       "providerPlugin": "awscloudformation",
       "service": "Lambda"
     },
-    "processPaymentAndWallet": {
-      "build": true,
-      "dependsOn": [
-        {
-          "attributes": [
-            "GraphQLAPIIdOutput",
-            "GraphQLAPIEndpointOutput",
-            "GraphQLAPIKeyOutput"
-          ],
-          "category": "api",
-          "resourceName": "Atua"
-        }
-      ],
-      "providerPlugin": "awscloudformation",
-      "service": "Lambda"
-    },
     "processPayouts": {
       "build": true,
       "dependsOn": [
@@ -174,6 +174,22 @@
       "service": "Lambda"
     },
     "reassignOrder": {
+      "build": true,
+      "dependsOn": [
+        {
+          "attributes": [
+            "GraphQLAPIIdOutput",
+            "GraphQLAPIEndpointOutput",
+            "GraphQLAPIKeyOutput"
+          ],
+          "category": "api",
+          "resourceName": "Atua"
+        }
+      ],
+      "providerPlugin": "awscloudformation",
+      "service": "Lambda"
+    },
+    "releaseCourierMilestoneFunds": {
       "build": true,
       "dependsOn": [
         {
@@ -239,6 +255,22 @@
     }
   },
   "parameters": {
+    "AMPLIFY_function_allocateCourierEarnings_deploymentBucketName": {
+      "usedBy": [
+        {
+          "category": "function",
+          "resourceName": "allocateCourierEarnings"
+        }
+      ]
+    },
+    "AMPLIFY_function_allocateCourierEarnings_s3Key": {
+      "usedBy": [
+        {
+          "category": "function",
+          "resourceName": "allocateCourierEarnings"
+        }
+      ]
+    },
     "AMPLIFY_function_assignOrder_deploymentBucketName": {
       "usedBy": [
         {
@@ -388,6 +420,22 @@
         {
           "category": "function",
           "resourceName": "reassignOrder"
+        }
+      ]
+    },
+    "AMPLIFY_function_releaseCourierMilestoneFunds_deploymentBucketName": {
+      "usedBy": [
+        {
+          "category": "function",
+          "resourceName": "releaseCourierMilestoneFunds"
+        }
+      ]
+    },
+    "AMPLIFY_function_releaseCourierMilestoneFunds_s3Key": {
+      "usedBy": [
+        {
+          "category": "function",
+          "resourceName": "releaseCourierMilestoneFunds"
         }
       ]
     },

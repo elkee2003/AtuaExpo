@@ -16,9 +16,6 @@
     "s3Key": {
       "Type": "String"
     },
-    "paystackSecretKey": {
-      "Type": "String"
-    },
     "apiAtuaGraphQLAPIIdOutput": {
       "Type": "String",
       "Default": "apiAtuaGraphQLAPIIdOutput"
@@ -62,12 +59,12 @@
         "FunctionName": {
           "Fn::If": [
             "ShouldNotCreateEnvResources",
-            "processPaymentAndWallet",
+            "releaseCourierMilestoneFunds",
             {
               "Fn::Join": [
                 "",
                 [
-                  "processPaymentAndWallet",
+                  "releaseCourierMilestoneFunds",
                   "-",
                   {
                     "Ref": "env"
@@ -93,9 +90,6 @@
             },
             "API_ATUA_GRAPHQLAPIKEYOUTPUT": {
               "Ref": "apiAtuaGraphQLAPIKeyOutput"
-            },
-            "PAYSTACK_SECRET_KEY": {
-              "Ref": "paystackSecretKey"
             }
           }
         },
@@ -116,12 +110,12 @@
         "RoleName": {
           "Fn::If": [
             "ShouldNotCreateEnvResources",
-            "atuaLambdaRole277ed731",
+            "atuaLambdaRole4d931cfb",
             {
               "Fn::Join": [
                 "",
                 [
-                  "atuaLambdaRole277ed731",
+                  "atuaLambdaRole4d931cfb",
                   "-",
                   {
                     "Ref": "env"

@@ -23,6 +23,13 @@ export type AmplifyDependentResourcesAttributes = {
     }
   },
   "function": {
+    "allocateCourierEarnings": {
+      "Arn": "string",
+      "LambdaExecutionRole": "string",
+      "LambdaExecutionRoleArn": "string",
+      "Name": "string",
+      "Region": "string"
+    },
     "assignOrder": {
       "Arn": "string",
       "LambdaExecutionRole": "string",
@@ -59,13 +66,6 @@ export type AmplifyDependentResourcesAttributes = {
       "Name": "string",
       "Region": "string"
     },
-    "processPaymentAndWallet": {
-      "Arn": "string",
-      "LambdaExecutionRole": "string",
-      "LambdaExecutionRoleArn": "string",
-      "Name": "string",
-      "Region": "string"
-    },
     "processPayouts": {
       "Arn": "string",
       "CloudWatchEventRule": "string",
@@ -77,6 +77,13 @@ export type AmplifyDependentResourcesAttributes = {
     "reassignOrder": {
       "Arn": "string",
       "CloudWatchEventRule": "string",
+      "LambdaExecutionRole": "string",
+      "LambdaExecutionRoleArn": "string",
+      "Name": "string",
+      "Region": "string"
+    },
+    "releaseCourierMilestoneFunds": {
+      "Arn": "string",
       "LambdaExecutionRole": "string",
       "LambdaExecutionRoleArn": "string",
       "Name": "string",

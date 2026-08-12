@@ -2,8 +2,16 @@
 import { initSchema } from '@aws-amplify/datastore';
 import { schema } from './schema';
 
+const EarningsAllocationStatus = {
+  "NOT_ALLOCATED": "NOT_ALLOCATED",
+  "PROCESSING": "PROCESSING",
+  "ALLOCATED": "ALLOCATED",
+  "FAILED": "FAILED"
+};
+
 const FundsStatus = {
   "HELD": "HELD",
+  "PARTIALLY_RELEASED": "PARTIALLY_RELEASED",
   "RELEASED": "RELEASED"
 };
 
@@ -14,11 +22,14 @@ const OrderPayoutStatus = {
 
 const OrderPaymentStatus = {
   "PENDING": "PENDING",
-  "PAID": "PAID"
+  "PROCESSING": "PROCESSING",
+  "PAID": "PAID",
+  "FAILED": "FAILED"
 };
 
 const PaymentStatus = {
   "PENDING": "PENDING",
+  "PROCESSING": "PROCESSING",
   "SUCCESS": "SUCCESS",
   "FAILED": "FAILED"
 };
@@ -119,6 +130,7 @@ export {
   CourierReview,
   Courier,
   User,
+  EarningsAllocationStatus,
   FundsStatus,
   OrderPayoutStatus,
   OrderPaymentStatus,

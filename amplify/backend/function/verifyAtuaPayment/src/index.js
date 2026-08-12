@@ -4,261 +4,273 @@
 	API_ATUA_GRAPHQLAPIKEYOUTPUT
 	ENV
 	REGION
-Amplify Params - DO NOT EDIT */
+ Amplify Params - DO NOT EDIT */
 
-const { SSMClient, GetParameterCommand } = require("@aws-sdk/client-ssm");
+const {
+  SSMClient,
+  GetParameterCommand,
+} = require("@aws-sdk/client-ssm");
 
 const https = require("https");
 const crypto = require("crypto");
 
-//==================================================
-// CONFIGURATION
-//==================================================
+/* ==========================================================
+   CONFIGURATION
+========================================================== */
 
-const GRAPHQL_ENDPOINT = process.env.API_ATUA_GRAPHQLAPIENDPOINTOUTPUT;
+const GRAPHQL_ENDPOINT =
+  process.env.API_ATUA_GRAPHQLAPIENDPOINTOUTPUT;
 
-const GRAPHQL_API_KEY = process.env.API_ATUA_GRAPHQLAPIKEYOUTPUT;
+const GRAPHQL_API_KEY =
+  process.env.API_ATUA_GRAPHQLAPIKEYOUTPUT;
 
-const REGION = process.env.REGION || process.env.AWS_REGION;
+const REGION =
+  process.env.REGION ||
+  process.env.AWS_REGION;
 
-//==================================================
-// GET PAYSTACK SECRET
-//==================================================
+/* ==========================================================
+   GET PAYSTACK SECRET
+========================================================== */
 
 const getPaystackSecretKey = async () => {
-  const parameterName = process.env.PAYSTACK_SECRET_KEY;
+  const parameterName =
+    process.env.PAYSTACK_SECRET_KEY;
 
   if (!parameterName) {
-    throw new Error("PAYSTACK_SECRET_KEY secret is not configured.");
+    throw new Error(
+      "PAYSTACK_SECRET_KEY secret is not configured."
+    );
   }
 
   const ssmClient = new SSMClient({
     region: REGION,
   });
 
-  const command = new GetParameterCommand({
-    Name: parameterName,
-    WithDecryption: true,
-  });
+  const command =
+    new GetParameterCommand({
+      Name: parameterName,
+      WithDecryption: true,
+    });
 
-  const result = await ssmClient.send(command);
+  const result =
+    await ssmClient.send(command);
 
-  const secretKey = result?.Parameter?.Value;
+  const secretKey =
+    result?.Parameter?.Value;
 
   if (!secretKey) {
-    throw new Error("Could not retrieve Paystack secret key.");
+    throw new Error(
+      "Could not retrieve Paystack secret key."
+    );
   }
 
   return secretKey;
 };
 
-//==================================================
-// GENERATE DELIVERY VERIFICATION CODE
-//==================================================
+/* ==========================================================
+   GENERATE DELIVERY VERIFICATION CODE
+========================================================== */
 
 const generateVerificationCode = () => {
-  return crypto.randomInt(0, 1000000).toString().padStart(6, "0");
+  return crypto
+    .randomInt(0, 1000000)
+    .toString()
+    .padStart(6, "0");
 };
 
-//==================================================
-// GRAPHQL REQUEST
-//==================================================
+/* ==========================================================
+   GRAPHQL REQUEST
+========================================================== */
 
 const graphqlRequest = async (
   query,
   variables = {},
-  operationName = "GraphQL operation",
+  operationName = "GraphQL operation"
 ) => {
-  //-----------------------------------------
-  // Validate Configuration
-  //-----------------------------------------
-
   if (!GRAPHQL_ENDPOINT) {
-    throw new Error("Atua GraphQL endpoint is not configured.");
+    throw new Error(
+      "Atua GraphQL endpoint is not configured."
+    );
   }
 
   if (!GRAPHQL_API_KEY) {
-    throw new Error("Atua GraphQL API key is not configured.");
+    throw new Error(
+      "Atua GraphQL API key is not configured."
+    );
   }
 
-  //-----------------------------------------
-  // Build Request
-  //-----------------------------------------
+  const endpoint =
+    new URL(GRAPHQL_ENDPOINT);
 
-  const endpoint = new URL(GRAPHQL_ENDPOINT);
-
-  const body = JSON.stringify({
-    query,
-    variables,
-  });
+  const body =
+    JSON.stringify({
+      query,
+      variables,
+    });
 
   const options = {
-    hostname: endpoint.hostname,
+    hostname:
+      endpoint.hostname,
 
-    path: endpoint.pathname || "/graphql",
+    path:
+      endpoint.pathname ||
+      "/graphql",
 
-    method: "POST",
+    method:
+      "POST",
 
     headers: {
-      "Content-Type": "application/json",
+      "Content-Type":
+        "application/json",
 
-      "Content-Length": Buffer.byteLength(body),
+      "Content-Length":
+        Buffer.byteLength(body),
 
-      "x-api-key": GRAPHQL_API_KEY,
+      "x-api-key":
+        GRAPHQL_API_KEY,
     },
   };
 
-  //-----------------------------------------
-  // Execute
-  //-----------------------------------------
+  return new Promise(
+    (resolve, reject) => {
+      const request =
+        https.request(
+          options,
+          (res) => {
+            let data = "";
 
-  return new Promise((resolve, reject) => {
-    const request = https.request(options, (res) => {
-      let data = "";
+            res.on(
+              "data",
+              (chunk) => {
+                data += chunk;
+              }
+            );
 
-      res.on("data", (chunk) => {
-        data += chunk;
-      });
+            res.on(
+              "end",
+              () => {
+                if (
+                  res.statusCode < 200 ||
+                  res.statusCode >= 300
+                ) {
+                  console.error(
+                    `${operationName} HTTP ERROR:`,
+                    {
+                      statusCode:
+                        res.statusCode,
 
-      res.on("end", () => {
-        //---------------------------------
-        // HTTP Failure
-        //---------------------------------
+                      body:
+                        data,
+                    }
+                  );
 
-        if (res.statusCode < 200 || res.statusCode >= 300) {
-          console.error(`${operationName} HTTP ERROR:`, {
-            statusCode: res.statusCode,
+                  return reject(
+                    new Error(
+                      `${operationName} returned HTTP ${res.statusCode}.`
+                    )
+                  );
+                }
 
-            body: data,
-          });
+                let parsed;
 
-          return reject(
-            new Error(`${operationName} returned HTTP ${res.statusCode}.`),
-          );
-        }
+                try {
+                  parsed =
+                    JSON.parse(data);
+                } catch (error) {
+                  console.error(
+                    `${operationName} PARSE ERROR:`,
+                    {
+                      rawResponse:
+                        data,
 
-        //---------------------------------
-        // Parse Response
-        //---------------------------------
+                      error:
+                        error.message,
+                    }
+                  );
 
-        let parsed;
+                  return reject(error);
+                }
 
-        try {
-          parsed = JSON.parse(data);
-        } catch (error) {
-          console.error(`${operationName} PARSE ERROR:`, {
-            rawResponse: data,
+                if (
+                  parsed?.errors?.length
+                ) {
+                  console.error(
+                    `${operationName} GRAPHQL ERRORS:`,
+                    JSON.stringify(
+                      parsed.errors
+                    )
+                  );
 
-            error: error.message,
-          });
+                  return reject(
+                    new Error(
+                      parsed.errors
+                        .map(
+                          (item) =>
+                            item?.message
+                        )
+                        .filter(Boolean)
+                        .join(" | ") ||
+                      `${operationName} failed.`
+                    )
+                  );
+                }
 
-          return reject(error);
-        }
+                resolve(
+                  parsed?.data ||
+                  null
+                );
+              }
+            );
+          }
+        );
 
-        //---------------------------------
-        // GraphQL Errors
-        //---------------------------------
-
-        if (parsed?.errors?.length) {
+      request.on(
+        "error",
+        (error) => {
           console.error(
-            `${operationName} GRAPHQL ERRORS:`,
-            JSON.stringify(parsed.errors),
+            `${operationName} REQUEST ERROR:`,
+            error
           );
 
-          console.error(
-            `${operationName} GRAPHQL DATA:`,
-            JSON.stringify(parsed.data),
-          );
-
-          return reject(
-            new Error(
-              parsed.errors
-                .map((item) => item?.message)
-                .filter(Boolean)
-                .join(" | ") || `${operationName} failed.`,
-            ),
-          );
+          reject(error);
         }
+      );
 
-        resolve(parsed?.data || null);
-      });
-    });
+      request.write(body);
 
-    request.on("error", (error) => {
-      console.error(`${operationName} REQUEST ERROR:`, error);
-
-      reject(error);
-    });
-
-    request.write(body);
-
-    request.end();
-  });
+      request.end();
+    }
+  );
 };
 
-//==================================================
-// GET ORDER
-//==================================================
+/* ==========================================================
+   GET ORDER
+========================================================== */
 
-const getOrder = async (orderId) => {
+const getOrder = async (
+  orderId
+) => {
   const query = `
     query GetOrder($id: ID!) {
       getOrder(id: $id) {
         id
-
-        recipientName
-        recipientNumber
-        recipientNumber2
-        orderDetails
-
-        originAddress
-        originState
-        originLat
-        originLng
-
-        destinationAddress
-        destinationState
-        destinationLat
-        destinationLng
-
-        tripType
-        distance
-
-        transportationType
-        vehicleClass
-        status
-
+        userID
         totalPrice
-        operationalFare
-        courierEarnings
-        commissionAmount
-        platformFee
-        platformServiceRevenue
-        vatAmount
-        platformNetRevenue
-
-        deliveryVerificationCode
-
-        declaredWeightBracket
-
+        status
         paymentStatus
         paymentID
-
         payoutStatus
         fundsStatus
-
+        deliveryVerificationCode
+        courierEarnings
         assignedCourierId
         assignmentStatus
         assignmentExpiresAt
         assignmentAttempts
         lastAssignedAt
         rejectedCourierIds
-
-        userID
-
         createdAt
         updatedAt
-
         _version
         _lastChangedAt
         _deleted
@@ -266,23 +278,30 @@ const getOrder = async (orderId) => {
     }
   `;
 
-  const data = await graphqlRequest(
-    query,
-    {
-      id: orderId,
-    },
-    "GetOrder",
-  );
+  const data =
+    await graphqlRequest(
+      query,
+      {
+        id: orderId,
+      },
+      "GetOrder"
+    );
 
-  return data?.getOrder || null;
+  return (
+    data?.getOrder ||
+    null
+  );
 };
 
-//==================================================
-// GET PAYMENT BY REFERENCE
-//==================================================
+/* ==========================================================
+   GET PAYMENT BY REFERENCE
+========================================================== */
 
-const getPaymentByReference = async (reference) => {
-  const query = `
+const getPaymentByReference =
+  async (
+    reference
+  ) => {
+    const query = `
       query ListPayments(
         $filter: ModelPaymentFilterInput
       ) {
@@ -294,18 +313,14 @@ const getPaymentByReference = async (reference) => {
             id
             orderID
             userID
-
             amount
             currency
-
             status
             paymentMethod
             provider
             reference
-
             createdAt
             updatedAt
-
             _version
             _lastChangedAt
             _deleted
@@ -314,26 +329,33 @@ const getPaymentByReference = async (reference) => {
       }
     `;
 
-  const data = await graphqlRequest(
-    query,
-    {
-      filter: {
-        reference: {
-          eq: reference,
+    const data =
+      await graphqlRequest(
+        query,
+        {
+          filter: {
+            reference: {
+              eq: reference,
+            },
+          },
         },
-      },
-    },
-    "GetPaymentByReference",
-  );
+        "GetPaymentByReference"
+      );
 
-  return data?.listPayments?.items?.[0] || null;
-};
+    return (
+      data?.listPayments?.items?.[0] ||
+      null
+    );
+  };
 
-//==================================================
-// CREATE PAYMENT
-//==================================================
+/* ==========================================================
+   CREATE PAYMENT
+========================================================== */
 
-const createPayment = async ({ order, transaction }) => {
+const createPayment = async ({
+  order,
+  transaction,
+}) => {
   const mutation = `
     mutation CreatePayment(
       $input: CreatePaymentInput!
@@ -344,18 +366,14 @@ const createPayment = async ({ order, transaction }) => {
         id
         orderID
         userID
-
         amount
         currency
-
         status
         paymentMethod
         provider
         reference
-
         createdAt
         updatedAt
-
         _version
         _lastChangedAt
         _deleted
@@ -363,77 +381,222 @@ const createPayment = async ({ order, transaction }) => {
     }
   `;
 
-  const paymentMethod = transaction.channel || "paystack";
+  const paymentMethod =
+    transaction.channel ||
+    "paystack";
 
   const input = {
-    orderID: order.id,
+    orderID:
+      order.id,
 
-    userID: order.userID,
+    userID:
+      order.userID,
 
-    amount: Number(order.totalPrice),
+    amount:
+      Number(order.totalPrice),
 
-    currency: transaction.currency,
+    currency:
+      transaction.currency,
 
-    status: "SUCCESS",
+    status:
+      "SUCCESS",
 
     paymentMethod,
 
-    provider: "PAYSTACK",
+    provider:
+      "PAYSTACK",
 
-    reference: transaction.reference,
+    reference:
+      transaction.reference,
   };
 
-  console.log("CREATING PAYMENT:", {
-    orderID: input.orderID,
-
-    amount: input.amount,
-
-    currency: input.currency,
-
-    reference: input.reference,
-  });
-
-  const data = await graphqlRequest(
-    mutation,
+  console.log(
+    "CREATING PAYMENT:",
     {
-      input,
-    },
-    "CreatePayment",
+      orderID:
+        input.orderID,
+
+      amount:
+        input.amount,
+
+      currency:
+        input.currency,
+
+      reference:
+        input.reference,
+    }
   );
 
-  console.log("CREATE PAYMENT RESULT:", JSON.stringify(data?.createPayment));
+  const data =
+    await graphqlRequest(
+      mutation,
+      {
+        input,
+      },
+      "CreatePayment"
+    );
 
-  return data?.createPayment || null;
+  const payment =
+    data?.createPayment ||
+    null;
+
+  console.log(
+    "PAYMENT CREATE RESULT:",
+    payment
+      ? {
+          id:
+            payment.id,
+
+          orderID:
+            payment.orderID,
+
+          reference:
+            payment.reference,
+        }
+      : null
+  );
+
+  return payment;
 };
 
-//==================================================
-// UPDATE ORDER AFTER PAYMENT
-//==================================================
+/* ==========================================================
+   UPDATE ORDER AFTER PAYMENT
+========================================================== */
 
-const markOrderAsPaid = async ({ order, paymentId, verificationCode }) => {
-  //-----------------------------------------
-  // Validate
-  //-----------------------------------------
-
+const markOrderAsPaid = async ({
+  order,
+  paymentId,
+  verificationCode,
+}) => {
   if (!order?.id) {
-    throw new Error("Order is required before it can be marked as paid.");
+    throw new Error(
+      "Order is required before it can be marked as paid."
+    );
   }
 
   if (!paymentId) {
     throw new Error(
-      "Payment ID is required before the order can be marked as paid.",
+      "Payment ID is required before the order can be marked as paid."
     );
   }
 
   if (!verificationCode) {
-    throw new Error("Delivery verification code is required.");
+    throw new Error(
+      "Delivery verification code is required."
+    );
   }
 
-  //================================================
-  // MUTATION
-  //================================================
-
   const mutation = `
+    mutation UpdateOrder(
+      $input: UpdateOrderInput!
+    ) {
+      updateOrder(
+        input: $input
+      ) {
+        id
+        status
+        paymentStatus
+        paymentID
+        fundsStatus
+        deliveryVerificationCode
+        payoutStatus
+        createdAt
+        updatedAt
+        _version
+        _lastChangedAt
+        _deleted
+      }
+    }
+  `;
+
+  const input = {
+    id:
+      order.id,
+
+    paymentStatus:
+      "PAID",
+
+    paymentID:
+      paymentId,
+
+    status:
+      "READY_FOR_PICKUP",
+
+    fundsStatus:
+      "HELD",
+
+    deliveryVerificationCode:
+      verificationCode,
+  };
+
+  if (
+    Number.isInteger(
+      order._version
+    )
+  ) {
+    input._version =
+      order._version;
+  }
+
+  console.log(
+    "UPDATING ORDER AFTER PAYMENT:",
+    {
+      orderId:
+        order.id,
+
+      paymentId,
+
+      currentVersion:
+        order._version,
+
+      paymentStatus:
+        "PAID",
+
+      fundsStatus:
+        "HELD",
+
+      status:
+        "READY_FOR_PICKUP",
+    }
+  );
+
+  const data =
+    await graphqlRequest(
+      mutation,
+      {
+        input,
+      },
+      "MarkOrderAsPaid"
+    );
+
+  return (
+    data?.updateOrder ||
+    null
+  );
+};
+
+/* ==========================================================
+   SAVE VERIFICATION CODE
+========================================================== */
+
+const saveVerificationCode =
+  async ({
+    order,
+    verificationCode,
+  }) => {
+    if (!order?.id) {
+      throw new Error(
+        "Order is required before saving verification code."
+      );
+    }
+
+    if (!verificationCode) {
+      throw new Error(
+        "Verification code is required."
+      );
+    }
+
+    const mutation = `
       mutation UpdateOrder(
         $input: UpdateOrderInput!
       ) {
@@ -441,60 +604,14 @@ const markOrderAsPaid = async ({ order, paymentId, verificationCode }) => {
           input: $input
         ) {
           id
-
-          recipientName
-          recipientNumber
-          recipientNumber2
-          orderDetails
-
-          originAddress
-          originState
-          originLat
-          originLng
-
-          destinationAddress
-          destinationState
-          destinationLat
-          destinationLng
-
-          tripType
-          distance
-
-          transportationType
-          vehicleClass
-          status
-
-          totalPrice
-          operationalFare
-          courierEarnings
-          commissionAmount
-          platformFee
-          platformServiceRevenue
-          vatAmount
-          platformNetRevenue
-
-          deliveryVerificationCode
-
-          declaredWeightBracket
-
           paymentStatus
           paymentID
-
-          payoutStatus
           fundsStatus
-
-          assignedCourierId
-          assignmentStatus
-          assignmentExpiresAt
-          assignmentAttempts
-          lastAssignedAt
-          rejectedCourierIds
-
-          userID
-
+          status
+          deliveryVerificationCode
+          payoutStatus
           createdAt
           updatedAt
-
           _version
           _lastChangedAt
           _deleted
@@ -502,152 +619,173 @@ const markOrderAsPaid = async ({ order, paymentId, verificationCode }) => {
       }
     `;
 
-  //================================================
-  // UPDATE ONLY PAYMENT-RELATED FIELDS
-  //================================================
+    const input = {
+      id:
+        order.id,
 
-  const input = {
-    id: order.id,
+      deliveryVerificationCode:
+        verificationCode,
+    };
 
-    paymentStatus: "PAID",
+    if (
+      Number.isInteger(
+        order._version
+      )
+    ) {
+      input._version =
+        order._version;
+    }
 
-    paymentID: paymentId,
+    console.log(
+      "SAVING DELIVERY VERIFICATION CODE:",
+      {
+        orderId:
+          order.id,
 
-    status: "READY_FOR_PICKUP",
+        currentVersion:
+          order._version,
+      }
+    );
 
-    deliveryVerificationCode: verificationCode,
+    const data =
+      await graphqlRequest(
+        mutation,
+        {
+          input,
+        },
+        "SaveVerificationCode"
+      );
+
+    return (
+      data?.updateOrder ||
+      null
+    );
   };
 
-  //-----------------------------------------
-  // DataStore Version
-  //-----------------------------------------
+/* ==========================================================
+   VERIFY TRANSACTION WITH PAYSTACK
+========================================================== */
 
-  if (Number.isInteger(order._version)) {
-    input._version = order._version;
-  }
-
-  console.log("UPDATING ORDER AFTER PAYMENT:", {
-    orderId: order.id,
-
-    paymentId,
-
-    currentVersion: order._version,
-
-    originAddress: order.originAddress,
-
-    originLat: order.originLat,
-
-    originLng: order.originLng,
-
-    destinationAddress: order.destinationAddress,
-
-    destinationLat: order.destinationLat,
-
-    destinationLng: order.destinationLng,
-
-    targetPaymentStatus: "PAID",
-
-    targetStatus: "READY_FOR_PICKUP",
-  });
-
-  //================================================
-  // UPDATE
-  //================================================
-
-  const data = await graphqlRequest(
-    mutation,
-    {
-      input,
-    },
-    "MarkOrderAsPaid",
-  );
-
-  const updatedOrder = data?.updateOrder || null;
-
-  return updatedOrder;
-};
-
-//==================================================
-// VERIFY TRANSACTION WITH PAYSTACK
-//==================================================
-
-const verifyWithPaystack = async (reference, secretKey) => {
-  const encodedReference = encodeURIComponent(reference);
+const verifyWithPaystack = async (
+  reference,
+  secretKey
+) => {
+  const encodedReference =
+    encodeURIComponent(
+      reference
+    );
 
   const options = {
-    hostname: "api.paystack.co",
+    hostname:
+      "api.paystack.co",
 
-    path: `/transaction/verify/${encodedReference}`,
+    path:
+      `/transaction/verify/${encodedReference}`,
 
-    method: "GET",
+    method:
+      "GET",
 
     headers: {
-      Authorization: `Bearer ${secretKey}`,
+      Authorization:
+        `Bearer ${secretKey}`,
 
-      Accept: "application/json",
+      Accept:
+        "application/json",
     },
   };
 
-  return new Promise((resolve, reject) => {
-    const request = https.request(options, (res) => {
-      let data = "";
+  return new Promise(
+    (resolve, reject) => {
+      const request =
+        https.request(
+          options,
+          (res) => {
+            let data = "";
 
-      res.on("data", (chunk) => {
-        data += chunk;
-      });
+            res.on(
+              "data",
+              (chunk) => {
+                data += chunk;
+              }
+            );
 
-      res.on("end", () => {
-        try {
-          const parsed = JSON.parse(data);
+            res.on(
+              "end",
+              () => {
+                try {
+                  const parsed =
+                    JSON.parse(data);
 
-          resolve({
-            statusCode: res.statusCode,
+                  resolve({
+                    statusCode:
+                      res.statusCode,
 
-            body: parsed,
-          });
-        } catch (error) {
-          console.error("PAYSTACK PARSE ERROR:", error);
+                    body:
+                      parsed,
+                  });
+                } catch (error) {
+                  console.error(
+                    "PAYSTACK PARSE ERROR:",
+                    error
+                  );
+
+                  reject(error);
+                }
+              }
+            );
+          }
+        );
+
+      request.on(
+        "error",
+        (error) => {
+          console.error(
+            "PAYSTACK REQUEST ERROR:",
+            error
+          );
 
           reject(error);
         }
-      });
-    });
+      );
 
-    request.on("error", (error) => {
-      console.error("PAYSTACK REQUEST ERROR:", error);
-
-      reject(error);
-    });
-
-    request.end();
-  });
+      request.end();
+    }
+  );
 };
 
-//==================================================
-// FAILURE RESULT
-//==================================================
+/* ==========================================================
+   FAILURE RESULT
+========================================================== */
 
-const failureResult = (message, orderId = null) => {
+const failureResult = (
+  message,
+  orderId = null
+) => {
   return {
-    success: false,
+    success:
+      false,
 
-    verified: false,
+    verified:
+      false,
 
-    alreadyPaid: false,
+    alreadyPaid:
+      false,
 
     message,
 
     orderId,
 
-    deliveryVerificationCode: null,
+    deliveryVerificationCode:
+      null,
 
-    payment: null,
+    payment:
+      null,
   };
 };
 
-//==================================================
-// SUCCESS PAYMENT DETAILS
-//==================================================
+/* ==========================================================
+   PAYMENT DETAILS
+========================================================== */
 
 const buildPaymentDetails = ({
   reference,
@@ -658,138 +796,155 @@ const buildPaymentDetails = ({
   paidAt,
 }) => {
   return {
-    reference: reference || null,
+    reference:
+      reference ||
+      null,
 
-    amount: Number(amount),
+    amount:
+      Number(amount),
 
-    currency: currency || null,
+    currency:
+      currency ||
+      null,
 
-    status: status || null,
+    status:
+      status ||
+      null,
 
-    channel: channel || null,
+    channel:
+      channel ||
+      null,
 
-    paidAt: paidAt || null,
+    paidAt:
+      paidAt ||
+      null,
   };
 };
 
-//==================================================
-// LAMBDA HANDLER
-//==================================================
+/* ==========================================================
+   LAMBDA HANDLER
+========================================================== */
 
-exports.handler = async (event) => {
-  console.log("==========================================");
+exports.handler = async (
+  event
+) => {
+  console.log(
+    "=========================================="
+  );
 
-  console.log("VERIFY ATUA PAYMENT STARTED");
+  console.log(
+    "VERIFY ATUA PAYMENT STARTED"
+  );
 
-  console.log("==========================================");
+  console.log(
+    "=========================================="
+  );
 
   try {
-    //================================================
-    // 1. GET APPSYNC ARGUMENTS
-    //================================================
 
-    const { orderId, reference } = event?.arguments || {};
+    /* ======================================================
+       1. GET APPSYNC ARGUMENTS
+    ====================================================== */
+
+    const {
+      orderId,
+      reference,
+    } =
+      event?.arguments || {};
 
     if (!orderId) {
-      return failureResult("Order ID is required.");
+      return failureResult(
+        "Order ID is required."
+      );
     }
 
     if (!reference) {
-      return failureResult("Payment reference is required.", orderId);
+      return failureResult(
+        "Payment reference is required.",
+        orderId
+      );
     }
 
-    console.log("VERIFYING PAYMENT:", {
-      orderId,
-      reference,
-    });
+    console.log(
+      "VERIFYING PAYMENT:",
+      {
+        orderId,
+        reference,
+      }
+    );
 
-    //================================================
-    // 2. GET ORDER
-    //================================================
+    /* ======================================================
+       2. GET ORDER
+    ====================================================== */
 
-    let order = await getOrder(orderId);
+    let order =
+      await getOrder(
+        orderId
+      );
 
     if (!order) {
-      return failureResult("Order could not be found.", orderId);
+      return failureResult(
+        "Order could not be found.",
+        orderId
+      );
     }
 
-    //================================================
-    // 3. VALIDATE ORDER
-    //================================================
+    /* ======================================================
+       3. VALIDATE ORDER
+    ====================================================== */
 
     if (!order.userID) {
-      return failureResult("Order does not have a user ID.", order.id);
+      return failureResult(
+        "Order does not have a user ID.",
+        order.id
+      );
     }
 
-    const orderAmount = Number(order.totalPrice);
+    const orderAmount =
+      Number(
+        order.totalPrice
+      );
 
-    if (!Number.isFinite(orderAmount) || orderAmount <= 0) {
-      return failureResult("Order has an invalid payment amount.", order.id);
+    if (
+      !Number.isFinite(
+        orderAmount
+      ) ||
+      orderAmount <= 0
+    ) {
+      return failureResult(
+        "Order has an invalid payment amount.",
+        order.id
+      );
     }
 
-    //================================================
-    // 4. ALREADY PAID
-    //================================================
+    /* ======================================================
+       4. GET PAYSTACK SECRET
+    ====================================================== */
 
-    if (order.paymentStatus === "PAID") {
-      console.log("ORDER ALREADY PAID:", {
-        orderId: order.id,
+    const secretKey =
+      await getPaystackSecretKey();
 
-        paymentID: order.paymentID,
+    console.log(
+      "PAYSTACK SECRET RETRIEVED"
+    );
 
-        hasVerificationCode: Boolean(order.deliveryVerificationCode),
-      });
+    /* ======================================================
+       5. VERIFY TRANSACTION
+    ====================================================== */
 
-      const existingPayment = await getPaymentByReference(reference);
+    const verification =
+      await verifyWithPaystack(
+        reference,
+        secretKey
+      );
 
-      return {
-        success: true,
+    const paystack =
+      verification?.body;
 
-        verified: true,
-
-        alreadyPaid: true,
-
-        message: "This order has already been paid.",
-
-        orderId: order.id,
-
-        deliveryVerificationCode: order.deliveryVerificationCode || null,
-
-        payment: existingPayment
-          ? buildPaymentDetails({
-              reference: existingPayment.reference,
-
-              amount: existingPayment.amount,
-
-              currency: existingPayment.currency,
-
-              status: "success",
-
-              channel: existingPayment.paymentMethod,
-
-              paidAt: existingPayment.createdAt,
-            })
-          : null,
-      };
-    }
-
-    //================================================
-    // 5. GET PAYSTACK SECRET
-    //================================================
-
-    const secretKey = await getPaystackSecretKey();
-
-    console.log("PAYSTACK SECRET RETRIEVED");
-
-    //================================================
-    // 6. VERIFY WITH PAYSTACK
-    //================================================
-
-    const verification = await verifyWithPaystack(reference, secretKey);
-
-    const paystack = verification?.body;
-
-    console.log("PAYSTACK HTTP STATUS:", verification?.statusCode);
+    console.log(
+      "PAYSTACK HTTP STATUS:",
+      verification?.statusCode
+    );
 
     if (
       !verification ||
@@ -797,379 +952,647 @@ exports.handler = async (event) => {
       verification.statusCode >= 300 ||
       !paystack?.status
     ) {
-      console.error("PAYSTACK VERIFICATION FAILED:", JSON.stringify(paystack));
+      console.error(
+        "PAYSTACK VERIFICATION FAILED:",
+        JSON.stringify(
+          paystack
+        )
+      );
 
       return failureResult(
-        paystack?.message || "Payment could not be verified.",
-        order.id,
+        paystack?.message ||
+          "Payment could not be verified.",
+        order.id
       );
     }
 
-    //================================================
-    // 7. TRANSACTION
-    //================================================
+    /* ======================================================
+       6. TRANSACTION
+    ====================================================== */
 
-    const transaction = paystack?.data;
+    const transaction =
+      paystack?.data;
 
     if (!transaction) {
       return failureResult(
         "Paystack returned an invalid transaction.",
-        order.id,
+        order.id
       );
     }
 
-    //================================================
-    // 8. VERIFY STATUS
-    //================================================
+    /* ======================================================
+       7. VERIFY STATUS
+    ====================================================== */
 
-    if (transaction.status !== "success") {
+    if (
+      transaction.status !==
+      "success"
+    ) {
       return failureResult(
         "Payment has not been successfully completed.",
-        order.id,
+        order.id
       );
     }
 
-    //================================================
-    // 9. VERIFY REFERENCE
-    //================================================
+    /* ======================================================
+       8. VERIFY REFERENCE
+    ====================================================== */
 
-    if (transaction.reference !== reference) {
-      console.error("PAYMENT REFERENCE MISMATCH:", {
-        requestedReference: reference,
+    if (
+      transaction.reference !==
+      reference
+    ) {
+      console.error(
+        "PAYMENT REFERENCE MISMATCH:",
+        {
+          requestedReference:
+            reference,
 
-        paystackReference: transaction.reference,
-      });
+          paystackReference:
+            transaction.reference,
+        }
+      );
 
-      return failureResult("Payment reference does not match.", order.id);
+      return failureResult(
+        "Payment reference does not match.",
+        order.id
+      );
     }
 
-    //================================================
-    // 10. VERIFY CURRENCY
-    //================================================
+    /* ======================================================
+       9. VERIFY CURRENCY
+    ====================================================== */
 
-    if (transaction.currency !== "NGN") {
+    if (
+      transaction.currency !==
+      "NGN"
+    ) {
       return failureResult(
         "Payment currency does not match the order.",
-        order.id,
+        order.id
       );
     }
 
-    //================================================
-    // 11. VERIFY AMOUNT
-    //================================================
+    /* ======================================================
+       10. VERIFY AMOUNT
+    ====================================================== */
 
-    const expectedAmountInKobo = Math.round(orderAmount * 100);
+    const expectedAmountInKobo =
+      Math.round(
+        orderAmount * 100
+      );
 
-    const paidAmountInKobo = Number(transaction.amount);
+    const paidAmountInKobo =
+      Number(
+        transaction.amount
+      );
 
-    if (!Number.isFinite(paidAmountInKobo)) {
+    if (
+      !Number.isFinite(
+        paidAmountInKobo
+      )
+    ) {
       return failureResult(
         "Paystack returned an invalid payment amount.",
-        order.id,
+        order.id
       );
     }
 
-    if (paidAmountInKobo !== expectedAmountInKobo) {
-      console.error("PAYMENT AMOUNT MISMATCH:", {
-        orderId: order.id,
+    if (
+      paidAmountInKobo !==
+      expectedAmountInKobo
+    ) {
+      console.error(
+        "PAYMENT AMOUNT MISMATCH:",
+        {
+          orderId:
+            order.id,
 
-        expectedAmountInKobo,
+          expectedAmountInKobo,
 
-        paidAmountInKobo,
-      });
+          paidAmountInKobo,
+        }
+      );
 
       return failureResult(
         "The amount paid does not match the order total.",
-        order.id,
+        order.id
       );
     }
 
-    console.log("PAYSTACK PAYMENT VERIFIED:", {
-      orderId: order.id,
+    console.log(
+      "PAYSTACK PAYMENT VERIFIED:",
+      {
+        orderId:
+          order.id,
 
-      reference: transaction.reference,
+        reference:
+          transaction.reference,
 
-      amount: orderAmount,
+        amount:
+          orderAmount,
 
-      currency: transaction.currency,
-    });
+        currency:
+          transaction.currency,
+      }
+    );
 
-    //================================================
-    // 12. CHECK EXISTING PAYMENT
-    //================================================
+    /* ======================================================
+       11. CHECK EXISTING PAYMENT
+    ====================================================== */
 
-    let payment = await getPaymentByReference(transaction.reference);
+    let payment =
+      await getPaymentByReference(
+        transaction.reference
+      );
 
     if (payment) {
-      if (payment.orderID !== order.id) {
-        console.error("PAYMENT REFERENCE ALREADY USED:", {
-          reference: transaction.reference,
 
-          existingOrderId: payment.orderID,
+      if (
+        payment.orderID !==
+        order.id
+      ) {
+        console.error(
+          "PAYMENT REFERENCE ALREADY USED:",
+          {
+            reference:
+              transaction.reference,
 
-          attemptedOrderId: order.id,
-        });
+            existingOrderId:
+              payment.orderID,
+
+            attemptedOrderId:
+              order.id,
+          }
+        );
 
         return failureResult(
           "This payment reference has already been used for another order.",
-          order.id,
+          order.id
         );
       }
 
-      console.log("EXISTING PAYMENT FOUND:", {
-        paymentId: payment.id,
+      console.log(
+        "EXISTING PAYMENT FOUND:",
+        {
+          paymentId:
+            payment.id,
 
-        orderId: payment.orderID,
+          orderId:
+            payment.orderID,
 
-        reference: payment.reference,
-      });
+          reference:
+            payment.reference,
+        }
+      );
+
     } else {
-      //================================================
-      // 13. CREATE PAYMENT
-      //================================================
 
-      payment = await createPayment({
-        order,
-        transaction,
-      });
+      /* ====================================================
+         12. CREATE PAYMENT
+      ==================================================== */
+
+      payment =
+        await createPayment({
+          order,
+          transaction,
+        });
 
       if (!payment?.id) {
-        throw new Error("Payment record could not be created.");
+
+        payment =
+          await getPaymentByReference(
+            transaction.reference
+          );
+
+        if (!payment?.id) {
+          throw new Error(
+            "Payment record could not be created."
+          );
+        }
       }
 
-      console.log("PAYMENT RECORD CREATED:", {
-        paymentId: payment.id,
+      console.log(
+        "PAYMENT RECORD READY:",
+        {
+          paymentId:
+            payment.id,
 
-        orderId: order.id,
+          orderId:
+            order.id,
 
-        reference: payment.reference,
-
-        version: payment._version,
-      });
+          reference:
+            payment.reference,
+        }
+      );
     }
 
-    //================================================
-    // 14. REFRESH ORDER BEFORE UPDATE
-    //================================================
+    /* ======================================================
+       13. REFRESH ORDER
+    ====================================================== */
 
-    order = await getOrder(order.id);
+    order =
+      await getOrder(
+        order.id
+      );
 
     if (!order) {
-      throw new Error("Order disappeared before payment could be recorded.");
+      throw new Error(
+        "Order could not be reloaded before payment processing."
+      );
     }
 
-    console.log("ORDER REFRESHED BEFORE PAYMENT UPDATE:", {
-      id: order.id,
+    console.log(
+      "ORDER REFRESHED:",
+      {
+        orderId:
+          order.id,
 
-      version: order._version,
+        paymentStatus:
+          order.paymentStatus,
 
-      paymentStatus: order.paymentStatus,
+        paymentID:
+          order.paymentID,
 
-      status: order.status,
+        fundsStatus:
+          order.fundsStatus,
 
-      paymentID: order.paymentID,
+        status:
+          order.status,
 
-      originLat: order.originLat,
+        version:
+          order._version,
 
-      originLng: order.originLng,
+        hasVerificationCode:
+          Boolean(
+            order.deliveryVerificationCode
+          ),
+      }
+    );
 
-      destinationLat: order.destinationLat,
+    /* ======================================================
+       14. ALREADY PAID
+    ====================================================== */
 
-      destinationLng: order.destinationLng,
+    if (
+      order.paymentStatus ===
+      "PAID"
+    ) {
 
-      hasVerificationCode: Boolean(order.deliveryVerificationCode),
-    });
+      console.log(
+        "ORDER ALREADY PAID."
+      );
 
-    //================================================
-    // 15. ORDER BECAME PAID
-    //================================================
+      if (
+        order.deliveryVerificationCode
+      ) {
 
-    if (order.paymentStatus === "PAID") {
-      console.log("ORDER BECAME PAID BEFORE UPDATE");
+        return {
+          success:
+            true,
+
+          verified:
+            true,
+
+          alreadyPaid:
+            true,
+
+          message:
+            "This order has already been paid.",
+
+          orderId:
+            order.id,
+
+          deliveryVerificationCode:
+            order.deliveryVerificationCode,
+
+          payment:
+            buildPaymentDetails({
+              reference:
+                transaction.reference,
+
+              amount:
+                orderAmount,
+
+              currency:
+                transaction.currency,
+
+              status:
+                transaction.status,
+
+              channel:
+                transaction.channel,
+
+              paidAt:
+                transaction.paid_at,
+            }),
+        };
+      }
+
+      /* ====================================================
+         ORDER IS PAID BUT HAS NO CODE
+      ==================================================== */
+
+      const verificationCode =
+        generateVerificationCode();
+
+      console.log(
+        "ORDER IS PAID BUT HAS NO DELIVERY CODE."
+      );
+
+      const updatedOrder =
+        await saveVerificationCode({
+          order,
+          verificationCode,
+        });
+
+      if (!updatedOrder) {
+        throw new Error(
+          "Delivery verification code could not be saved."
+        );
+      }
+
+      const confirmedOrder =
+        await getOrder(
+          order.id
+        );
+
+      if (!confirmedOrder) {
+        throw new Error(
+          "Could not reload order after saving delivery verification code."
+        );
+      }
+
+      if (
+        !confirmedOrder.deliveryVerificationCode
+      ) {
+        throw new Error(
+          "Delivery verification code was not saved."
+        );
+      }
 
       return {
-        success: true,
+        success:
+          true,
 
-        verified: true,
+        verified:
+          true,
 
-        alreadyPaid: true,
+        alreadyPaid:
+          true,
 
-        message: "Payment has already been verified.",
+        message:
+          "This order has already been paid.",
 
-        orderId: order.id,
+        orderId:
+          confirmedOrder.id,
 
-        deliveryVerificationCode: order.deliveryVerificationCode || null,
+        deliveryVerificationCode:
+          confirmedOrder.deliveryVerificationCode,
 
-        payment: buildPaymentDetails({
-          reference: transaction.reference,
+        payment:
+          buildPaymentDetails({
+            reference:
+              transaction.reference,
 
-          amount: orderAmount,
+            amount:
+              orderAmount,
 
-          currency: transaction.currency,
+            currency:
+              transaction.currency,
 
-          status: transaction.status,
+            status:
+              transaction.status,
 
-          channel: transaction.channel,
+            channel:
+              transaction.channel,
 
-          paidAt: transaction.paid_at,
-        }),
+            paidAt:
+              transaction.paid_at,
+          }),
       };
     }
 
-    //================================================
-    // 16. GENERATE / REUSE DELIVERY CODE
-    //================================================
+    /* ======================================================
+       15. GENERATE DELIVERY CODE
+    ====================================================== */
 
     const verificationCode =
-      order.deliveryVerificationCode || generateVerificationCode();
+      order.deliveryVerificationCode ||
+      generateVerificationCode();
 
-    console.log("DELIVERY VERIFICATION CODE READY:", {
-      orderId: order.id,
+    console.log(
+      "DELIVERY VERIFICATION CODE READY:",
+      {
+        orderId:
+          order.id,
 
-      reused: Boolean(order.deliveryVerificationCode),
+        reused:
+          Boolean(
+            order.deliveryVerificationCode
+          ),
+      }
+    );
 
-      hasVerificationCode: true,
-    });
+    /* ======================================================
+       16. MARK ORDER AS PAID
+    ====================================================== */
 
-    //================================================
-    // 17. MARK ORDER AS PAID
-    //================================================
+    const updatedOrder =
+      await markOrderAsPaid({
+        order,
 
-    const updatedOrder = await markOrderAsPaid({
-      order,
+        paymentId:
+          payment.id,
 
-      paymentId: payment.id,
-
-      verificationCode,
-    });
+        verificationCode,
+      });
 
     if (!updatedOrder) {
-      throw new Error("Order could not be updated after payment.");
+      throw new Error(
+        "Order could not be updated after payment."
+      );
     }
 
-    //================================================
-    // 18. CONFIRM ORDER FROM CLOUD
-    //================================================
+    /* ======================================================
+       17. CONFIRM ORDER
+    ====================================================== */
 
-    const confirmedOrder = await getOrder(order.id);
+    const confirmedOrder =
+      await getOrder(
+        order.id
+      );
 
     if (!confirmedOrder) {
-      throw new Error("Could not reload order after payment update.");
-    }
-
-    console.log("CONFIRMED ORDER AFTER PAYMENT:", {
-      orderId: confirmedOrder.id,
-
-      userID: confirmedOrder.userID,
-
-      paymentStatus: confirmedOrder.paymentStatus,
-
-      paymentID: confirmedOrder.paymentID,
-
-      status: confirmedOrder.status,
-
-      version: confirmedOrder._version,
-
-      hasVerificationCode: Boolean(confirmedOrder.deliveryVerificationCode),
-    });
-
-    //================================================
-    // 19. VERIFY CRITICAL FIELDS
-    //================================================
-
-    if (confirmedOrder.paymentStatus !== "PAID") {
       throw new Error(
-        `Order payment status was not updated. Current value: ${confirmedOrder.paymentStatus}`,
+        "Could not reload order after payment update."
       );
     }
 
-    if (confirmedOrder.paymentID !== payment.id) {
+    console.log(
+      "CONFIRMED ORDER AFTER PAYMENT:",
+      {
+        orderId:
+          confirmedOrder.id,
+
+        paymentStatus:
+          confirmedOrder.paymentStatus,
+
+        paymentID:
+          confirmedOrder.paymentID,
+
+        fundsStatus:
+          confirmedOrder.fundsStatus,
+
+        status:
+          confirmedOrder.status,
+
+        hasVerificationCode:
+          Boolean(
+            confirmedOrder.deliveryVerificationCode
+          ),
+
+        version:
+          confirmedOrder._version,
+      }
+    );
+
+    /* ======================================================
+       18. VERIFY CRITICAL FIELDS
+    ====================================================== */
+
+    if (
+      confirmedOrder.paymentStatus !==
+      "PAID"
+    ) {
       throw new Error(
-        `Payment was not linked to the order. Expected ${payment.id}, received ${confirmedOrder.paymentID}.`,
+        `Order paymentStatus was not updated to PAID. Current value: ${confirmedOrder.paymentStatus}`
       );
     }
 
-    if (confirmedOrder.status !== "READY_FOR_PICKUP") {
+    if (
+      confirmedOrder.paymentID !==
+      payment.id
+    ) {
       throw new Error(
-        `Order was not activated for pickup. Current value: ${confirmedOrder.status}`,
+        `Payment was not linked to the order. Expected ${payment.id}, received ${confirmedOrder.paymentID}.`
       );
     }
 
-    if (!confirmedOrder.deliveryVerificationCode) {
-      throw new Error("Delivery verification code was not saved.");
+    if (
+      confirmedOrder.fundsStatus !==
+      "HELD"
+    ) {
+      throw new Error(
+        `Order fundsStatus was not set to HELD. Current value: ${confirmedOrder.fundsStatus}`
+      );
     }
 
-    console.log("ORDER PAYMENT UPDATE CONFIRMED:", {
-      orderId: confirmedOrder.id,
+    if (
+      confirmedOrder.status !==
+      "READY_FOR_PICKUP"
+    ) {
+      throw new Error(
+        `Order was not activated for pickup. Current value: ${confirmedOrder.status}`
+      );
+    }
 
-      paymentID: confirmedOrder.paymentID,
+    if (
+      !confirmedOrder.deliveryVerificationCode
+    ) {
+      throw new Error(
+        "Delivery verification code was not saved."
+      );
+    }
 
-      paymentStatus: confirmedOrder.paymentStatus,
+    /* ======================================================
+       19. SUCCESS
+    ====================================================== */
 
-      status: confirmedOrder.status,
-
-      version: confirmedOrder._version,
-
-      hasVerificationCode: true,
-    });
-
-    //================================================
-    // 20. SUCCESS
-    //================================================
+    console.log(
+      "PAYMENT SUCCESSFULLY VERIFIED"
+    );
 
     return {
-      success: true,
+      success:
+        true,
 
-      verified: true,
+      verified:
+        true,
 
-      alreadyPaid: false,
+      alreadyPaid:
+        false,
 
-      message: "Payment successfully verified and recorded.",
+      message:
+        "Payment successfully verified and recorded.",
 
-      orderId: confirmedOrder.id,
+      orderId:
+        confirmedOrder.id,
 
-      deliveryVerificationCode: confirmedOrder.deliveryVerificationCode,
+      deliveryVerificationCode:
+        confirmedOrder.deliveryVerificationCode,
 
-      payment: buildPaymentDetails({
-        reference: transaction.reference,
+      payment:
+        buildPaymentDetails({
+          reference:
+            transaction.reference,
 
-        amount: orderAmount,
+          amount:
+            orderAmount,
 
-        currency: transaction.currency,
+          currency:
+            transaction.currency,
 
-        status: transaction.status,
+          status:
+            transaction.status,
 
-        channel: transaction.channel,
+          channel:
+            transaction.channel,
 
-        paidAt: transaction.paid_at,
-      }),
+          paidAt:
+            transaction.paid_at,
+        }),
     };
+
   } catch (error) {
-    //================================================
-    // UNEXPECTED ERROR
-    //================================================
 
-    console.error("VERIFY ATUA PAYMENT ERROR:", error);
+    console.error(
+      "VERIFY ATUA PAYMENT ERROR:",
+      error
+    );
 
-    console.error("VERIFY ATUA PAYMENT ERROR MESSAGE:", error?.message);
+    console.error(
+      "VERIFY ATUA PAYMENT ERROR MESSAGE:",
+      error?.message
+    );
 
-    console.error("VERIFY ATUA PAYMENT ERROR STACK:", error?.stack);
+    console.error(
+      "VERIFY ATUA PAYMENT ERROR STACK:",
+      error?.stack
+    );
 
     return {
-      success: false,
+      success:
+        false,
 
-      verified: false,
+      verified:
+        false,
 
-      alreadyPaid: false,
+      alreadyPaid:
+        false,
 
       message:
         "Something went wrong while verifying and recording the payment.",
 
-      orderId: event?.arguments?.orderId || null,
+      orderId:
+        event?.arguments?.orderId ||
+        null,
 
-      deliveryVerificationCode: null,
+      deliveryVerificationCode:
+        null,
 
-      payment: null,
+      payment:
+        null,
     };
   }
 };

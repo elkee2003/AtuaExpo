@@ -286,6 +286,13 @@ export const schema = {
                     "isRequired": true,
                     "attributes": []
                 },
+                "walletID": {
+                    "name": "walletID",
+                    "isArray": false,
+                    "type": "ID",
+                    "isRequired": false,
+                    "attributes": []
+                },
                 "amount": {
                     "name": "amount",
                     "isArray": false,
@@ -323,10 +330,52 @@ export const schema = {
                     "isRequired": false,
                     "attributes": []
                 },
-                "walletID": {
-                    "name": "walletID",
+                "transferCode": {
+                    "name": "transferCode",
                     "isArray": false,
-                    "type": "ID",
+                    "type": "String",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "transferID": {
+                    "name": "transferID",
+                    "isArray": false,
+                    "type": "String",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "failureReason": {
+                    "name": "failureReason",
+                    "isArray": false,
+                    "type": "String",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "payoutMethod": {
+                    "name": "payoutMethod",
+                    "isArray": false,
+                    "type": "String",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "processedAt": {
+                    "name": "processedAt",
+                    "isArray": false,
+                    "type": "AWSDateTime",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "paidAt": {
+                    "name": "paidAt",
+                    "isArray": false,
+                    "type": "AWSDateTime",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "failedAt": {
+                    "name": "failedAt",
+                    "isArray": false,
+                    "type": "AWSDateTime",
                     "isRequired": false,
                     "attributes": []
                 },
@@ -369,6 +418,15 @@ export const schema = {
                         "name": "byWallet",
                         "fields": [
                             "walletID"
+                        ]
+                    }
+                },
+                {
+                    "type": "key",
+                    "properties": {
+                        "name": "byPayoutReference",
+                        "fields": [
+                            "reference"
                         ]
                     }
                 },
@@ -444,6 +502,13 @@ export const schema = {
                     "isRequired": false,
                     "attributes": []
                 },
+                "reference": {
+                    "name": "reference",
+                    "isArray": false,
+                    "type": "String",
+                    "isRequired": false,
+                    "attributes": []
+                },
                 "status": {
                     "name": "status",
                     "isArray": false,
@@ -505,6 +570,15 @@ export const schema = {
                     }
                 },
                 {
+                    "type": "key",
+                    "properties": {
+                        "name": "byTransactionReference",
+                        "fields": [
+                            "reference"
+                        ]
+                    }
+                },
+                {
                     "type": "auth",
                     "properties": {
                         "rules": [
@@ -548,8 +622,8 @@ export const schema = {
                     "isRequired": true,
                     "attributes": []
                 },
-                "balance": {
-                    "name": "balance",
+                "availableBalance": {
+                    "name": "availableBalance",
                     "isArray": false,
                     "type": "Float",
                     "isRequired": false,
@@ -562,8 +636,8 @@ export const schema = {
                     "isRequired": false,
                     "attributes": []
                 },
-                "totalEarnings": {
-                    "name": "totalEarnings",
+                "lifetimeEarnings": {
+                    "name": "lifetimeEarnings",
                     "isArray": false,
                     "type": "Float",
                     "isRequired": false,
@@ -764,6 +838,15 @@ export const schema = {
                         "name": "byUser",
                         "fields": [
                             "userID"
+                        ]
+                    }
+                },
+                {
+                    "type": "key",
+                    "properties": {
+                        "name": "byPaymentReference",
+                        "fields": [
+                            "reference"
                         ]
                     }
                 },
@@ -1569,6 +1652,13 @@ export const schema = {
                     "isRequired": false,
                     "attributes": []
                 },
+                "paymentReference": {
+                    "name": "paymentReference",
+                    "isArray": false,
+                    "type": "String",
+                    "isRequired": false,
+                    "attributes": []
+                },
                 "payoutStatus": {
                     "name": "payoutStatus",
                     "isArray": false,
@@ -1584,6 +1674,78 @@ export const schema = {
                     "type": {
                         "enum": "FundsStatus"
                     },
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "earningsAllocationStatus": {
+                    "name": "earningsAllocationStatus",
+                    "isArray": false,
+                    "type": {
+                        "enum": "EarningsAllocationStatus"
+                    },
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "earningsAllocatedAt": {
+                    "name": "earningsAllocatedAt",
+                    "isArray": false,
+                    "type": "AWSDateTime",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "fundsReleaseBlocked": {
+                    "name": "fundsReleaseBlocked",
+                    "isArray": false,
+                    "type": "Boolean",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "fundsHoldReason": {
+                    "name": "fundsHoldReason",
+                    "isArray": false,
+                    "type": "String",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "fundsHeldBy": {
+                    "name": "fundsHeldBy",
+                    "isArray": false,
+                    "type": "ID",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "fundsHeldAt": {
+                    "name": "fundsHeldAt",
+                    "isArray": false,
+                    "type": "AWSDateTime",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "fundsReleasedAmount": {
+                    "name": "fundsReleasedAmount",
+                    "isArray": false,
+                    "type": "Float",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "pickupFundsReleasedAt": {
+                    "name": "pickupFundsReleasedAt",
+                    "isArray": false,
+                    "type": "AWSDateTime",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "fundsReleasedAt": {
+                    "name": "fundsReleasedAt",
+                    "isArray": false,
+                    "type": "AWSDateTime",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "fundsReleaseType": {
+                    "name": "fundsReleaseType",
+                    "isArray": false,
+                    "type": "String",
                     "isRequired": false,
                     "attributes": []
                 },
@@ -2804,10 +2966,20 @@ export const schema = {
         }
     },
     "enums": {
+        "EarningsAllocationStatus": {
+            "name": "EarningsAllocationStatus",
+            "values": [
+                "NOT_ALLOCATED",
+                "PROCESSING",
+                "ALLOCATED",
+                "FAILED"
+            ]
+        },
         "FundsStatus": {
             "name": "FundsStatus",
             "values": [
                 "HELD",
+                "PARTIALLY_RELEASED",
                 "RELEASED"
             ]
         },
@@ -2822,13 +2994,16 @@ export const schema = {
             "name": "OrderPaymentStatus",
             "values": [
                 "PENDING",
-                "PAID"
+                "PROCESSING",
+                "PAID",
+                "FAILED"
             ]
         },
         "PaymentStatus": {
             "name": "PaymentStatus",
             "values": [
                 "PENDING",
+                "PROCESSING",
                 "SUCCESS",
                 "FAILED"
             ]
@@ -3043,5 +3218,5 @@ export const schema = {
         }
     },
     "codegenVersion": "3.4.4",
-    "version": "77c4c0fe73be24de626571e962075006"
+    "version": "bbe4ca145f6022de4b78642299d35724"
 };
