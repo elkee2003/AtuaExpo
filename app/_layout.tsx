@@ -7,9 +7,9 @@ import { Stack } from "expo-router";
 import React, { useEffect } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 
-import {
-  PaystackProvider,
-} from "react-native-paystack-webview";
+import { PaystackProvider } from "react-native-paystack-webview";
+
+import CourierReviewGate from "../components/CourierReviewGate";
 
 import AuthProvider from "../providers/AuthProvider";
 import LocationProvider from "../providers/LocationProvider";
@@ -30,8 +30,7 @@ Amplify.configure(amplifyconfig);
 // TEST PUBLIC KEY ONLY FOR NOW.
 //-----------------------------------------
 
-const PAYSTACK_PUBLIC_KEY =
-  "pk_test_02c242878c00dfec3ba77ac909a90b2f56c938b3";
+const PAYSTACK_PUBLIC_KEY = "pk_test_02c242878c00dfec3ba77ac909a90b2f56c938b3";
 
 //-----------------------------------------
 // Root Layout
@@ -43,9 +42,7 @@ const RootLayout = () => {
   //-----------------------------------------
 
   useEffect(() => {
-    resumePendingUploads(
-      uploadEvidence,
-    );
+    resumePendingUploads(uploadEvidence);
   }, []);
 
   //-----------------------------------------
@@ -53,13 +50,9 @@ const RootLayout = () => {
   //-----------------------------------------
 
   return (
-    <GestureHandlerRootView
-      style={{ flex: 1 }}
-    >
+    <GestureHandlerRootView style={{ flex: 1 }}>
       <PaystackProvider
-        publicKey={
-          PAYSTACK_PUBLIC_KEY
-        }
+        publicKey={PAYSTACK_PUBLIC_KEY}
         currency="NGN"
         debug={true}
       >
@@ -69,14 +62,14 @@ const RootLayout = () => {
               <LocationProvider>
                 <Stack
                   screenOptions={{
-                    headerShown:
-                      false,
+                    headerShown: false,
                   }}
                 >
-                  <Stack.Screen
-                    name="(tabs)"
-                  />
+                  <Stack.Screen name="(tabs)" />
                 </Stack>
+
+                {/* GLOBAL POST-DELIVERY REVIEW */}
+                <CourierReviewGate />
               </LocationProvider>
             </OrderProvider>
           </ProfileProvider>
