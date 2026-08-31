@@ -203,6 +203,70 @@ const Payment = () => {
   };
 
   //================================================
+  // WAIT FOR DATSTORE ORDER SYNC
+  //================================================
+
+  const waitForOrderSync = async (orderId, timeout = 15000) => {
+    return new Promise(async (resolve, reject) => {
+      let resolved = false;
+
+      const finish = (callback, value) => {
+        if (resolved) return;
+
+        resolved = true;
+        subscription?.unsubscribe();
+
+        callback(value);
+      };
+
+      const subscription = DataStore.observe(Order, orderId).subscribe(
+        ({ element, opType }) => {
+          console.log("ORDER DATASTORE UPDATE:", {
+            opType,
+            id: element?.id,
+            userID: element?.userID,
+            paymentStatus: element?.paymentStatus,
+            status: element?.status,
+            paymentID: element?.paymentID,
+            fundsStatus: element?.fundsStatus,
+            deliveryVerificationCode: element?.deliveryVerificationCode,
+          });
+
+          if (
+            element?.id === orderId &&
+            element?.paymentStatus === "PAID" &&
+            element?.paymentID &&
+            element?.fundsStatus === "HELD" &&
+            element?.deliveryVerificationCode
+          ) {
+            finish(resolve, element);
+          }
+        },
+      );
+
+      // Also check the current local copy.
+      try {
+        const currentOrder = await DataStore.query(Order, orderId);
+
+        if (
+          currentOrder?.paymentStatus === "PAID" &&
+          currentOrder?.paymentID &&
+          currentOrder?.fundsStatus === "HELD" &&
+          currentOrder?.deliveryVerificationCode
+        ) {
+          finish(resolve, currentOrder);
+        }
+      } catch (error) {
+        console.log("Initial Order sync check failed:", error);
+      }
+
+      setTimeout(() => {
+        finish(reject, new Error("Order synchronization timed out."));
+      }, timeout);
+    });
+  };
+
+  //================================================
   // PAYSTACK SUCCESS
   //================================================
 
@@ -319,6 +383,47 @@ const Payment = () => {
         throw new Error(
           "Payment was verified, but the delivery verification code could not be retrieved.",
         );
+      }
+
+      //================================================
+      // WAIT FOR ORDER TO SYNC LOCALLY
+      //================================================
+
+      console.log("WAITING FOR ORDER DATASTORE SYNC...");
+
+      let syncedOrder;
+
+      try {
+        syncedOrder = await waitForOrderSync(order.id);
+
+        console.log("ORDER SUCCESSFULLY SYNCED:", {
+          id: syncedOrder.id,
+          userID: syncedOrder.userID,
+          paymentStatus: syncedOrder.paymentStatus,
+          paymentID: syncedOrder.paymentID,
+          status: syncedOrder.status,
+          fundsStatus: syncedOrder.fundsStatus,
+          deliveryVerificationCode: syncedOrder.deliveryVerificationCode,
+        });
+      } catch (syncError) {
+        console.error("ORDER DATASTORE SYNC FAILED:", syncError);
+
+        // IMPORTANT:
+        // Payment itself has already been verified.
+        // Do NOT tell the customer to pay again.
+
+        Alert.alert(
+          "Payment Confirmed",
+          "Your payment was successful. We're still synchronizing your order. Please continue to your order.",
+          [
+            {
+              text: "Continue",
+              onPress: () => completePaymentFlow(order.id),
+            },
+          ],
+        );
+
+        return;
       }
 
       // -------------------------------------
@@ -548,7 +653,7 @@ const Payment = () => {
     //
     //-------------------------------------
 
-    const reference = `ref_${Date.now()}`;
+    const reference = `atua_${order.id}_${Date.now()}`;
 
     console.log("STARTING PAYSTACK PAYMENT:", {
       orderId: order.id,

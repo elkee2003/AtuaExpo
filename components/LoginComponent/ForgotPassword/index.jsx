@@ -3,12 +3,12 @@ import { router } from "expo-router";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import {
-    Alert,
-    KeyboardAvoidingView,
-    Platform,
-    ScrollView,
-    Text,
-    View,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  Text,
+  View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -27,7 +27,7 @@ const ForgotPasswordCom = () => {
     try {
       await resetPassword({ username: email });
 
-      Alert.alert("Success", "Code sent to your email.");
+      Alert.alert("Success", "Code sent to your email. Check inbox or spam");
       router.push({
         pathname: "/login/confirmcode",
         params: { email },

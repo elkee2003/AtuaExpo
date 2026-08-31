@@ -1,4 +1,29 @@
-// I have to make a UI for rating the courier
+// ==================================================
+// ORDER TRACKING SCREEN
+// ==================================================
+// IMPORTANT:
+//
+// This screen treats DataStore as the local synchronized
+// source of the Order.
+//
+// The Paystack webhook / verifyAtuaPayment Lambda updates
+// the Order in the backend.
+//
+// This screen MUST NOT assume that the first DataStore
+// observation contains every field.
+//
+// We therefore:
+// 1. Fetch the Order initially.
+// 2. Keep the existing complete Order in state.
+// 3. When DataStore observes a change, re-query the Order.
+// 4. Merge only defined incoming values.
+// 5. Never replace populated fields with undefined.
+// 6. Re-check when the app returns to the foreground.
+// 7. Briefly retry synchronization after the screen opens.
+//
+// This prevents a temporary/incomplete DataStore
+// observation from making the tracking UI appear blank.
+// ==================================================
 
 import { GOOGLE_API_KEY } from "@/keys";
 import { Courier, Offer, Order } from "@/src/models";
@@ -11,9 +36,16 @@ import { getUrl } from "aws-amplify/storage";
 
 import { router } from "expo-router";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { ActivityIndicator, Animated, Image, Text, View } from "react-native";
+import {
+  ActivityIndicator,
+  Animated,
+  AppState,
+  Image,
+  Text,
+  View,
+} from "react-native";
 
 import MapView, { Marker, PROVIDER_GOOGLE } from "react-native-maps";
 
@@ -27,9 +59,9 @@ import RetryUploadBanner from "./Maxi/RetryUploadBanner";
 
 import styles from "./styles";
 
-//==================================================
+// ==================================================
 // COORDINATE HELPERS
-//==================================================
+// ==================================================
 
 const toCoordinate = (value) => {
   //-----------------------------------------
@@ -53,9 +85,9 @@ const toCoordinate = (value) => {
   return number;
 };
 
-//==================================================
+// ==================================================
 // VALIDATE COORDINATE
-//==================================================
+// ==================================================
 
 const isValidCoordinate = (latitude, longitude) => {
   return (
@@ -68,22 +100,92 @@ const isValidCoordinate = (latitude, longitude) => {
   );
 };
 
-//==================================================
+// ==================================================
+// REMOVE UNDEFINED VALUES
+// ==================================================
+//
+// DataStore observations can temporarily give us an
+// incomplete representation while synchronization is
+// occurring.
+//
+// We do NOT want:
+//
+// currentOrder.someField = "ABC"
+//
+// followed by:
+//
+// incomingOrder.someField = undefined
+//
+// to erase "ABC" from the React state.
+//
+// Only undefined values are removed here.
+// Explicit null values are preserved.
+// ==================================================
+
+const removeUndefinedValues = (object) => {
+  if (!object) {
+    return {};
+  }
+
+  return Object.fromEntries(
+    Object.entries(object).filter(([, value]) => value !== undefined),
+  );
+};
+
+// ==================================================
+// MERGE ORDER SAFELY
+// ==================================================
+//
+// Existing populated values are preserved when an
+// incoming DataStore observation is incomplete.
+//
+// This is ONLY for React UI state.
+//
+// It does NOT write anything back to DataStore.
+// ==================================================
+
+const mergeOrders = (currentOrder, incomingOrder) => {
+  if (!incomingOrder) {
+    return currentOrder;
+  }
+
+  if (!currentOrder) {
+    return incomingOrder;
+  }
+
+  return {
+    ...currentOrder,
+
+    ...removeUndefinedValues(incomingOrder),
+  };
+};
+
+// ==================================================
 // ORDER TRACKING SCREEN
-//==================================================
+// ==================================================
 
 const OrderTrackingScreen = ({ orderId }) => {
-  //-----------------------------------------
-  // Refs
-  //-----------------------------------------
+  // =================================================
+  // REFS
+  // =================================================
 
   const bottomSheetRef = useRef(null);
 
   const mapRef = useRef(null);
 
-  //-----------------------------------------
-  // Courier Animated Coordinates
-  //-----------------------------------------
+  const orderSubscriptionRef = useRef(null);
+
+  const offersSubscriptionRef = useRef(null);
+
+  const courierSubscriptionRef = useRef(null);
+
+  const refreshTimerRef = useRef(null);
+
+  const mountedRef = useRef(true);
+
+  // =================================================
+  // COURIER ANIMATED COORDINATES
+  // =================================================
 
   const courierAnim = useRef({
     latitude: new Animated.Value(0),
@@ -91,15 +193,15 @@ const OrderTrackingScreen = ({ orderId }) => {
     longitude: new Animated.Value(0),
   }).current;
 
-  //-----------------------------------------
-  // Bottom Sheet
-  //-----------------------------------------
+  // =================================================
+  // BOTTOM SHEET
+  // =================================================
 
   const snapPoints = useMemo(() => ["35%", "60%", "85%"], []);
 
-  //-----------------------------------------
-  // State
-  //-----------------------------------------
+  // =================================================
+  // STATE
+  // =================================================
 
   const [order, setOrder] = useState(null);
 
@@ -109,56 +211,201 @@ const OrderTrackingScreen = ({ orderId }) => {
 
   const [offers, setOffers] = useState([]);
 
-  //-----------------------------------------
-  // Animations
-  //-----------------------------------------
+  // =================================================
+  // ANIMATIONS
+  // =================================================
 
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
   const driverCardAnim = useRef(new Animated.Value(0)).current;
 
-  //================================================
+  // =================================================
+  // MOUNT / UNMOUNT
+  // =================================================
+
+  useEffect(() => {
+    mountedRef.current = true;
+
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
+  // =================================================
   // FETCH ORDER
-  //================================================
+  // =================================================
+  //
+  // IMPORTANT:
+  //
+  // This function DOES NOT blindly replace the current
+  // Order with whatever DataStore gives us.
+  //
+  // It merges the latest result into the existing state.
+  //
+  // This is the main protection against the temporary
+  // blank-field problem.
+  // =================================================
+
+  const refreshOrder = useCallback(
+    async ({ reason = "UNKNOWN", log = true } = {}) => {
+      if (!orderId) {
+        return null;
+      }
+
+      try {
+        const latestOrder = await DataStore.query(Order, orderId);
+
+        if (!latestOrder) {
+          if (log) {
+            console.log("ORDER NOT FOUND:", orderId, "REASON:", reason);
+          }
+
+          return null;
+        }
+
+        if (log) {
+          console.log("ORDER REFRESHED FROM DATASTORE:", {
+            orderId: latestOrder.id,
+
+            status: latestOrder.status,
+
+            paymentStatus: latestOrder.paymentStatus,
+
+            paymentID: latestOrder.paymentID,
+
+            fundsStatus: latestOrder.fundsStatus,
+
+            deliveryVerificationCode: latestOrder.deliveryVerificationCode,
+
+            assignedCourierId: latestOrder.assignedCourierId,
+
+            version: latestOrder._version,
+          });
+        }
+
+        if (mountedRef.current) {
+          setOrder((currentOrder) => mergeOrders(currentOrder, latestOrder));
+        }
+
+        return latestOrder;
+      } catch (error) {
+        console.log("REFRESH ORDER ERROR:", reason, error);
+
+        return null;
+      }
+    },
+    [orderId],
+  );
+
+  // =================================================
+  // INITIAL ORDER LOAD + ORDER SUBSCRIPTION
+  // =================================================
 
   useEffect(() => {
     if (!orderId) {
       return;
     }
 
-    let subscription;
+    let cancelled = false;
 
-    const fetchOrder = async () => {
-      try {
-        const data = await DataStore.query(Order, orderId);
+    // ------------------------------------------------
+    // INITIAL FETCH
+    // ------------------------------------------------
 
-        if (!data) {
-          console.log("ORDER NOT FOUND:", orderId);
+    const initialLoad = async () => {
+      const latestOrder = await refreshOrder({
+        reason: "INITIAL_LOAD",
+        log: true,
+      });
 
+      if (cancelled || !latestOrder) {
+        return;
+      }
+
+      // ------------------------------------------------
+      // IMPORTANT:
+      //
+      // After payment, AppSync/DataStore synchronization
+      // may not have reached this device immediately.
+      //
+      // We therefore perform a few short re-checks.
+      //
+      // This is NOT permanent polling.
+      //
+      // It only helps the tracking screen converge quickly
+      // after a backend Lambda updates the Order.
+      // ------------------------------------------------
+
+      const retryDelays = [500, 1500, 3000, 5000, 8000];
+
+      retryDelays.forEach((delay) => {
+        setTimeout(async () => {
+          if (cancelled || !mountedRef.current) {
+            return;
+          }
+
+          await refreshOrder({
+            reason: `POST_LOAD_SYNC_${delay}MS`,
+            log: false,
+          });
+        }, delay);
+      });
+    };
+
+    initialLoad();
+
+    // ------------------------------------------------
+    // OBSERVE ORDER
+    // ------------------------------------------------
+    //
+    // IMPORTANT:
+    //
+    // We DO NOT do:
+    //
+    // setOrder(msg.element)
+    //
+    // because an observation can be temporarily
+    // incomplete.
+    //
+    // Instead:
+    //
+    // observation
+    //      ↓
+    // fresh DataStore query
+    //      ↓
+    // merge into current React state
+    //
+    // ------------------------------------------------
+
+    const subscription = DataStore.observe(Order, orderId).subscribe({
+      next: async (msg) => {
+        if (cancelled || !mountedRef.current) {
           return;
         }
 
-        setOrder(data);
-      } catch (error) {
-        console.log("FETCH ORDER ERROR:", error);
-      }
-    };
-
-    //-------------------------------------
-    // Initial Fetch
-    //-------------------------------------
-
-    fetchOrder();
-
-    //-------------------------------------
-    // Observe Order
-    //-------------------------------------
-
-    subscription = DataStore.observe(Order, orderId).subscribe({
-      next: (msg) => {
-        if (msg?.element) {
-          setOrder(msg.element);
+        if (!msg?.element) {
+          return;
         }
+
+        console.log("ORDER DATASTORE EVENT:", {
+          orderId: msg.element.id,
+
+          status: msg.element.status,
+
+          paymentStatus: msg.element.paymentStatus,
+
+          version: msg.element._version,
+        });
+
+        // ------------------------------------------------
+        // DO NOT TRUST THE EVENT AS THE COMPLETE ORDER.
+        // RE-QUERY DATASTORE.
+        // ------------------------------------------------
+
+        await refreshOrder({
+          reason: "DATASTORE_ORDER_EVENT",
+          log: true,
+        });
       },
 
       error: (error) => {
@@ -166,25 +413,70 @@ const OrderTrackingScreen = ({ orderId }) => {
       },
     });
 
-    //-------------------------------------
-    // Cleanup
-    //-------------------------------------
+    orderSubscriptionRef.current = subscription;
+
+    // ------------------------------------------------
+    // CLEANUP
+    // ------------------------------------------------
 
     return () => {
-      subscription?.unsubscribe();
-    };
-  }, [orderId]);
+      cancelled = true;
 
-  //================================================
-  // FETCH OFFERS
-  //================================================
+      subscription?.unsubscribe();
+
+      orderSubscriptionRef.current = null;
+    };
+  }, [orderId, refreshOrder]);
+
+  // =================================================
+  // REFRESH WHEN APP RETURNS TO FOREGROUND
+  // =================================================
+  //
+  // This is especially important because you said:
+  //
+  // "If I close the app and open it, the fields return."
+  //
+  // Instead of requiring a complete app restart, we
+  // explicitly refresh the Order whenever this screen
+  // returns to the foreground.
+  // =================================================
 
   useEffect(() => {
     if (!orderId) {
       return;
     }
 
-    let subscription;
+    const handleAppStateChange = (nextState) => {
+      if (nextState === "active") {
+        console.log("APP ACTIVE - REFRESHING TRACKED ORDER");
+
+        refreshOrder({
+          reason: "APP_RETURNED_TO_FOREGROUND",
+          log: true,
+        });
+      }
+    };
+
+    const subscription = AppState.addEventListener(
+      "change",
+      handleAppStateChange,
+    );
+
+    return () => {
+      subscription.remove();
+    };
+  }, [orderId, refreshOrder]);
+
+  // =================================================
+  // FETCH OFFERS
+  // =================================================
+
+  useEffect(() => {
+    if (!orderId) {
+      return;
+    }
+
+    let cancelled = false;
 
     const fetchOffers = async () => {
       try {
@@ -192,16 +484,20 @@ const OrderTrackingScreen = ({ orderId }) => {
           o.orderID.eq(orderId),
         );
 
-        //---------------------------------
+        if (cancelled) {
+          return;
+        }
+
+        // ---------------------------------------------
         // Latest Offer Per Courier
-        //---------------------------------
+        // ---------------------------------------------
 
         const latestByCourier = {};
 
         result.forEach((offer) => {
-          //---------------------------------
+          // -------------------------------------------
           // Ignore User Initial Offers
-          //---------------------------------
+          // -------------------------------------------
 
           if (!offer.courierID) {
             return;
@@ -217,23 +513,23 @@ const OrderTrackingScreen = ({ orderId }) => {
           }
         });
 
-        //---------------------------------
+        // ---------------------------------------------
         // Convert To Array
-        //---------------------------------
+        // ---------------------------------------------
 
         const latestOffers = Object.values(latestByCourier);
 
-        //---------------------------------
+        // ---------------------------------------------
         // Sort Newest First
-        //---------------------------------
+        // ---------------------------------------------
 
         const sorted = latestOffers.sort(
           (a, b) => new Date(b.createdAt) - new Date(a.createdAt),
         );
 
-        //---------------------------------
+        // ---------------------------------------------
         // Attach Courier Information
-        //---------------------------------
+        // ---------------------------------------------
 
         const enriched = await Promise.all(
           sorted.map(async (offer) => {
@@ -244,9 +540,9 @@ const OrderTrackingScreen = ({ orderId }) => {
 
             let imageUrl = null;
 
-            //---------------------------------
+            // -----------------------------------
             // Courier Image
-            //---------------------------------
+            // -----------------------------------
 
             if (offerCourier?.profilePic) {
               try {
@@ -271,29 +567,32 @@ const OrderTrackingScreen = ({ orderId }) => {
 
               courier: {
                 ...offerCourier,
+
                 imageUrl,
               },
             };
           }),
         );
 
-        setOffers(enriched);
+        if (!cancelled && mountedRef.current) {
+          setOffers(enriched);
+        }
       } catch (error) {
         console.log("FETCH OFFERS ERROR:", error);
       }
     };
 
-    //-------------------------------------
+    // ---------------------------------------------
     // Initial Fetch
-    //-------------------------------------
+    // ---------------------------------------------
 
     fetchOffers();
 
-    //-------------------------------------
+    // ---------------------------------------------
     // Observe Offers
-    //-------------------------------------
+    // ---------------------------------------------
 
-    subscription = DataStore.observe(Offer).subscribe({
+    const subscription = DataStore.observe(Offer).subscribe({
       next: (msg) => {
         if (msg?.element?.orderID === orderId) {
           fetchOffers();
@@ -305,60 +604,85 @@ const OrderTrackingScreen = ({ orderId }) => {
       },
     });
 
-    //-------------------------------------
+    offersSubscriptionRef.current = subscription;
+
+    // ---------------------------------------------
     // Cleanup
-    //-------------------------------------
+    // ---------------------------------------------
 
     return () => {
+      cancelled = true;
+
       subscription?.unsubscribe();
+
+      offersSubscriptionRef.current = null;
     };
   }, [orderId]);
 
-  //================================================
+  // =================================================
   // FETCH ASSIGNED COURIER
-  //================================================
+  // =================================================
 
   useEffect(() => {
-    //-------------------------------------
+    //-----------------------------------------
     // No Courier Yet
-    //-------------------------------------
+    //-----------------------------------------
 
     if (!order?.assignedCourierId) {
       setCourier(null);
+
       setCourierImageUrl(null);
 
       return;
     }
 
-    let subscription;
+    let cancelled = false;
+
+    const courierId = order.assignedCourierId;
 
     const fetchCourier = async () => {
       try {
-        const data = await DataStore.query(Courier, order.assignedCourierId);
+        const data = await DataStore.query(Courier, courierId);
 
-        setCourier(data || null);
+        if (!cancelled && mountedRef.current) {
+          setCourier(data || null);
+        }
       } catch (error) {
         console.log("FETCH COURIER ERROR:", error);
       }
     };
 
-    //-------------------------------------
+    //-----------------------------------------
     // Initial Fetch
-    //-------------------------------------
+    //-----------------------------------------
 
     fetchCourier();
 
-    //-------------------------------------
+    //-----------------------------------------
     // Observe Courier
-    //-------------------------------------
+    //-----------------------------------------
 
-    subscription = DataStore.observe(
-      Courier,
-      order.assignedCourierId,
-    ).subscribe({
-      next: (msg) => {
-        if (msg?.element) {
-          setCourier(msg.element);
+    const subscription = DataStore.observe(Courier, courierId).subscribe({
+      next: async (msg) => {
+        if (cancelled || !msg?.element) {
+          return;
+        }
+
+        // -------------------------------------------
+        // Re-query instead of blindly replacing the
+        // courier object with an event payload.
+        // -------------------------------------------
+
+        try {
+          const latestCourier = await DataStore.query(Courier, courierId);
+
+          if (latestCourier && !cancelled && mountedRef.current) {
+            setCourier((currentCourier) =>
+              mergeOrders(currentCourier, latestCourier),
+            );
+          }
+        } catch (error) {
+          console.log("REFRESH COURIER AFTER EVENT ERROR:", error);
         }
       },
 
@@ -367,18 +691,24 @@ const OrderTrackingScreen = ({ orderId }) => {
       },
     });
 
-    //-------------------------------------
+    courierSubscriptionRef.current = subscription;
+
+    //-----------------------------------------
     // Cleanup
-    //-------------------------------------
+    //-----------------------------------------
 
     return () => {
+      cancelled = true;
+
       subscription?.unsubscribe();
+
+      courierSubscriptionRef.current = null;
     };
   }, [order?.assignedCourierId]);
 
-  //================================================
+  // =================================================
   // FETCH COURIER PROFILE IMAGE
-  //================================================
+  // =================================================
 
   useEffect(() => {
     let active = true;
@@ -432,60 +762,60 @@ const OrderTrackingScreen = ({ orderId }) => {
     };
   }, [courier?.profilePic]);
 
-  //================================================
+  // =================================================
   // SET INITIAL COURIER LOCATION
-  //================================================
+  // =================================================
 
   useEffect(() => {
-    //-------------------------------------
+    //-----------------------------------------
     // Convert Coordinates
-    //-------------------------------------
+    //-----------------------------------------
 
     const courierLat = toCoordinate(courier?.lat);
 
     const courierLng = toCoordinate(courier?.lng);
 
-    //-------------------------------------
+    //-----------------------------------------
     // Validate
-    //-------------------------------------
+    //-----------------------------------------
 
     if (!isValidCoordinate(courierLat, courierLng)) {
       return;
     }
 
-    //-------------------------------------
+    //-----------------------------------------
     // Set Immediately
-    //-------------------------------------
+    //-----------------------------------------
 
     courierAnim.latitude.setValue(courierLat);
 
     courierAnim.longitude.setValue(courierLng);
   }, [courier?.id, courierAnim]);
 
-  //================================================
+  // =================================================
   // ANIMATE COURIER LOCATION
-  //================================================
+  // =================================================
 
   useEffect(() => {
-    //-------------------------------------
+    //-----------------------------------------
     // Convert Coordinates
-    //-------------------------------------
+    //-----------------------------------------
 
     const courierLat = toCoordinate(courier?.lat);
 
     const courierLng = toCoordinate(courier?.lng);
 
-    //-------------------------------------
+    //-----------------------------------------
     // Validate
-    //-------------------------------------
+    //-----------------------------------------
 
     if (!isValidCoordinate(courierLat, courierLng)) {
       return;
     }
 
-    //-------------------------------------
+    //-----------------------------------------
     // Animate Marker
-    //-------------------------------------
+    //-----------------------------------------
 
     Animated.parallel([
       Animated.timing(courierAnim.latitude, {
@@ -506,14 +836,14 @@ const OrderTrackingScreen = ({ orderId }) => {
     ]).start();
   }, [courier?.lat, courier?.lng, courierAnim]);
 
-  //================================================
+  // =================================================
   // SEARCH PULSE
-  //================================================
+  // =================================================
 
   useEffect(() => {
-    //-------------------------------------
+    //-----------------------------------------
     // Only Pulse While Searching/Bidding
-    //-------------------------------------
+    //-----------------------------------------
 
     if (order?.status !== "READY_FOR_PICKUP" && order?.status !== "BIDDING") {
       pulseAnim.setValue(1);
@@ -521,21 +851,25 @@ const OrderTrackingScreen = ({ orderId }) => {
       return;
     }
 
-    //-------------------------------------
+    //-----------------------------------------
     // Animation
-    //-------------------------------------
+    //-----------------------------------------
 
     const animation = Animated.loop(
       Animated.sequence([
         Animated.timing(pulseAnim, {
           toValue: 1.4,
+
           duration: 500,
+
           useNativeDriver: true,
         }),
 
         Animated.timing(pulseAnim, {
           toValue: 1,
+
           duration: 500,
+
           useNativeDriver: true,
         }),
       ]),
@@ -543,47 +877,47 @@ const OrderTrackingScreen = ({ orderId }) => {
 
     animation.start();
 
-    //-------------------------------------
+    //-----------------------------------------
     // Cleanup
-    //-------------------------------------
+    //-----------------------------------------
 
     return () => {
       animation.stop();
     };
   }, [order?.status, pulseAnim]);
 
-  //================================================
+  // =================================================
   // DRIVER ACCEPTED ANIMATION
-  //================================================
+  // =================================================
 
   useEffect(() => {
-    //-------------------------------------
+    //-----------------------------------------
     // Only When Accepted
-    //-------------------------------------
+    //-----------------------------------------
 
     if (order?.status !== "ACCEPTED") {
       return;
     }
 
-    //-------------------------------------
+    //-----------------------------------------
     // Convert Courier Coordinates
-    //-------------------------------------
+    //-----------------------------------------
 
     const courierLat = toCoordinate(courier?.lat);
 
     const courierLng = toCoordinate(courier?.lng);
 
-    //-------------------------------------
+    //-----------------------------------------
     // Validate
-    //-------------------------------------
+    //-----------------------------------------
 
     if (!isValidCoordinate(courierLat, courierLng)) {
       return;
     }
 
-    //-------------------------------------
+    //-----------------------------------------
     // Animate Driver Card
-    //-------------------------------------
+    //-----------------------------------------
 
     Animated.spring(driverCardAnim, {
       toValue: 1,
@@ -591,15 +925,15 @@ const OrderTrackingScreen = ({ orderId }) => {
       useNativeDriver: true,
     }).start();
 
-    //-------------------------------------
+    //-----------------------------------------
     // Expand Bottom Sheet
-    //-------------------------------------
+    //-----------------------------------------
 
     bottomSheetRef.current?.expand();
 
-    //-------------------------------------
+    //-----------------------------------------
     // Move Map To Courier
-    //-------------------------------------
+    //-----------------------------------------
 
     mapRef.current?.animateToRegion(
       {
@@ -616,9 +950,9 @@ const OrderTrackingScreen = ({ orderId }) => {
     );
   }, [order?.status, courier?.lat, courier?.lng, driverCardAnim]);
 
-  //================================================
+  // =================================================
   // CLEAR LIVE ORDER BADGE
-  //================================================
+  // =================================================
 
   useEffect(() => {
     if (!order) {
@@ -633,27 +967,41 @@ const OrderTrackingScreen = ({ orderId }) => {
     // Clear Badge After Delay
     //-------------------------------------
 
-    const timer = setTimeout(async () => {
-      try {
-        const latestOrder = await DataStore.query(Order, order.id);
+    const timer = setTimeout(
+      async () => {
+        try {
+          const latestOrder = await DataStore.query(Order, order.id);
 
-        if (!latestOrder) {
-          return;
+          if (!latestOrder) {
+            return;
+          }
+
+          await DataStore.save(
+            Order.copyOf(
+              latestOrder,
+
+              (updated) => {
+                updated.hasNewOffer = false;
+              },
+            ),
+          );
+
+          // -----------------------------------------
+          // Refresh React state from the record
+          // we just saved.
+          // -----------------------------------------
+
+          await refreshOrder({
+            reason: "CLEAR_OFFER_BADGE",
+            log: false,
+          });
+        } catch (error) {
+          console.log("CLEAR OFFER BADGE ERROR:", error);
         }
+      },
 
-        await DataStore.save(
-          Order.copyOf(
-            latestOrder,
-
-            (updated) => {
-              updated.hasNewOffer = false;
-            },
-          ),
-        );
-      } catch (error) {
-        console.log("CLEAR OFFER BADGE ERROR:", error);
-      }
-    }, 1500);
+      1500,
+    );
 
     //-------------------------------------
     // Cleanup
@@ -662,11 +1010,11 @@ const OrderTrackingScreen = ({ orderId }) => {
     return () => {
       clearTimeout(timer);
     };
-  }, [order?.id, order?.hasNewOffer, order?.lastOfferSenderType]);
+  }, [order?.id, order?.hasNewOffer, order?.lastOfferSenderType, refreshOrder]);
 
-  //================================================
+  // =================================================
   // LOADING ORDER
-  //================================================
+  // =================================================
 
   if (!order) {
     return (
@@ -678,9 +1026,9 @@ const OrderTrackingScreen = ({ orderId }) => {
     );
   }
 
-  //================================================
+  // =================================================
   // ORDER COORDINATES
-  //================================================
+  // =================================================
 
   const originLatitude = toCoordinate(order.originLat);
 
@@ -735,9 +1083,9 @@ const OrderTrackingScreen = ({ orderId }) => {
 
   const canRenderMap = Boolean(origin && destination);
 
-  //================================================
+  // =================================================
   // COURIER COORDINATES
-  //================================================
+  // =================================================
 
   const courierLatitude = toCoordinate(courier?.lat);
 
@@ -748,15 +1096,15 @@ const OrderTrackingScreen = ({ orderId }) => {
     courierLongitude,
   );
 
-  //================================================
+  // =================================================
   // MAXI CONDITIONS
-  //================================================
+  // =================================================
 
   const canStartBidding = order.transportationType === "MAXI";
 
-  //================================================
+  // =================================================
   // ACCEPT MAXI OFFER
-  //================================================
+  // =================================================
 
   const handleAcceptOffer = async (offer) => {
     //-------------------------------------
@@ -794,7 +1142,7 @@ const OrderTrackingScreen = ({ orderId }) => {
       // Update Order
       //---------------------------------
 
-      await DataStore.save(
+      const updatedOrder = await DataStore.save(
         Order.copyOf(
           latestOrder,
 
@@ -811,6 +1159,15 @@ const OrderTrackingScreen = ({ orderId }) => {
           },
         ),
       );
+
+      //---------------------------------
+      // Immediately update UI with the
+      // actual saved object.
+      //---------------------------------
+
+      if (updatedOrder && mountedRef.current) {
+        setOrder((currentOrder) => mergeOrders(currentOrder, updatedOrder));
+      }
 
       //---------------------------------
       // Get Latest Offer
@@ -838,9 +1195,9 @@ const OrderTrackingScreen = ({ orderId }) => {
     }
   };
 
-  //================================================
+  // =================================================
   // COUNTER MAXI OFFER
-  //================================================
+  // =================================================
 
   const handleCounterOffer = async (offer) => {
     try {
@@ -876,7 +1233,7 @@ const OrderTrackingScreen = ({ orderId }) => {
       // Notify Courier
       //-------------------------------------
 
-      await DataStore.save(
+      const updatedOrder = await DataStore.save(
         Order.copyOf(
           latestOrder,
 
@@ -889,14 +1246,22 @@ const OrderTrackingScreen = ({ orderId }) => {
           },
         ),
       );
+
+      //-------------------------------------
+      // Update UI from actual saved record
+      //-------------------------------------
+
+      if (updatedOrder && mountedRef.current) {
+        setOrder((currentOrder) => mergeOrders(currentOrder, updatedOrder));
+      }
     } catch (error) {
       console.log("COUNTER OFFER ERROR:", error);
     }
   };
 
-  //================================================
+  // =================================================
   // UI
-  //================================================
+  // =================================================
 
   return (
     <SafeAreaView style={styles.container}>

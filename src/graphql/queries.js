@@ -235,12 +235,19 @@ export const getPayout = /* GraphQL */ `
     getPayout(id: $id) {
       id
       courierID
+      walletID
       amount
       status
       bankName
       accountNumber
       reference
-      walletID
+      transferCode
+      transferID
+      failureReason
+      payoutMethod
+      processedAt
+      paidAt
+      failedAt
       createdAt
       updatedAt
       _version
@@ -260,12 +267,19 @@ export const listPayouts = /* GraphQL */ `
       items {
         id
         courierID
+        walletID
         amount
         status
         bankName
         accountNumber
         reference
-        walletID
+        transferCode
+        transferID
+        failureReason
+        payoutMethod
+        processedAt
+        paidAt
+        failedAt
         createdAt
         updatedAt
         _version
@@ -295,12 +309,19 @@ export const syncPayouts = /* GraphQL */ `
       items {
         id
         courierID
+        walletID
         amount
         status
         bankName
         accountNumber
         reference
-        walletID
+        transferCode
+        transferID
+        failureReason
+        payoutMethod
+        processedAt
+        paidAt
+        failedAt
         createdAt
         updatedAt
         _version
@@ -332,12 +353,19 @@ export const payoutsByCourierID = /* GraphQL */ `
       items {
         id
         courierID
+        walletID
         amount
         status
         bankName
         accountNumber
         reference
-        walletID
+        transferCode
+        transferID
+        failureReason
+        payoutMethod
+        processedAt
+        paidAt
+        failedAt
         createdAt
         updatedAt
         _version
@@ -369,12 +397,63 @@ export const payoutsByWalletID = /* GraphQL */ `
       items {
         id
         courierID
+        walletID
         amount
         status
         bankName
         accountNumber
         reference
+        transferCode
+        transferID
+        failureReason
+        payoutMethod
+        processedAt
+        paidAt
+        failedAt
+        createdAt
+        updatedAt
+        _version
+        _deleted
+        _lastChangedAt
+        __typename
+      }
+      nextToken
+      startedAt
+      __typename
+    }
+  }
+`;
+export const payoutsByReference = /* GraphQL */ `
+  query PayoutsByReference(
+    $reference: String!
+    $sortDirection: ModelSortDirection
+    $filter: ModelPayoutFilterInput
+    $limit: Int
+    $nextToken: String
+  ) {
+    payoutsByReference(
+      reference: $reference
+      sortDirection: $sortDirection
+      filter: $filter
+      limit: $limit
+      nextToken: $nextToken
+    ) {
+      items {
+        id
+        courierID
         walletID
+        amount
+        status
+        bankName
+        accountNumber
+        reference
+        transferCode
+        transferID
+        failureReason
+        payoutMethod
+        processedAt
+        paidAt
+        failedAt
         createdAt
         updatedAt
         _version
@@ -633,9 +712,9 @@ export const getWallet = /* GraphQL */ `
       id
       ownerID
       ownerType
-      balance
+      availableBalance
       pendingBalance
-      totalEarnings
+      lifetimeEarnings
       transactions {
         nextToken
         startedAt
@@ -661,9 +740,9 @@ export const listWallets = /* GraphQL */ `
         id
         ownerID
         ownerType
-        balance
+        availableBalance
         pendingBalance
-        totalEarnings
+        lifetimeEarnings
         createdAt
         updatedAt
         _version
@@ -694,9 +773,9 @@ export const syncWallets = /* GraphQL */ `
         id
         ownerID
         ownerType
-        balance
+        availableBalance
         pendingBalance
-        totalEarnings
+        lifetimeEarnings
         createdAt
         updatedAt
         _version
@@ -815,10 +894,14 @@ export const getPayment = /* GraphQL */ `
         paymentReference
         payoutStatus
         fundsStatus
+        earningsAllocationStatus
+        earningsAllocatedAt
         fundsReleaseBlocked
         fundsHoldReason
         fundsHeldBy
         fundsHeldAt
+        fundsReleasedAmount
+        pickupFundsReleasedAt
         fundsReleasedAt
         fundsReleaseType
         assignedCourierId
@@ -1143,10 +1226,14 @@ export const getOffer = /* GraphQL */ `
         paymentReference
         payoutStatus
         fundsStatus
+        earningsAllocationStatus
+        earningsAllocatedAt
         fundsReleaseBlocked
         fundsHoldReason
         fundsHeldBy
         fundsHeldAt
+        fundsReleasedAmount
+        pickupFundsReleasedAt
         fundsReleasedAt
         fundsReleaseType
         assignedCourierId
@@ -1456,10 +1543,14 @@ export const getOrder = /* GraphQL */ `
       paymentReference
       payoutStatus
       fundsStatus
+      earningsAllocationStatus
+      earningsAllocatedAt
       fundsReleaseBlocked
       fundsHoldReason
       fundsHeldBy
       fundsHeldAt
+      fundsReleasedAmount
+      pickupFundsReleasedAt
       fundsReleasedAt
       fundsReleaseType
       assignedCourierId
@@ -1653,10 +1744,14 @@ export const listOrders = /* GraphQL */ `
         paymentReference
         payoutStatus
         fundsStatus
+        earningsAllocationStatus
+        earningsAllocatedAt
         fundsReleaseBlocked
         fundsHoldReason
         fundsHeldBy
         fundsHeldAt
+        fundsReleasedAmount
+        pickupFundsReleasedAt
         fundsReleasedAt
         fundsReleaseType
         assignedCourierId
@@ -1785,10 +1880,14 @@ export const syncOrders = /* GraphQL */ `
         paymentReference
         payoutStatus
         fundsStatus
+        earningsAllocationStatus
+        earningsAllocatedAt
         fundsReleaseBlocked
         fundsHoldReason
         fundsHeldBy
         fundsHeldAt
+        fundsReleasedAmount
+        pickupFundsReleasedAt
         fundsReleasedAt
         fundsReleaseType
         assignedCourierId
@@ -1919,10 +2018,14 @@ export const ordersByAssignedCourierId = /* GraphQL */ `
         paymentReference
         payoutStatus
         fundsStatus
+        earningsAllocationStatus
+        earningsAllocatedAt
         fundsReleaseBlocked
         fundsHoldReason
         fundsHeldBy
         fundsHeldAt
+        fundsReleasedAmount
+        pickupFundsReleasedAt
         fundsReleasedAt
         fundsReleaseType
         assignedCourierId
@@ -2055,10 +2158,14 @@ export const ordersByAssignmentStatusAndAssignmentExpiresAt = /* GraphQL */ `
         paymentReference
         payoutStatus
         fundsStatus
+        earningsAllocationStatus
+        earningsAllocatedAt
         fundsReleaseBlocked
         fundsHoldReason
         fundsHeldBy
         fundsHeldAt
+        fundsReleasedAmount
+        pickupFundsReleasedAt
         fundsReleasedAt
         fundsReleaseType
         assignedCourierId
@@ -2189,10 +2296,14 @@ export const ordersByUserID = /* GraphQL */ `
         paymentReference
         payoutStatus
         fundsStatus
+        earningsAllocationStatus
+        earningsAllocatedAt
         fundsReleaseBlocked
         fundsHoldReason
         fundsHeldBy
         fundsHeldAt
+        fundsReleasedAmount
+        pickupFundsReleasedAt
         fundsReleasedAt
         fundsReleaseType
         assignedCourierId
@@ -2391,10 +2502,14 @@ export const getCourierReport = /* GraphQL */ `
         paymentReference
         payoutStatus
         fundsStatus
+        earningsAllocationStatus
+        earningsAllocatedAt
         fundsReleaseBlocked
         fundsHoldReason
         fundsHeldBy
         fundsHeldAt
+        fundsReleasedAmount
+        pickupFundsReleasedAt
         fundsReleasedAt
         fundsReleaseType
         assignedCourierId
@@ -2787,10 +2902,14 @@ export const getCourierReview = /* GraphQL */ `
         paymentReference
         payoutStatus
         fundsStatus
+        earningsAllocationStatus
+        earningsAllocatedAt
         fundsReleaseBlocked
         fundsHoldReason
         fundsHeldBy
         fundsHeldAt
+        fundsReleasedAmount
+        pickupFundsReleasedAt
         fundsReleasedAt
         fundsReleaseType
         assignedCourierId
@@ -3057,9 +3176,9 @@ export const getCourier = /* GraphQL */ `
         id
         ownerID
         ownerType
-        balance
+        availableBalance
         pendingBalance
-        totalEarnings
+        lifetimeEarnings
         createdAt
         updatedAt
         _version

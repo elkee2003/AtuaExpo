@@ -23,40 +23,60 @@ const OrderHistoryMain = () => {
   useEffect(() => {
     if (!dbUser?.id) return;
 
+    console.log("[OrderHistory] Starting observeQuery for user:", dbUser.id);
+
     const subscription = DataStore.observeQuery(Order, (order) =>
       order.userID.eq(dbUser.id),
-    ).subscribe(async ({ items }) => {
-      try {
-        // ✅ Sort orders
-        const sortedOrders = items.sort(
-          (a, b) =>
-            new Date(b.createdAt ?? 0).getTime() -
-            new Date(a.createdAt ?? 0).getTime(),
-        );
+    ).subscribe(
+      async ({ items }) => {
+        try {
+          console.log(
+            "[OrderHistory] observeQuery received:",
+            items.map((order) => ({
+              id: order.id,
+              userID: order.userID,
+              status: order.status,
+              paymentStatus: order.paymentStatus,
+              paymentID: order.paymentID,
+              _version: order._version,
+            })),
+          );
 
-        // ✅ Attach courier using relationship (NO extra queries)
-        const ordersWithCouriers = await Promise.all(
-          sortedOrders.map(async (order) => {
-            let courier = null;
+          const sortedOrders = items.sort(
+            (a, b) =>
+              new Date(b.createdAt ?? 0).getTime() -
+              new Date(a.createdAt ?? 0).getTime(),
+          );
 
-            if (order.assignedCourierId && order.status !== "DELIVERED") {
-              courier = await order.assignedCourier; // ✅ FIXED
-            }
+          const ordersWithCouriers = await Promise.all(
+            sortedOrders.map(async (order) => {
+              let courier = null;
 
-            return { ...order, courier };
-          }),
-        );
+              if (order.assignedCourierId && order.status !== "DELIVERED") {
+                courier = await order.assignedCourier;
+              }
 
-        setOrders(ordersWithCouriers);
-      } catch (error) {
-        console.log("Error processing orders:", error);
-      } finally {
-        setLoading(false);
-        setRefreshing(false);
-      }
-    });
+              return { ...order, courier };
+            }),
+          );
 
-    return () => subscription.unsubscribe();
+          setOrders(ordersWithCouriers);
+        } catch (error) {
+          console.log("[OrderHistory] Error processing orders:", error);
+        } finally {
+          setLoading(false);
+          setRefreshing(false);
+        }
+      },
+      (error) => {
+        console.error("[OrderHistory] observeQuery subscription error:", error);
+      },
+    );
+
+    return () => {
+      console.log("[OrderHistory] Unsubscribing");
+      subscription.unsubscribe();
+    };
   }, [dbUser?.id]);
 
   const onRefresh = async () => {

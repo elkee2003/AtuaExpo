@@ -101,7 +101,10 @@ const ConfirmEmailCom = () => {
 
     try {
       await resendSignUpCode({ username });
-      Alert.alert("Code Sent", "A new code has been sent to your email.");
+      Alert.alert(
+        "Code Sent",
+        "A new code has been sent to your email. Check inbox or spam",
+      );
     } catch (error) {
       Alert.alert("Resend Failed", error?.message || "Something went wrong.");
     } finally {

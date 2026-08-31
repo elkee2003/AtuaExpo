@@ -1,15 +1,12 @@
 /* Amplify Params - DO NOT EDIT
-	API_ATUA_GRAPHQLAPIENDPOINTOUTPUT
-	API_ATUA_GRAPHQLAPIIDOUTPUT
-	API_ATUA_GRAPHQLAPIKEYOUTPUT
-	ENV
-	REGION
+    API_ATUA_GRAPHQLAPIENDPOINTOUTPUT
+    API_ATUA_GRAPHQLAPIIDOUTPUT
+    API_ATUA_GRAPHQLAPIKEYOUTPUT
+    ENV
+    REGION
  Amplify Params - DO NOT EDIT */
 
-const {
-  SSMClient,
-  GetParameterCommand,
-} = require("@aws-sdk/client-ssm");
+const { SSMClient, GetParameterCommand } = require("@aws-sdk/client-ssm");
 
 const https = require("https");
 const crypto = require("crypto");
@@ -18,51 +15,38 @@ const crypto = require("crypto");
    CONFIGURATION
 ========================================================== */
 
-const GRAPHQL_ENDPOINT =
-  process.env.API_ATUA_GRAPHQLAPIENDPOINTOUTPUT;
+const GRAPHQL_ENDPOINT = process.env.API_ATUA_GRAPHQLAPIENDPOINTOUTPUT;
 
-const GRAPHQL_API_KEY =
-  process.env.API_ATUA_GRAPHQLAPIKEYOUTPUT;
+const GRAPHQL_API_KEY = process.env.API_ATUA_GRAPHQLAPIKEYOUTPUT;
 
-const REGION =
-  process.env.REGION ||
-  process.env.AWS_REGION;
+const REGION = process.env.REGION || process.env.AWS_REGION;
 
 /* ==========================================================
    GET PAYSTACK SECRET FROM SSM
 ========================================================== */
 
 const getPaystackSecretKey = async () => {
-  const parameterName =
-    process.env.PAYSTACK_SECRET_KEY;
+  const parameterName = process.env.PAYSTACK_SECRET_KEY;
 
   if (!parameterName) {
-    throw new Error(
-      "PAYSTACK_SECRET_KEY secret is not configured."
-    );
+    throw new Error("PAYSTACK_SECRET_KEY secret is not configured.");
   }
 
-  const ssmClient =
-    new SSMClient({
-      region: REGION,
-    });
+  const ssmClient = new SSMClient({
+    region: REGION,
+  });
 
-  const command =
-    new GetParameterCommand({
-      Name: parameterName,
-      WithDecryption: true,
-    });
+  const command = new GetParameterCommand({
+    Name: parameterName,
+    WithDecryption: true,
+  });
 
-  const result =
-    await ssmClient.send(command);
+  const result = await ssmClient.send(command);
 
-  const secretKey =
-    result?.Parameter?.Value;
+  const secretKey = result?.Parameter?.Value;
 
   if (!secretKey) {
-    throw new Error(
-      "Could not retrieve Paystack secret key."
-    );
+    throw new Error("Could not retrieve Paystack secret key.");
   }
 
   return secretKey;
@@ -75,374 +59,453 @@ const getPaystackSecretKey = async () => {
 const graphqlRequest = async (
   query,
   variables = {},
-  operationName = "GraphQL operation"
+  operationName = "GraphQL operation",
 ) => {
   if (!GRAPHQL_ENDPOINT) {
-    throw new Error(
-      "Atua GraphQL endpoint is not configured."
-    );
+    throw new Error("Atua GraphQL endpoint is not configured.");
   }
 
   if (!GRAPHQL_API_KEY) {
-    throw new Error(
-      "Atua GraphQL API key is not configured."
-    );
+    throw new Error("Atua GraphQL API key is not configured.");
   }
 
-  const endpoint =
-    new URL(GRAPHQL_ENDPOINT);
+  const endpoint = new URL(GRAPHQL_ENDPOINT);
 
-  const body =
-    JSON.stringify({
-      query,
-      variables,
-    });
+  const body = JSON.stringify({
+    query,
+    variables,
+  });
 
   const options = {
-    hostname:
-      endpoint.hostname,
+    hostname: endpoint.hostname,
 
-    path:
-      endpoint.pathname ||
-      "/graphql",
+    path: endpoint.pathname || "/graphql",
 
-    method:
-      "POST",
+    method: "POST",
 
     headers: {
-      "Content-Type":
-        "application/json",
+      "Content-Type": "application/json",
 
-      "Content-Length":
-        Buffer.byteLength(body),
+      "Content-Length": Buffer.byteLength(body),
 
-      "x-api-key":
-        GRAPHQL_API_KEY,
+      "x-api-key": GRAPHQL_API_KEY,
     },
   };
 
-  return new Promise(
-    (resolve, reject) => {
-      const request =
-        https.request(
-          options,
-          (res) => {
-            let data = "";
+  return new Promise((resolve, reject) => {
+    const request = https.request(options, (res) => {
+      let data = "";
 
-            res.on(
-              "data",
-              (chunk) => {
-                data += chunk;
-              }
-            );
+      res.on("data", (chunk) => {
+        data += chunk;
+      });
 
-            res.on(
-              "end",
-              () => {
-                if (
-                  res.statusCode < 200 ||
-                  res.statusCode >= 300
-                ) {
-                  console.error(
-                    `${operationName} HTTP ERROR:`,
-                    {
-                      statusCode:
-                        res.statusCode,
+      res.on("end", () => {
+        if (res.statusCode < 200 || res.statusCode >= 300) {
+          console.error(`${operationName} HTTP ERROR:`, {
+            statusCode: res.statusCode,
 
-                      body:
-                        data,
-                    }
-                  );
+            body: data,
+          });
 
-                  return reject(
-                    new Error(
-                      `${operationName} returned HTTP ${res.statusCode}.`
-                    )
-                  );
-                }
+          return reject(
+            new Error(`${operationName} returned HTTP ${res.statusCode}.`),
+          );
+        }
 
-                let parsed;
+        let parsed;
 
-                try {
-                  parsed =
-                    JSON.parse(data);
-                } catch (error) {
-                  console.error(
-                    `${operationName} JSON PARSE ERROR:`,
-                    error
-                  );
+        try {
+          parsed = JSON.parse(data);
+        } catch (error) {
+          console.error(`${operationName} JSON PARSE ERROR:`, error);
 
-                  return reject(error);
-                }
+          return reject(error);
+        }
 
-                if (
-                  parsed?.errors?.length
-                ) {
-                  console.error(
-                    `${operationName} GRAPHQL ERRORS:`,
-                    JSON.stringify(
-                      parsed.errors
-                    )
-                  );
-
-                  return reject(
-                    new Error(
-                      parsed.errors
-                        .map(
-                          (item) =>
-                            item?.message
-                        )
-                        .filter(Boolean)
-                        .join(" | ") ||
-                      `${operationName} failed.`
-                    )
-                  );
-                }
-
-                resolve(
-                  parsed?.data ||
-                  null
-                );
-              }
-            );
-          }
-        );
-
-      request.on(
-        "error",
-        (error) => {
+        if (parsed?.errors?.length) {
           console.error(
-            `${operationName} REQUEST ERROR:`,
-            error
+            `${operationName} GRAPHQL ERRORS:`,
+            JSON.stringify(parsed.errors),
           );
 
-          reject(error);
+          return reject(
+            new Error(
+              parsed.errors
+                .map((item) => item?.message)
+                .filter(Boolean)
+                .join(" | ") || `${operationName} failed.`,
+            ),
+          );
         }
-      );
 
-      request.write(body);
-      request.end();
-    }
-  );
+        resolve(parsed?.data || null);
+      });
+    });
+
+    request.on("error", (error) => {
+      console.error(`${operationName} REQUEST ERROR:`, error);
+
+      reject(error);
+    });
+
+    request.write(body);
+    request.end();
+  });
 };
 
 /* ==========================================================
    PAYSTACK API REQUEST
 ========================================================== */
 
-const paystackRequest = async ({
-  method,
-  path,
-  secretKey,
-}) => {
+const paystackRequest = async ({ method = "GET", path, secretKey }) => {
+  if (!secretKey) {
+    throw new Error("Paystack secret key is required.");
+  }
+
+  if (!path) {
+    throw new Error("Paystack API path is required.");
+  }
+
   const options = {
-    hostname:
-      "api.paystack.co",
+    hostname: "api.paystack.co",
 
     path,
 
     method,
 
     headers: {
-      Authorization:
-        `Bearer ${secretKey}`,
+      Authorization: `Bearer ${secretKey}`,
 
-      Accept:
-        "application/json",
+      Accept: "application/json",
     },
   };
 
-  return new Promise(
-    (resolve, reject) => {
-      const request =
-        https.request(
-          options,
-          (res) => {
-            let data = "";
+  return new Promise((resolve, reject) => {
+    const request = https.request(options, (res) => {
+      let data = "";
 
-            res.on(
-              "data",
-              (chunk) => {
-                data += chunk;
-              }
-            );
+      res.on("data", (chunk) => {
+        data += chunk;
+      });
 
-            res.on(
-              "end",
-              () => {
-                let parsed;
+      res.on("end", () => {
+        let parsed;
 
-                try {
-                  parsed =
-                    JSON.parse(data);
-                } catch (error) {
-                  console.error(
-                    "PAYSTACK JSON PARSE ERROR:",
-                    {
-                      statusCode:
-                        res.statusCode,
+        try {
+          parsed = JSON.parse(data);
+        } catch (error) {
+          console.error("PAYSTACK JSON PARSE ERROR:", {
+            statusCode: res.statusCode,
 
-                      body:
-                        data,
-                    }
-                  );
+            body: data,
+          });
 
-                  return reject(error);
-                }
-
-                resolve({
-                  statusCode:
-                    res.statusCode,
-
-                  body:
-                    parsed,
-                });
-              }
-            );
-          }
-        );
-
-      request.on(
-        "error",
-        (error) => {
-          console.error(
-            "PAYSTACK REQUEST ERROR:",
-            error
-          );
-
-          reject(error);
+          return reject(error);
         }
-      );
 
-      request.end();
-    }
-  );
+        resolve({
+          statusCode: res.statusCode,
+
+          body: parsed,
+        });
+      });
+    });
+
+    request.on("error", (error) => {
+      console.error("PAYSTACK REQUEST ERROR:", error);
+
+      reject(error);
+    });
+
+    request.end();
+  });
 };
+
+/* ==========================================================
+   COMPLETE ORDER FIELD SELECTION
+========================================================== */
+
+/*
+ * IMPORTANT:
+ *
+ * These fields are used when READING an Order and when
+ * receiving the result of an Order update.
+ *
+ * They are NOT all sent in updateOrder input.
+ *
+ * The webhook only changes the fields that belong to
+ * payment finalization.
+ */
+
+const ORDER_FIELDS = `
+  id
+
+  recipientName
+  recipientNumber
+  recipientNumber2
+  orderDetails
+
+  originAddress
+  originState
+  originLat
+  originLng
+
+  destinationAddress
+  destinationState
+  destinationLat
+  destinationLng
+
+  tripType
+  distance
+
+  transportationType
+  vehicleClass
+  status
+
+  hasNewOffer
+  lastOfferAt
+  lastOfferSenderType
+
+  loadCategory
+  isInterState
+
+  estimatedMinPrice
+  estimatedMaxPrice
+
+  initialOfferPrice
+
+  loadingFee
+  unloadingFee
+  floorSurcharge
+  fragileSurcharge
+  extrasTotal
+
+  totalPrice
+  operationalFare
+
+  courierEarnings
+  commissionAmount
+  platformFee
+  platformServiceRevenue
+  vatAmount
+  platformNetRevenue
+
+  deliveryVerificationCode
+
+  declaredWeightBracket
+
+  senderPreTransferPhotos
+  senderPreTransferVideo
+  senderPreTransferRecordedAt
+
+  senderPreTransferLocalPhotos
+  senderPreTransferLocalVideo
+
+  mediaUploadStatus
+
+  courierPreTransferUploadStatus
+  courierPostLoadingUploadStatus
+  dropoffUploadStatus
+
+  courierPreTransferPhotos
+  courierPreTransferVideo
+  courierPreTransferRecordedAt
+
+  courierPreTransferLocalPhotos
+  courierPreTransferLocalVideo
+
+  courierPostLoadingPhotos
+  courierPostLoadingVideo
+
+  courierPostLoadingLocalPhotos
+  courierPostLoadingLocalVideo
+
+  dropoffArrivalPhotos
+  dropoffArrivalVideo
+
+  dropoffArrivalLocalPhotos
+  dropoffArrivalLocalVideo
+
+  postDeliveryPhotos
+  postDeliveryVideo
+
+  pickupLoadingResponsibility
+  pickupFloorLevel
+  pickupFloorLevelPrice
+  pickupHasElevator
+
+  dropoffUnloadingResponsibility
+  dropoffFloorLevel
+  dropoffFloorLevelPrice
+  dropoffHasElevator
+
+  acceptedAt
+  arrivedPickupAt
+  loadingStartedAt
+  tripStartedAt
+  arrivedDropoffAt
+  unloadingCompletedAt
+
+  logisticsCompanyId
+  waybillNumber
+  waybillPhoto
+  logisticsTrackingCode
+  logisticsTrackingStatus
+  handedOverToLogisticsAt
+  logisticsIntakeConfirmedAt
+
+  acceptedOfferID
+
+  paymentStatus
+  paymentID
+  paymentReference
+
+  payoutStatus
+  fundsStatus
+
+  earningsAllocationStatus
+  earningsAllocatedAt
+
+  fundsReleaseBlocked
+  fundsHoldReason
+  fundsHeldBy
+  fundsHeldAt
+  fundsReleasedAmount
+  pickupFundsReleasedAt
+  fundsReleasedAt
+  fundsReleaseType
+
+  assignedCourierId
+  assignmentExpiresAt
+  assignmentAttempts
+  lastAssignedAt
+  rejectedCourierIds
+  assignmentStatus
+
+  userID
+
+  createdAt
+  updatedAt
+
+  _version
+  _lastChangedAt
+  _deleted
+`;
 
 /* ==========================================================
    GET ORDER
 ========================================================== */
 
-const getOrder = async (
-  orderId
-) => {
+const getOrder = async (orderId) => {
+  if (!orderId) {
+    throw new Error("Order ID is required.");
+  }
+
   const query = `
-    query GetOrder($id: ID!) {
-      getOrder(id: $id) {
-        id
-        userID
-        totalPrice
-
-        status
-
-        paymentStatus
-        paymentID
-
-        payoutStatus
-        fundsStatus
-
-        courierEarnings
-        assignedCourierId
-
-        isInterState
-        tripType
-
-        createdAt
-        updatedAt
-
-        _version
-        _lastChangedAt
-        _deleted
+    query GetOrder(
+      $id: ID!
+    ) {
+      getOrder(
+        id: $id
+      ) {
+        ${ORDER_FIELDS}
       }
     }
   `;
 
-  const data =
-    await graphqlRequest(
-      query,
-      {
-        id:
-          orderId,
-      },
-      "GetOrder"
-    );
-
-  return (
-    data?.getOrder ||
-    null
+  const data = await graphqlRequest(
+    query,
+    {
+      id: orderId,
+    },
+    "GetOrder",
   );
+
+  return data?.getOrder || null;
 };
 
 /* ==========================================================
    GET PAYMENT BY REFERENCE
 ========================================================== */
 
-const getPaymentByReference =
-  async (
-    reference
-  ) => {
-    const query = `
-      query ListPayments(
-        $filter: ModelPaymentFilterInput
+const getPaymentByReference = async (reference) => {
+  if (!reference) {
+    throw new Error("Payment reference is required.");
+  }
+
+  const query = `
+    query ListPayments(
+      $filter: ModelPaymentFilterInput
+    ) {
+      listPayments(
+        filter: $filter
+        limit: 1
       ) {
-        listPayments(
-          filter: $filter
-          limit: 1
-        ) {
-          items {
-            id
+        items {
+          id
 
-            orderID
-            userID
+          orderID
+          userID
 
-            amount
-            currency
+          amount
+          currency
 
-            status
-            paymentMethod
-            provider
+          status
+          paymentMethod
+          provider
 
-            reference
+          reference
 
-            createdAt
-            updatedAt
+          createdAt
+          updatedAt
 
-            _version
-            _lastChangedAt
-            _deleted
-          }
+          _version
+          _lastChangedAt
+          _deleted
         }
       }
-    `;
+    }
+  `;
 
-    const data =
-      await graphqlRequest(
-        query,
-        {
-          filter: {
-            reference: {
-              eq:
-                reference,
-            },
-          },
+  const data = await graphqlRequest(
+    query,
+    {
+      filter: {
+        reference: {
+          eq: reference,
         },
-        "GetPaymentByReference"
-      );
+      },
+    },
+    "GetPaymentByReference",
+  );
 
-    return (
-      data?.listPayments?.items?.[0] ||
-      null
-    );
-  };
+  return data?.listPayments?.items?.find((item) => !item?._deleted) || null;
+};
 
 /* ==========================================================
    CREATE PAYMENT
 ========================================================== */
 
-const createPayment = async ({
-  order,
-  transaction,
-}) => {
+const createPayment = async ({ order, transaction }) => {
+  if (!order?.id) {
+    throw new Error("Order is required to create Payment.");
+  }
+
+  if (!order?.userID) {
+    throw new Error(`Order ${order.id} does not have userID.`);
+  }
+
+  if (!transaction?.reference) {
+    throw new Error("Paystack transaction reference is required.");
+  }
+
+  const amount = Number(order.totalPrice);
+
+  if (!Number.isFinite(amount) || amount <= 0) {
+    throw new Error(`Invalid Order totalPrice: ${order.totalPrice}`);
+  }
+
   const mutation = `
     mutation CreatePayment(
       $input: CreatePaymentInput!
@@ -475,82 +538,166 @@ const createPayment = async ({
   `;
 
   const input = {
-    orderID:
-      order.id,
+    orderID: order.id,
 
-    userID:
-      order.userID,
+    userID: order.userID,
 
-    amount:
-      Number(
-        order.totalPrice
-      ),
+    amount,
 
-    currency:
-      transaction.currency,
+    currency: transaction.currency || "NGN",
 
-    status:
-      "SUCCESS",
+    status: "SUCCESS",
 
-    paymentMethod:
-      transaction.channel ||
-      "paystack",
+    paymentMethod: transaction.channel || "paystack",
 
-    provider:
-      "PAYSTACK",
+    provider: "PAYSTACK",
 
-    reference:
-      transaction.reference,
+    reference: transaction.reference,
   };
 
-  console.log(
-    "CREATING PAYMENT:",
+  console.log("CREATING PAYMENT:", {
+    orderID: input.orderID,
+
+    userID: input.userID,
+
+    amount: input.amount,
+
+    currency: input.currency,
+
+    reference: input.reference,
+  });
+
+  const data = await graphqlRequest(
+    mutation,
     {
-      orderID:
-        input.orderID,
-
-      amount:
-        input.amount,
-
-      reference:
-        input.reference,
-    }
+      input,
+    },
+    "CreatePayment",
   );
 
-  const data =
-    await graphqlRequest(
-      mutation,
-      {
-        input,
-      },
-      "CreatePayment"
-    );
+  const payment = data?.createPayment || null;
 
-  return (
-    data?.createPayment ||
-    null
-  );
+  if (!payment) {
+    throw new Error("Payment creation returned no Payment.");
+  }
+
+  console.log("PAYMENT CREATED:", {
+    paymentID: payment.id,
+
+    orderID: payment.orderID,
+
+    userID: payment.userID,
+
+    amount: payment.amount,
+
+    reference: payment.reference,
+  });
+
+  return payment;
 };
 
 /* ==========================================================
-   MARK ORDER AS PAID
+   GENERATE DELIVERY VERIFICATION CODE
 ========================================================== */
 
-const markOrderAsPaid = async ({
-  order,
-  paymentId,
-}) => {
+const generateVerificationCode = () => {
+  return crypto.randomInt(0, 1000000).toString().padStart(6, "0");
+};
+/* ==========================================================
+   UPDATE ORDER AFTER SUCCESSFUL PAYMENT
+========================================================== */
+
+/*
+ * This is the PRIMARY payment finalization operation.
+ *
+ * One Order update contains:
+ *
+ * - userID
+ * - paymentStatus
+ * - paymentID
+ * - status
+ * - fundsStatus
+ * - deliveryVerificationCode
+ *
+ * We only SEND those fields as the update input.
+ *
+ * We REQUEST the complete Order back using ORDER_FIELDS.
+ *
+ * This is important for the DataStore synchronization path.
+ */
+
+const finalizePaidOrder = async ({ order, payment }) => {
   if (!order?.id) {
-    throw new Error(
-      "Order is required."
-    );
+    throw new Error("Cannot finalize Order without Order ID.");
   }
 
-  if (!paymentId) {
-    throw new Error(
-      "Payment ID is required."
-    );
+  if (!order?.userID) {
+    throw new Error(`Order ${order.id} is missing userID.`);
   }
+
+  if (!payment?.id) {
+    throw new Error("Cannot finalize Order without Payment ID.");
+  }
+
+  /*
+   * --------------------------------------------------------
+   * IDEMPOTENCY
+   * --------------------------------------------------------
+   *
+   * If this webhook was already successfully processed,
+   * do NOT generate another verification code.
+   *
+   * This is extremely important because Paystack can retry
+   * webhook events.
+   */
+
+  if (
+    order.paymentStatus === "PAID" &&
+    order.paymentID === payment.id &&
+    order.deliveryVerificationCode
+  ) {
+    console.log("ORDER ALREADY FULLY FINALIZED:", {
+      orderID: order.id,
+
+      paymentID: payment.id,
+
+      deliveryVerificationCode: order.deliveryVerificationCode,
+
+      version: order._version,
+    });
+
+    return order;
+  }
+
+  /*
+   * --------------------------------------------------------
+   * VERIFICATION CODE
+   * --------------------------------------------------------
+   *
+   * If an existing code somehow exists, preserve it.
+   *
+   * Otherwise generate a new one.
+   *
+   * This prevents a webhook retry from changing the customer's
+   * verification code.
+   */
+
+  const deliveryVerificationCode =
+    order.deliveryVerificationCode || generateVerificationCode();
+
+  console.log("DELIVERY VERIFICATION CODE:", {
+    orderID: order.id,
+
+    code: deliveryVerificationCode,
+
+    existing: Boolean(order.deliveryVerificationCode),
+  });
+
+  /*
+   * --------------------------------------------------------
+   * UPDATE ORDER
+   * --------------------------------------------------------
+   */
 
   const mutation = `
     mutation UpdateOrder(
@@ -559,1732 +706,688 @@ const markOrderAsPaid = async ({
       updateOrder(
         input: $input
       ) {
-        id
-
-        status
-
-        paymentStatus
-        paymentID
-
-        payoutStatus
-        fundsStatus
-
-        courierEarnings
-        assignedCourierId
-
-        createdAt
-        updatedAt
-
-        _version
-        _lastChangedAt
-        _deleted
+        ${ORDER_FIELDS}
       }
     }
   `;
 
   const input = {
-    id:
-      order.id,
+    id: order.id,
 
-    paymentStatus:
-      "PAID",
+    /*
+     * IMPORTANT:
+     *
+     * userID is explicitly preserved.
+     *
+     * Your Order schema requires this field and the old
+     * subscription problem involved userID becoming null.
+     */
+    userID: order.userID,
 
-    paymentID:
-      paymentId,
+    paymentStatus: "PAID",
 
-    status:
-      "READY_FOR_PICKUP",
+    paymentID: payment.id,
 
-    fundsStatus:
-      "HELD",
+    status: "READY_FOR_PICKUP",
+
+    fundsStatus: "HELD",
+
+    deliveryVerificationCode: deliveryVerificationCode,
   };
 
-  if (
-    Number.isInteger(
-      order._version
-    )
-  ) {
-    input._version =
-      order._version;
+  /*
+   * --------------------------------------------------------
+   * OPTIMISTIC CONCURRENCY
+   * --------------------------------------------------------
+   *
+   * AppSync/DataStore uses _version.
+   *
+   * If we have the current version, send it so we don't
+   * blindly overwrite a newer Order.
+   */
+
+  if (Number.isInteger(order._version)) {
+    input._version = order._version;
   }
 
-  const data =
-    await graphqlRequest(
-      mutation,
+  console.log("FINALIZING ORDER:", {
+    orderID: order.id,
+
+    userID: order.userID,
+
+    previousVersion: order._version,
+
+    paymentID: payment.id,
+
+    paymentStatus: "PAID",
+
+    status: "READY_FOR_PICKUP",
+
+    fundsStatus: "HELD",
+
+    deliveryVerificationCode,
+  });
+
+  const data = await graphqlRequest(
+    mutation,
+    {
+      input,
+    },
+    "FinalizePaidOrder",
+  );
+
+  const updatedOrder = data?.updateOrder || null;
+
+  if (!updatedOrder) {
+    throw new Error(`updateOrder returned no Order for ${order.id}.`);
+  }
+
+  /*
+   * --------------------------------------------------------
+   * IMPORTANT DATASTORE DIAGNOSTIC
+   * --------------------------------------------------------
+   *
+   * We want to know exactly what AppSync returned from the
+   * mutation.
+   *
+   * If the complete Order is here, but the mobile DataStore
+   * temporarily blanks fields, then the remaining problem is
+   * on the subscription/synchronization side rather than
+   * this Lambda's database update.
+   */
+
+  console.log(
+    "FINALIZED ORDER RESPONSE:",
+    JSON.stringify(
       {
-        input,
+        id: updatedOrder.id,
+
+        userID: updatedOrder.userID,
+
+        recipientName: updatedOrder.recipientName,
+
+        recipientNumber: updatedOrder.recipientNumber,
+
+        originAddress: updatedOrder.originAddress,
+
+        originState: updatedOrder.originState,
+
+        destinationAddress: updatedOrder.destinationAddress,
+
+        destinationState: updatedOrder.destinationState,
+
+        originLat: updatedOrder.originLat,
+
+        originLng: updatedOrder.originLng,
+
+        destinationLat: updatedOrder.destinationLat,
+
+        destinationLng: updatedOrder.destinationLng,
+
+        tripType: updatedOrder.tripType,
+
+        distance: updatedOrder.distance,
+
+        transportationType: updatedOrder.transportationType,
+
+        vehicleClass: updatedOrder.vehicleClass,
+
+        totalPrice: updatedOrder.totalPrice,
+
+        operationalFare: updatedOrder.operationalFare,
+
+        courierEarnings: updatedOrder.courierEarnings,
+
+        paymentStatus: updatedOrder.paymentStatus,
+
+        paymentID: updatedOrder.paymentID,
+
+        paymentReference: updatedOrder.paymentReference,
+
+        payoutStatus: updatedOrder.payoutStatus,
+
+        fundsStatus: updatedOrder.fundsStatus,
+
+        deliveryVerificationCode: updatedOrder.deliveryVerificationCode,
+
+        assignedCourierId: updatedOrder.assignedCourierId,
+
+        assignmentStatus: updatedOrder.assignmentStatus,
+
+        status: updatedOrder.status,
+
+        createdAt: updatedOrder.createdAt,
+
+        updatedAt: updatedOrder.updatedAt,
+
+        _version: updatedOrder._version,
+
+        _lastChangedAt: updatedOrder._lastChangedAt,
+
+        _deleted: updatedOrder._deleted,
       },
-      "MarkOrderAsPaid"
-    );
+      null,
+      2,
+    ),
+  );
+
+  return updatedOrder;
+};
+
+/* ==========================================================
+   PAYSTACK SIGNATURE VERIFICATION
+========================================================== */
+
+const verifyPaystackSignature = ({ rawBody, signature, secretKey }) => {
+  if (!rawBody) {
+    throw new Error("Paystack webhook body is missing.");
+  }
+
+  if (!signature) {
+    throw new Error("Paystack signature is missing.");
+  }
+
+  const expectedSignature = crypto
+    .createHmac("sha512", secretKey)
+    .update(rawBody)
+    .digest("hex");
+
+  const expectedBuffer = Buffer.from(expectedSignature, "utf8");
+
+  const receivedBuffer = Buffer.from(signature, "utf8");
+
+  /*
+   * timingSafeEqual requires both buffers
+   * to have the same length.
+   */
+
+  if (expectedBuffer.length !== receivedBuffer.length) {
+    return false;
+  }
+
+  return crypto.timingSafeEqual(expectedBuffer, receivedBuffer);
+};
+
+/* ==========================================================
+   GET PAYSTACK SIGNATURE
+========================================================== */
+
+const getPaystackSignature = (event) => {
+  const headers = event?.headers || {};
+
+  /*
+   * API Gateway may normalize header casing.
+   */
 
   return (
-    data?.updateOrder ||
+    headers["x-paystack-signature"] ||
+    headers["X-Paystack-Signature"] ||
+    headers["X-PAYSTACK-SIGNATURE"] ||
     null
   );
 };
 
 /* ==========================================================
-   VERIFY CUSTOMER TRANSACTION WITH PAYSTACK
+   PARSE WEBHOOK BODY
 ========================================================== */
 
-const verifyCustomerTransaction =
-  async (
-    reference,
-    secretKey
-  ) => {
-    const encodedReference =
-      encodeURIComponent(
-        reference
-      );
-
-    const response =
-      await new Promise(
-        (resolve, reject) => {
-          const request =
-            https.request(
-              {
-                hostname:
-                  "api.paystack.co",
-
-                path:
-                  `/transaction/verify/${encodedReference}`,
-
-                method:
-                  "GET",
-
-                headers: {
-                  Authorization:
-                    `Bearer ${secretKey}`,
-
-                  Accept:
-                    "application/json",
-                },
-              },
-
-              (res) => {
-                let data = "";
-
-                res.on(
-                  "data",
-                  (chunk) => {
-                    data += chunk;
-                  }
-                );
-
-                res.on(
-                  "end",
-                  () => {
-                    try {
-                      resolve({
-                        statusCode:
-                          res.statusCode,
-
-                        body:
-                          JSON.parse(
-                            data
-                          ),
-                      });
-                    } catch (error) {
-                      reject(error);
-                    }
-                  }
-                );
-              }
-            );
-
-          request.on(
-            "error",
-            reject
-          );
-
-          request.end();
-        }
-      );
-
-    return response;
-  };
-
-/* ==========================================================
-   GET PAYOUT BY REFERENCE
-========================================================== */
-
-const getPayoutByReference =
-  async (
-    reference
-  ) => {
-    const query = `
-      query ListPayouts(
-        $filter: ModelPayoutFilterInput
-      ) {
-        listPayouts(
-          filter: $filter
-          limit: 1
-        ) {
-          items {
-            id
-
-            courierID
-            walletID
-
-            amount
-
-            status
-
-            bankName
-            accountNumber
-
-            reference
-
-            transferCode
-            transferID
-
-            failureReason
-
-            payoutMethod
-
-            processedAt
-            paidAt
-            failedAt
-
-            _version
-          }
-        }
-      }
-    `;
-
-    const data =
-      await graphqlRequest(
-        query,
-        {
-          filter: {
-            reference: {
-              eq:
-                reference,
-            },
-          },
-        },
-        "GetPayoutByReference"
-      );
-
-    return (
-      data?.listPayouts?.items?.[0] ||
-      null
-    );
-  };
-
-/* ==========================================================
-   UPDATE PAYOUT
-========================================================== */
-
-const updatePayout = async ({
-  payout,
-  fields,
-}) => {
-  const mutation = `
-    mutation UpdatePayout(
-      $input: UpdatePayoutInput!
-    ) {
-      updatePayout(
-        input: $input
-      ) {
-        id
-
-        courierID
-        walletID
-
-        amount
-
-        status
-
-        bankName
-        accountNumber
-
-        reference
-
-        transferCode
-        transferID
-
-        failureReason
-
-        payoutMethod
-
-        processedAt
-        paidAt
-        failedAt
-
-        _version
-      }
-    }
-  `;
-
-  const input = {
-    id:
-      payout.id,
-
-    ...fields,
-  };
-
-  if (
-    Number.isInteger(
-      payout._version
-    )
-  ) {
-    input._version =
-      payout._version;
+const parseWebhookBody = (event) => {
+  if (!event) {
+    throw new Error("Webhook event is missing.");
   }
 
-  const data =
-    await graphqlRequest(
-      mutation,
-      {
-        input,
-      },
-      "UpdatePayout"
-    );
+  let body = event.body;
 
-  return (
-    data?.updatePayout ||
-    null
-  );
-};
-
-/* ==========================================================
-   GET TRANSACTION BY REFERENCE
-========================================================== */
-
-const getTransactionByReference =
-  async (
-    reference
-  ) => {
-    const query = `
-      query ListTransactions(
-        $filter: ModelTransactionFilterInput
-      ) {
-        listTransactions(
-          filter: $filter
-          limit: 1
-        ) {
-          items {
-            id
-
-            walletID
-
-            type
-            amount
-
-            description
-
-            orderID
-            paymentID
-
-            reference
-
-            status
-
-            _version
-          }
-        }
-      }
-    `;
-
-    const data =
-      await graphqlRequest(
-        query,
-        {
-          filter: {
-            reference: {
-              eq:
-                reference,
-            },
-          },
-        },
-        "GetTransactionByReference"
-      );
-
-    return (
-      data?.listTransactions?.items?.[0] ||
-      null
-    );
-  };
-
-/* ==========================================================
-   UPDATE TRANSACTION
-========================================================== */
-
-const updateTransaction = async ({
-  transaction,
-  fields,
-}) => {
-  const mutation = `
-    mutation UpdateTransaction(
-      $input: UpdateTransactionInput!
-    ) {
-      updateTransaction(
-        input: $input
-      ) {
-        id
-
-        walletID
-
-        type
-        amount
-
-        description
-
-        orderID
-        paymentID
-
-        reference
-
-        status
-
-        _version
-      }
-    }
-  `;
-
-  const input = {
-    id:
-      transaction.id,
-
-    ...fields,
-  };
-
-  if (
-    Number.isInteger(
-      transaction._version
-    )
-  ) {
-    input._version =
-      transaction._version;
+  if (body === undefined || body === null) {
+    throw new Error("Webhook body is missing.");
   }
 
-  const data =
-    await graphqlRequest(
-      mutation,
-      {
-        input,
-      },
-      "UpdateTransaction"
-    );
+  /*
+   * API Gateway can deliver a Base64 encoded body.
+   */
 
-  return (
-    data?.updateTransaction ||
-    null
-  );
-};
-
-/* ==========================================================
-   GET COURIER WALLET
-========================================================== */
-
-const getCourierWallet =
-  async (
-    courierID
-  ) => {
-    const query = `
-      query ListWallets(
-        $filter: ModelWalletFilterInput
-      ) {
-        listWallets(
-          filter: $filter
-          limit: 1
-        ) {
-          items {
-            id
-
-            ownerID
-            ownerType
-
-            availableBalance
-            pendingBalance
-            lifetimeEarnings
-
-            _version
-          }
-        }
-      }
-    `;
-
-    const data =
-      await graphqlRequest(
-        query,
-        {
-          filter: {
-            ownerID: {
-              eq:
-                courierID,
-            },
-
-            ownerType: {
-              eq:
-                "COURIER",
-            },
-          },
-        },
-        "GetCourierWallet"
-      );
-
-    return (
-      data?.listWallets?.items?.[0] ||
-      null
-    );
-  };
-
-/* ==========================================================
-   UPDATE WALLET AVAILABLE BALANCE
-========================================================== */
-
-const updateWalletAvailableBalance =
-  async ({
-    wallet,
-    availableBalance,
-  }) => {
-    const mutation = `
-      mutation UpdateWallet(
-        $input: UpdateWalletInput!
-      ) {
-        updateWallet(
-          input: $input
-        ) {
-          id
-
-          availableBalance
-          pendingBalance
-          lifetimeEarnings
-
-          _version
-        }
-      }
-    `;
-
-    const input = {
-      id:
-        wallet.id,
-
-      availableBalance:
-        Number(
-          availableBalance.toFixed(2)
-        ),
-    };
-
-    if (
-      Number.isInteger(
-        wallet._version
-      )
-    ) {
-      input._version =
-        wallet._version;
-    }
-
-    const data =
-      await graphqlRequest(
-        mutation,
-        {
-          input,
-        },
-        "UpdateWalletAvailableBalance"
-      );
-
-    return (
-      data?.updateWallet ||
-      null
-    );
-  };
-
-/* ==========================================================
-   GET RAW WEBHOOK BODY
-========================================================== */
-
-const getRawBody = (
-  event
-) => {
-  if (
-    event?.isBase64Encoded &&
-    event?.body
-  ) {
-    return Buffer.from(
-      event.body,
-      "base64"
-    );
+  if (event.isBase64Encoded) {
+    body = Buffer.from(body, "base64").toString("utf8");
   }
 
-  return Buffer.from(
-    event?.body || "",
-    "utf8"
-  );
-};
+  if (typeof body === "string") {
+    try {
+      return JSON.parse(body);
+    } catch (error) {
+      console.error("FAILED TO PARSE WEBHOOK BODY:", error.message);
 
-/* ==========================================================
-   GET HEADER
-========================================================== */
-
-const getHeader = (
-  event,
-  headerName
-) => {
-  const headers =
-    event?.headers ||
-    {};
-
-  const target =
-    headerName.toLowerCase();
-
-  for (
-    const key of Object.keys(
-      headers
-    )
-  ) {
-    if (
-      key.toLowerCase() ===
-      target
-    ) {
-      return headers[key];
+      throw new Error("Invalid Paystack webhook JSON.");
     }
   }
 
-  return null;
+  if (typeof body === "object") {
+    return body;
+  }
+
+  throw new Error("Unsupported webhook body format.");
 };
-
-/* ==========================================================
-   VERIFY PAYSTACK SIGNATURE
-========================================================== */
-
-const verifyPaystackSignature =
-  ({
-    rawBody,
-    signature,
-    secretKey,
-  }) => {
-    if (!signature) {
-      return false;
-    }
-
-    const expectedHash =
-      crypto
-        .createHmac(
-          "sha512",
-          secretKey
-        )
-        .update(rawBody)
-        .digest("hex");
-
-    const expected =
-      Buffer.from(
-        expectedHash,
-        "utf8"
-      );
-
-    const received =
-      Buffer.from(
-        String(signature),
-        "utf8"
-      );
-
-    if (
-      expected.length !==
-      received.length
-    ) {
-      return false;
-    }
-
-    return crypto.timingSafeEqual(
-      expected,
-      received
-    );
-  };
 
 /* ==========================================================
    EXTRACT ORDER ID
 ========================================================== */
 
-const extractOrderId = (
-  transaction
-) => {
-  const directOrderId =
-    transaction?.metadata?.order_id ||
-    transaction?.metadata?.orderId;
+const extractOrderId = (transaction) => {
+  /*
+   * Prefer metadata.
+   */
 
-  if (
-    directOrderId
-  ) {
-    return directOrderId;
-  }
+  const metadata = transaction?.metadata;
 
-  const customFields =
-    transaction?.metadata?.custom_fields;
+  if (metadata && typeof metadata === "object") {
+    const metadataOrderID =
+      metadata.orderID || metadata.orderId || metadata.order_id;
 
-  if (
-    Array.isArray(
-      customFields
-    )
-  ) {
-    const field =
-      customFields.find(
-        (item) =>
-          item?.variable_name ===
-          "order_id"
-      );
-
-    if (
-      field?.value
-    ) {
-      return field.value;
+    if (metadataOrderID) {
+      return metadataOrderID;
     }
   }
 
-  return null;
+  /*
+   * Fallback to your Paystack reference:
+   *
+   * atua_<ORDER_ID>_<TIMESTAMP>
+   */
+
+  const reference = transaction?.reference;
+
+  if (!reference) {
+    return null;
+  }
+
+  const match = reference.match(/^atua_([^_]+)/);
+
+  return match?.[1] || null;
 };
 
 /* ==========================================================
-   SUCCESS RESPONSE
+   HTTP RESPONSE
 ========================================================== */
 
-const successResponse = (
-  message,
-  extra = {}
-) => {
+const httpResponse = (statusCode, body) => {
   return {
-    statusCode:
-      200,
+    statusCode,
 
     headers: {
-      "Content-Type":
-        "application/json",
+      "Content-Type": "application/json",
     },
 
-    body:
-      JSON.stringify({
-        success:
-          true,
-
-        message,
-
-        ...extra,
-      }),
+    body: JSON.stringify(body),
   };
 };
 
 /* ==========================================================
-   CUSTOMER PAYMENT HANDLER
+   MAIN WEBHOOK HANDLER
 ========================================================== */
 
-const handleCustomerPayment =
-  async ({
-    payload,
-    secretKey,
-  }) => {
-    const transaction =
-      payload?.data;
+exports.handler = async (event) => {
+  console.log("==========================================");
+
+  console.log("ATUA PAYSTACK WEBHOOK STARTED");
+
+  console.log("==========================================");
+
+  try {
+    /*
+     * ------------------------------------------------------
+     * 1. GET PAYSTACK SECRET
+     * ------------------------------------------------------
+     */
+
+    const paystackSecret = await getPaystackSecretKey();
+
+    /*
+     * ------------------------------------------------------
+     * 2. GET RAW BODY
+     * ------------------------------------------------------
+     */
+
+    let rawBody = event?.body;
+
+    if (rawBody === undefined || rawBody === null) {
+      throw new Error("Webhook body is missing.");
+    }
+
+    if (event.isBase64Encoded) {
+      rawBody = Buffer.from(rawBody, "base64").toString("utf8");
+    }
+
+    if (typeof rawBody !== "string") {
+      rawBody = JSON.stringify(rawBody);
+    }
+
+    /*
+     * ------------------------------------------------------
+     * 3. VERIFY PAYSTACK SIGNATURE
+     * ------------------------------------------------------
+     */
+
+    const signature = getPaystackSignature(event);
+
+    const signatureValid = verifyPaystackSignature({
+      rawBody,
+      signature,
+      secretKey: paystackSecret,
+    });
+
+    if (!signatureValid) {
+      console.error("INVALID PAYSTACK SIGNATURE");
+
+      return httpResponse(401, {
+        success: false,
+
+        message: "Invalid Paystack signature.",
+      });
+    }
+
+    console.log("PAYSTACK SIGNATURE VERIFIED");
+
+    /*
+     * ------------------------------------------------------
+     * 4. PARSE PAYLOAD
+     * ------------------------------------------------------
+     */
+
+    const payload = parseWebhookBody({
+      ...event,
+
+      body: rawBody,
+
+      isBase64Encoded: false,
+    });
+
+    const eventType = payload?.event;
+
+    console.log("PAYSTACK EVENT:", eventType);
+
+    /*
+     * ------------------------------------------------------
+     * 5. ONLY PROCESS CHARGE.SUCCESS
+     * ------------------------------------------------------
+     */
+
+    if (eventType !== "charge.success") {
+      console.log("IGNORING PAYSTACK EVENT:", eventType);
+
+      return httpResponse(200, {
+        success: true,
+
+        ignored: true,
+
+        event: eventType,
+      });
+    }
+
+    /*
+     * ------------------------------------------------------
+     * 6. GET TRANSACTION
+     * ------------------------------------------------------
+     */
+
+    const transaction = payload?.data;
 
     if (!transaction) {
-      throw new Error(
-        "Paystack customer transaction data is missing."
-      );
+      throw new Error("charge.success contains no transaction data.");
     }
 
-    const reference =
-      transaction.reference;
+    const reference = transaction.reference;
 
     if (!reference) {
-      throw new Error(
-        "Paystack payment reference is missing."
-      );
+      throw new Error("Paystack transaction reference is missing.");
     }
 
-    const orderId =
-      extractOrderId(
-        transaction
-      );
+    console.log("PAYSTACK REFERENCE:", reference);
+
+    /*
+     * ------------------------------------------------------
+     * 7. GET ORDER ID
+     * ------------------------------------------------------
+     */
+
+    const orderId = extractOrderId(transaction);
 
     if (!orderId) {
       throw new Error(
-        "Order ID could not be found in Paystack metadata."
+        `Could not determine Order ID from Paystack reference ${reference}.`,
       );
     }
 
-    let order =
-      await getOrder(
-        orderId
-      );
+    console.log("PAYSTACK ORDER ID:", orderId);
+
+    /*
+     * ------------------------------------------------------
+     * 8. FETCH CURRENT ORDER
+     * ------------------------------------------------------
+     */
+
+    const order = await getOrder(orderId);
 
     if (!order) {
-      throw new Error(
-        `Order ${orderId} could not be found.`
-      );
+      throw new Error(`Order ${orderId} was not found.`);
     }
 
-    const verification =
-      await verifyCustomerTransaction(
-        reference,
-        secretKey
-      );
+    console.log(
+      "ORDER FOUND:",
+      JSON.stringify(
+        {
+          id: order.id,
 
-    const paystack =
-      verification?.body;
+          userID: order.userID,
 
-    if (
-      !verification ||
-      verification.statusCode < 200 ||
-      verification.statusCode >= 300 ||
-      !paystack?.status
-    ) {
-      throw new Error(
-        paystack?.message ||
-        "Paystack transaction verification failed."
-      );
+          status: order.status,
+
+          paymentStatus: order.paymentStatus,
+
+          paymentID: order.paymentID,
+
+          fundsStatus: order.fundsStatus,
+
+          deliveryVerificationCode: order.deliveryVerificationCode,
+
+          totalPrice: order.totalPrice,
+
+          operationalFare: order.operationalFare,
+
+          courierEarnings: order.courierEarnings,
+
+          _version: order._version,
+        },
+        null,
+        2,
+      ),
+    );
+
+    /*
+     * ------------------------------------------------------
+     * 9. VALIDATE USER ID
+     * ------------------------------------------------------
+     */
+
+    if (!order.userID) {
+      throw new Error(`Order ${order.id} has no userID.`);
     }
 
-    const verifiedTransaction =
-      paystack?.data;
+    /*
+     * ------------------------------------------------------
+     * 10. LOOK FOR EXISTING PAYMENT
+     * ------------------------------------------------------
+     */
 
-    if (!verifiedTransaction) {
-      throw new Error(
-        "Paystack returned no transaction data."
-      );
+    let payment = await getPaymentByReference(reference);
+
+    if (payment) {
+      console.log("PAYMENT ALREADY EXISTS:", {
+        paymentID: payment.id,
+
+        orderID: payment.orderID,
+
+        userID: payment.userID,
+
+        reference: payment.reference,
+
+        status: payment.status,
+      });
+
+      /*
+       * Never allow a Payment belonging to a different
+       * Order to be attached to this Order.
+       */
+
+      if (payment.orderID && payment.orderID !== order.id) {
+        throw new Error(
+          `Payment ${payment.id} belongs to Order ${payment.orderID}, not ${order.id}.`,
+        );
+      }
     }
 
-    if (
-      verifiedTransaction.status !==
-      "success"
-    ) {
-      throw new Error(
-        `Payment is not successful. Paystack status: ${verifiedTransaction.status}`
-      );
-    }
-
-    if (
-      verifiedTransaction.reference !==
-      reference
-    ) {
-      throw new Error(
-        "Paystack payment reference mismatch."
-      );
-    }
-
-    if (
-      verifiedTransaction.currency !==
-      "NGN"
-    ) {
-      throw new Error(
-        `Unexpected payment currency: ${verifiedTransaction.currency}`
-      );
-    }
-
-    const orderAmount =
-      Number(
-        order.totalPrice
-      );
-
-    if (
-      !Number.isFinite(
-        orderAmount
-      ) ||
-      orderAmount <= 0
-    ) {
-      throw new Error(
-        "Order has an invalid totalPrice."
-      );
-    }
-
-    const expectedAmountInKobo =
-      Math.round(
-        orderAmount * 100
-      );
-
-    const paidAmountInKobo =
-      Number(
-        verifiedTransaction.amount
-      );
-
-    if (
-      !Number.isFinite(
-        paidAmountInKobo
-      ) ||
-      paidAmountInKobo !==
-        expectedAmountInKobo
-    ) {
-      throw new Error(
-        "The amount paid does not match the order amount."
-      );
-    }
-
-    let payment =
-      await getPaymentByReference(
-        reference
-      );
-
-    if (
-      payment &&
-      payment.orderID !==
-        order.id
-    ) {
-      throw new Error(
-        "This payment reference is already associated with another order."
-      );
-    }
+    /*
+     * ------------------------------------------------------
+     * 11. CREATE PAYMENT IF NECESSARY
+     * ------------------------------------------------------
+     */
 
     if (!payment) {
-      payment =
-        await createPayment({
-          order,
+      console.log("CREATING PAYMENT:", {
+        orderID: order.id,
 
-          transaction:
-            verifiedTransaction,
-        });
+        userID: order.userID,
 
-      if (!payment?.id) {
-        payment =
-          await getPaymentByReference(
-            reference
-          );
-      }
+        amount: transaction.amount,
 
-      if (!payment?.id) {
-        throw new Error(
-          "Payment record could not be created."
-        );
-      }
-    }
+        reference,
+      });
 
-    order =
-      await getOrder(
-        order.id
-      );
-
-    if (!order) {
-      throw new Error(
-        "Order could not be reloaded."
-      );
-    }
-
-    if (
-      order.paymentStatus ===
-      "PAID"
-    ) {
-      return successResponse(
-        "Payment already processed.",
-        {
-          orderId:
-            order.id,
-
-          paymentId:
-            payment.id,
-
-          reference,
-
-          paymentStatus:
-            order.paymentStatus,
-
-          fundsStatus:
-            order.fundsStatus,
-
-          alreadyProcessed:
-            true,
-        }
-      );
-    }
-
-    const updatedOrder =
-      await markOrderAsPaid({
+      payment = await createPayment({
         order,
 
-        paymentId:
-          payment.id,
-      });
-
-    if (!updatedOrder) {
-      throw new Error(
-        "Order could not be updated after payment."
-      );
-    }
-
-    const confirmedOrder =
-      await getOrder(
-        order.id
-      );
-
-    if (!confirmedOrder) {
-      throw new Error(
-        "Could not reload order after payment update."
-      );
-    }
-
-    if (
-      confirmedOrder.paymentStatus !==
-      "PAID"
-    ) {
-      throw new Error(
-        `Order paymentStatus was not updated to PAID. Current value: ${confirmedOrder.paymentStatus}`
-      );
-    }
-
-    if (
-      confirmedOrder.paymentID !==
-      payment.id
-    ) {
-      throw new Error(
-        "Payment was not correctly linked to the order."
-      );
-    }
-
-    if (
-      confirmedOrder.fundsStatus !==
-      "HELD"
-    ) {
-      throw new Error(
-        `Order fundsStatus was not set to HELD. Current value: ${confirmedOrder.fundsStatus}`
-      );
-    }
-
-    if (
-      confirmedOrder.status !==
-      "READY_FOR_PICKUP"
-    ) {
-      throw new Error(
-        `Order status was not set to READY_FOR_PICKUP. Current value: ${confirmedOrder.status}`
-      );
-    }
-
-    return successResponse(
-      "Customer payment successfully verified and recorded.",
-      {
-        orderId:
-          confirmedOrder.id,
-
-        paymentId:
-          payment.id,
-
-        reference,
-
-        amount:
-          orderAmount,
-
-        currency:
-          verifiedTransaction.currency,
-
-        paymentStatus:
-          confirmedOrder.paymentStatus,
-
-        fundsStatus:
-          confirmedOrder.fundsStatus,
-
-        status:
-          confirmedOrder.status,
-      }
-    );
-  };
-
-/* ==========================================================
-   TRANSFER PAYLOAD FAILURE REASON
-========================================================== */
-
-const getTransferFailureReason =
-  (transfer) => {
-    if (
-      transfer?.failures
-    ) {
-      try {
-        return JSON.stringify(
-          transfer.failures
-        );
-      } catch {
-        return String(
-          transfer.failures
-        );
-      }
-    }
-
-    if (
-      transfer?.reason
-    ) {
-      return String(
-        transfer.reason
-      );
-    }
-
-    if (
-      transfer?.message
-    ) {
-      return String(
-        transfer.message
-      );
-    }
-
-    return "Paystack transfer failed.";
-  };
-
-/* ==========================================================
-   HANDLE TRANSFER SUCCESS
-========================================================== */
-
-const handleTransferSuccess =
-  async ({
-    transfer,
-  }) => {
-    const reference =
-      transfer?.reference;
-
-    if (!reference) {
-      throw new Error(
-        "Transfer success event has no reference."
-      );
-    }
-
-    const payout =
-      await getPayoutByReference(
-        reference
-      );
-
-    if (!payout) {
-      throw new Error(
-        `Payout not found for transfer reference ${reference}.`
-      );
-    }
-
-    if (
-      payout.status ===
-      "PAID"
-    ) {
-      return successResponse(
-        "Payout was already marked PAID.",
-        {
-          payoutID:
-            payout.id,
-
-          reference,
-
-          alreadyProcessed:
-            true,
-        }
-      );
-    }
-
-    if (
-      payout.status ===
-      "FAILED"
-    ) {
-      return successResponse(
-        "Payout was already marked FAILED; success event ignored.",
-        {
-          payoutID:
-            payout.id,
-
-          reference,
-
-          alreadyProcessed:
-            true,
-        }
-      );
-    }
-
-    const paidPayout =
-      await updatePayout({
-        payout,
-
-        fields: {
-          status:
-            "PAID",
-
-          transferCode:
-            transfer?.transfer_code ||
-            payout.transferCode ||
-            null,
-
-          transferID:
-            transfer?.id != null
-              ? String(
-                  transfer.id
-                )
-              : payout.transferID ||
-                null,
-
-          paidAt:
-            new Date().toISOString(),
-
-          failureReason:
-            null,
-        },
-      });
-
-    if (!paidPayout) {
-      throw new Error(
-        `Could not mark payout ${payout.id} as PAID.`
-      );
-    }
-
-    const transaction =
-      await getTransactionByReference(
-        reference
-      );
-
-    if (
-      transaction &&
-      transaction.status !==
-        "COMPLETED"
-    ) {
-      await updateTransaction({
         transaction,
-
-        fields: {
-          status:
-            "COMPLETED",
-
-          description:
-            "Courier payout completed by Paystack.",
-        },
       });
-    }
 
-    return successResponse(
-      "Courier payout marked PAID.",
-      {
-        payoutID:
-          payout.id,
-
-        courierID:
-          payout.courierID,
-
-        amount:
-          payout.amount,
-
-        reference,
-
-        payoutStatus:
-          "PAID",
+      if (!payment?.id) {
+        throw new Error("Payment creation returned no Payment ID.");
       }
-    );
-  };
+    }
 
-/* ==========================================================
-   HANDLE TRANSFER FAILURE / REVERSAL
-========================================================== */
+    /*
+     * ------------------------------------------------------
+     * 12. FINALIZE ORDER
+     * ------------------------------------------------------
+     *
+     * THIS IS WHERE THE WEBHOOK GENERATES AND SAVES
+     * THE DELIVERY VERIFICATION CODE.
+     *
+     * verifyAtuaPayment is NOT needed for the normal
+     * successful payment path.
+     */
 
-const handleTransferFailure =
-  async ({
-    transfer,
-    eventType,
-  }) => {
-    const reference =
-      transfer?.reference;
+    const finalizedOrder = await finalizePaidOrder({
+      order,
 
-    if (!reference) {
+      payment,
+    });
+
+    /*
+     * ------------------------------------------------------
+     * 13. VERIFY THE UPDATE RESULT
+     * ------------------------------------------------------
+     */
+
+    if (finalizedOrder.paymentStatus !== "PAID") {
+      throw new Error(`Order ${order.id} was not finalized as PAID.`);
+    }
+
+    if (finalizedOrder.paymentID !== payment.id) {
       throw new Error(
-        `${eventType} event has no transfer reference.`
+        `Order ${order.id} paymentID does not match Payment ${payment.id}.`,
       );
     }
 
-    const payout =
-      await getPayoutByReference(
-        reference
-      );
+    if (finalizedOrder.userID !== order.userID) {
+      throw new Error(`Order ${order.id} userID changed unexpectedly.`);
+    }
 
-    if (!payout) {
+    if (!finalizedOrder.deliveryVerificationCode) {
       throw new Error(
-        `Payout not found for transfer reference ${reference}.`
-      );
-    }
-
-    if (
-      payout.status ===
-      "FAILED"
-    ) {
-      return successResponse(
-        "Payout was already marked FAILED.",
-        {
-          payoutID:
-            payout.id,
-
-          reference,
-
-          alreadyProcessed:
-            true,
-        }
-      );
-    }
-
-    if (
-      payout.status ===
-      "PAID"
-    ) {
-      return successResponse(
-        "Payout is already PAID; failure event ignored.",
-        {
-          payoutID:
-            payout.id,
-
-          reference,
-
-          alreadyProcessed:
-            true,
-        }
-      );
-    }
-
-    const wallet =
-      await getCourierWallet(
-        payout.courierID
-      );
-
-    if (!wallet) {
-      throw new Error(
-        `Wallet not found for courier ${payout.courierID}.`
-      );
-    }
-
-    const transaction =
-      await getTransactionByReference(
-        reference
-      );
-
-    const currentAvailable =
-      Number(
-        wallet.availableBalance ||
-        0
-      );
-
-    const payoutAmount =
-      Number(
-        payout.amount ||
-        0
-      );
-
-    if (
-      !Number.isFinite(
-        payoutAmount
-      ) ||
-      payoutAmount <= 0
-    ) {
-      throw new Error(
-        `Invalid payout amount for payout ${payout.id}.`
+        `Order ${order.id} was marked PAID but has no delivery verification code.`,
       );
     }
 
     /*
-     * Only restore the wallet while the payout is still
-     * PROCESSING/PENDING.
-     *
-     * A duplicate webhook after FAILED will stop above and
-     * will therefore not restore the balance twice.
+     * ------------------------------------------------------
+     * 14. FINAL SUCCESS
+     * ------------------------------------------------------
      */
 
-    const restoredBalance =
-      Number(
-        (
-          currentAvailable +
-          payoutAmount
-        ).toFixed(2)
-      );
+    console.log("==========================================");
 
-    const restoredWallet =
-      await updateWalletAvailableBalance({
-        wallet,
+    console.log("ATUA PAYSTACK WEBHOOK COMPLETED");
 
-        availableBalance:
-          restoredBalance,
-      });
+    console.log("ORDER:", finalizedOrder.id);
 
-    if (!restoredWallet) {
-      throw new Error(
-        `Could not restore available balance for courier ${payout.courierID}.`
-      );
-    }
+    console.log("USER:", finalizedOrder.userID);
 
-    if (
-      transaction &&
-      transaction.status !==
-        "FAILED"
-    ) {
-      await updateTransaction({
-        transaction,
+    console.log("PAYMENT:", payment.id);
 
-        fields: {
-          status:
-            "FAILED",
+    console.log("PAYMENT STATUS:", finalizedOrder.paymentStatus);
 
-          description:
-            eventType ===
-            "transfer.reversed"
-              ? "Courier payout reversed by Paystack; balance restored."
-              : "Courier payout failed; balance restored.",
-        },
-      });
-    }
-
-    const failedPayout =
-      await updatePayout({
-        payout,
-
-        fields: {
-          status:
-            "FAILED",
-
-          failureReason:
-            getTransferFailureReason(
-              transfer
-            ),
-
-          failedAt:
-            new Date().toISOString(),
-
-          transferCode:
-            transfer?.transfer_code ||
-            payout.transferCode ||
-            null,
-
-          transferID:
-            transfer?.id != null
-              ? String(
-                  transfer.id
-                )
-              : payout.transferID ||
-                null,
-        },
-      });
-
-    if (!failedPayout) {
-      throw new Error(
-        `Payout ${payout.id} could not be marked FAILED.`
-      );
-    }
-
-    return successResponse(
-      eventType ===
-        "transfer.reversed"
-        ? "Courier payout was reversed and balance restored."
-        : "Courier payout failed and balance was restored.",
-      {
-        payoutID:
-          payout.id,
-
-        courierID:
-          payout.courierID,
-
-        amount:
-          payoutAmount,
-
-        reference,
-
-        event:
-          eventType,
-
-        payoutStatus:
-          "FAILED",
-
-        restoredAvailableBalance:
-          restoredBalance,
-      }
-    );
-  };
-
-/* ==========================================================
-   HANDLE TRANSFER EVENT
-========================================================== */
-
-const handleTransferEvent =
-  async ({
-    eventType,
-    payload,
-  }) => {
-    const transfer =
-      payload?.data;
-
-    if (!transfer) {
-      throw new Error(
-        `${eventType} event contains no transfer data.`
-      );
-    }
+    console.log("FUNDS STATUS:", finalizedOrder.fundsStatus);
 
     console.log(
-      "PAYSTACK TRANSFER EVENT:",
-      {
-        event:
-          eventType,
-
-        reference:
-          transfer.reference,
-
-        transferID:
-          transfer.id,
-
-        transferCode:
-          transfer.transfer_code,
-
-        amount:
-          transfer.amount,
-
-        status:
-          transfer.status,
-      }
+      "DELIVERY VERIFICATION CODE:",
+      finalizedOrder.deliveryVerificationCode,
     );
 
-    switch (
-      eventType
-    ) {
-      case "transfer.success":
-        return handleTransferSuccess({
-          transfer,
-        });
+    console.log("ORDER VERSION:", finalizedOrder._version);
 
-      case "transfer.failed":
-        return handleTransferFailure({
-          transfer,
-          eventType,
-        });
+    console.log("==========================================");
 
-      case "transfer.reversed":
-        return handleTransferFailure({
-          transfer,
-          eventType,
-        });
+    return httpResponse(200, {
+      success: true,
 
-      default:
-        return successResponse(
-          "Transfer event received and ignored.",
-          {
-            event:
-              eventType,
-          }
-        );
-    }
-  };
+      event: eventType,
 
-/* ==========================================================
-   MAIN HANDLER
-========================================================== */
+      orderID: finalizedOrder.id,
 
-exports.handler = async (
-  event
-) => {
-  console.log(
-    "=========================================="
-  );
+      paymentID: payment.id,
 
-  console.log(
-    "ATUA PAYSTACK WEBHOOK STARTED"
-  );
+      paymentStatus: finalizedOrder.paymentStatus,
 
-  console.log(
-    "=========================================="
-  );
+      status: finalizedOrder.status,
 
-  try {
-    /* ======================================================
-       1. GET PAYSTACK SECRET
-    ====================================================== */
+      fundsStatus: finalizedOrder.fundsStatus,
 
-    const secretKey =
-      await getPaystackSecretKey();
-
-    /* ======================================================
-       2. GET RAW BODY
-    ====================================================== */
-
-    const rawBody =
-      getRawBody(
-        event
-      );
-
-    if (
-      !rawBody ||
-      rawBody.length === 0
-    ) {
-      return {
-        statusCode:
-          400,
-
-        body:
-          JSON.stringify({
-            success:
-              false,
-
-            message:
-              "Webhook body is empty.",
-          }),
-      };
-    }
-
-    /* ======================================================
-       3. VERIFY PAYSTACK SIGNATURE
-    ====================================================== */
-
-    const signature =
-      getHeader(
-        event,
-        "x-paystack-signature"
-      );
-
-    const signatureValid =
-      verifyPaystackSignature({
-        rawBody,
-
-        signature,
-
-        secretKey,
-      });
-
-    if (!signatureValid) {
-      console.error(
-        "INVALID PAYSTACK WEBHOOK SIGNATURE"
-      );
-
-      return {
-        statusCode:
-          401,
-
-        body:
-          JSON.stringify({
-            success:
-              false,
-
-            message:
-              "Invalid webhook signature.",
-          }),
-      };
-    }
-
-    console.log(
-      "PAYSTACK SIGNATURE VERIFIED"
-    );
-
-    /* ======================================================
-       4. PARSE PAYLOAD
-    ====================================================== */
-
-    let payload;
-
-    try {
-      payload =
-        JSON.parse(
-          rawBody.toString(
-            "utf8"
-          )
-        );
-    } catch (error) {
-      console.error(
-        "INVALID WEBHOOK JSON:",
-        error
-      );
-
-      return {
-        statusCode:
-          400,
-
-        body:
-          JSON.stringify({
-            success:
-              false,
-
-            message:
-              "Invalid webhook JSON.",
-          }),
-      };
-    }
-
-    /* ======================================================
-       5. DETERMINE EVENT
-    ====================================================== */
-
-    const eventType =
-      payload?.event;
-
-    console.log(
-      "PAYSTACK EVENT:",
-      eventType
-    );
-
-    /* ======================================================
-       6. CUSTOMER PAYMENT EVENTS
-    ====================================================== */
-
-    if (
-      eventType ===
-      "charge.success"
-    ) {
-      return await handleCustomerPayment({
-        payload,
-
-        secretKey,
-      });
-    }
-
-    /* ======================================================
-       7. COURIER TRANSFER EVENTS
-    ====================================================== */
-
-    if (
-      eventType ===
-        "transfer.success" ||
-      eventType ===
-        "transfer.failed" ||
-      eventType ===
-        "transfer.reversed"
-    ) {
-      return await handleTransferEvent({
-        eventType,
-
-        payload,
-      });
-    }
-
-    /* ======================================================
-       8. OTHER EVENTS
-    ====================================================== */
-
-    console.log(
-      "IGNORING UNSUPPORTED PAYSTACK EVENT:",
-      eventType
-    );
-
-    return successResponse(
-      "Event received and ignored.",
-      {
-        event:
-          eventType ||
-          null,
-      }
-    );
-
+      deliveryVerificationCode: finalizedOrder.deliveryVerificationCode,
+    });
   } catch (error) {
-    console.error(
-      "=========================================="
-    );
+    console.error("==========================================");
 
-    console.error(
-      "ATUA PAYSTACK WEBHOOK ERROR"
-    );
+    console.error("ATUA PAYSTACK WEBHOOK ERROR");
 
-    console.error(
-      "MESSAGE:",
-      error?.message
-    );
+    console.error("MESSAGE:", error?.message);
 
-    console.error(
-      "STACK:",
-      error?.stack
-    );
+    console.error("STACK:", error?.stack);
 
-    console.error(
-      "=========================================="
-    );
+    console.error("==========================================");
 
-    return {
-      statusCode:
-        500,
+    /*
+     * Return 500 so Paystack can retry when the payment
+     * could not be fully processed.
+     *
+     * This is especially important if:
+     *
+     * - Payment creation failed
+     * - Order update failed
+     * - Verification code could not be saved
+     */
 
-      headers: {
-        "Content-Type":
-          "application/json",
-      },
+    return httpResponse(500, {
+      success: false,
 
-      body:
-        JSON.stringify({
-          success:
-            false,
-
-          message:
-            "Paystack webhook processing failed.",
-        }),
-    };
+      message: error?.message || "Webhook processing failed.",
+    });
   }
 };
