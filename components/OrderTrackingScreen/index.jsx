@@ -1,6 +1,7 @@
 // ==================================================
 // ORDER TRACKING SCREEN
 // ==================================================
+//
 // IMPORTANT:
 //
 // This screen treats DataStore as the local synchronized
@@ -21,12 +22,28 @@
 // 6. Re-check when the app returns to the foreground.
 // 7. Briefly retry synchronization after the screen opens.
 //
-// This prevents a temporary/incomplete DataStore
-// observation from making the tracking UI appear blank.
+// Courier location:
+//
+// The assigned courier's live position comes from
+// CourierLiveLocation, NOT Courier.lat / Courier.lng.
+//
+// Courier is still used for profile information such as:
+// - firstName
+// - transportationType
+// - profilePic
+//
+// CourierLiveLocation is used for:
+// - latitude
+// - longitude
+// - heading
+// - speed
+// - accuracy
+// - isTracking
+// - lastSeenAt
 // ==================================================
 
 import { GOOGLE_API_KEY } from "@/keys";
-import { Courier, Offer, Order } from "@/src/models";
+import { Courier, CourierLiveLocation, Offer, Order } from "@/src/models";
 
 import Ionicons from "@expo/vector-icons/Ionicons";
 import BottomSheet, { BottomSheetView } from "@gorhom/bottom-sheet";
@@ -63,6 +80,12 @@ import styles from "./styles";
 // COORDINATE HELPERS
 // ==================================================
 
+/**
+ * Safely convert a value into a number.
+ *
+ * This protects the map from null, undefined, empty strings,
+ * or values that cannot be converted into valid numbers.
+ */
 const toCoordinate = (value) => {
   //-----------------------------------------
   // Missing Value
@@ -78,6 +101,10 @@ const toCoordinate = (value) => {
 
   const number = Number(value);
 
+  //-----------------------------------------
+  // Invalid Number
+  //-----------------------------------------
+
   if (!Number.isFinite(number)) {
     return null;
   }
@@ -89,6 +116,10 @@ const toCoordinate = (value) => {
 // VALIDATE COORDINATE
 // ==================================================
 
+/**
+ * Make sure latitude and longitude are actually
+ * valid geographic coordinates.
+ */
 const isValidCoordinate = (latitude, longitude) => {
   return (
     Number.isFinite(latitude) &&
@@ -133,30 +164,26 @@ const removeUndefinedValues = (object) => {
 };
 
 // ==================================================
-// MERGE ORDER SAFELY
+// MERGE OBJECTS SAFELY
 // ==================================================
 //
-// Existing populated values are preserved when an
-// incoming DataStore observation is incomplete.
-//
-// This is ONLY for React UI state.
+// This is used for React UI state only.
 //
 // It does NOT write anything back to DataStore.
 // ==================================================
 
-const mergeOrders = (currentOrder, incomingOrder) => {
-  if (!incomingOrder) {
-    return currentOrder;
+const mergeOrders = (currentObject, incomingObject) => {
+  if (!incomingObject) {
+    return currentObject;
   }
 
-  if (!currentOrder) {
-    return incomingOrder;
+  if (!currentObject) {
+    return incomingObject;
   }
 
   return {
-    ...currentOrder,
-
-    ...removeUndefinedValues(incomingOrder),
+    ...currentObject,
+    ...removeUndefinedValues(incomingObject),
   };
 };
 
@@ -179,19 +206,51 @@ const OrderTrackingScreen = ({ orderId }) => {
 
   const courierSubscriptionRef = useRef(null);
 
-  const refreshTimerRef = useRef(null);
+  const hasInitializedCourierPositionRef = useRef(false);
+
+  // NEW:
+  // Dedicated subscription reference for the assigned
+  // courier's live GPS location.
+  const courierLiveLocationSubscriptionRef = useRef(null);
+
+  const refreshTimersRef = useRef([]);
 
   const mountedRef = useRef(true);
 
   // =================================================
   // COURIER ANIMATED COORDINATES
   // =================================================
+  //
+  // These Animated.Values drive Marker.Animated.
+  //
+  // They now receive coordinates from
+  // CourierLiveLocation instead of Courier.lat/lng.
+  // =================================================
 
   const courierAnim = useRef({
     latitude: new Animated.Value(0),
-
     longitude: new Animated.Value(0),
   }).current;
+
+  // =================================================
+  // RESET COURIER POSITION WHEN COURIER CHANGES
+  // =================================================
+  //
+  // When the order is reassigned to another courier,
+  // reset the marker initialization so the new courier
+  // does not animate from the previous courier's location.
+  //
+  // =================================================
+
+  useEffect(() => {
+    // Reset marker initialization whenever the
+    // assigned courier changes.
+    hasInitializedCourierPositionRef.current = false;
+
+    // Stop any previous courier animation.
+    courierAnim.latitude.stopAnimation();
+    courierAnim.longitude.stopAnimation();
+  }, [order?.assignedCourierId, courierAnim]);
 
   // =================================================
   // BOTTOM SHEET
@@ -206,6 +265,14 @@ const OrderTrackingScreen = ({ orderId }) => {
   const [order, setOrder] = useState(null);
 
   const [courier, setCourier] = useState(null);
+
+  const [isMapReady, setIsMapReady] = useState(false);
+
+  const [isFollowingCourier, setIsFollowingCourier] = useState(true);
+
+  // NEW:
+  // Current live location for the assigned courier.
+  const [courierLiveLocation, setCourierLiveLocation] = useState(null);
 
   const [courierImageUrl, setCourierImageUrl] = useState(null);
 
@@ -266,19 +333,12 @@ const OrderTrackingScreen = ({ orderId }) => {
         if (log) {
           console.log("ORDER REFRESHED FROM DATASTORE:", {
             orderId: latestOrder.id,
-
             status: latestOrder.status,
-
             paymentStatus: latestOrder.paymentStatus,
-
             paymentID: latestOrder.paymentID,
-
             fundsStatus: latestOrder.fundsStatus,
-
             deliveryVerificationCode: latestOrder.deliveryVerificationCode,
-
             assignedCourierId: latestOrder.assignedCourierId,
-
             version: latestOrder._version,
           });
         }
@@ -323,23 +383,21 @@ const OrderTrackingScreen = ({ orderId }) => {
       }
 
       // ------------------------------------------------
-      // IMPORTANT:
+      // POST LOAD SYNC RETRIES
+      // ------------------------------------------------
       //
-      // After payment, AppSync/DataStore synchronization
-      // may not have reached this device immediately.
+      // These are only short synchronization checks
+      // after opening the tracking screen.
       //
-      // We therefore perform a few short re-checks.
-      //
-      // This is NOT permanent polling.
-      //
-      // It only helps the tracking screen converge quickly
-      // after a backend Lambda updates the Order.
+      // They help after a backend Lambda updates the
+      // Order but the local DataStore has not synchronized
+      // the new values immediately.
       // ------------------------------------------------
 
       const retryDelays = [500, 1500, 3000, 5000, 8000];
 
       retryDelays.forEach((delay) => {
-        setTimeout(async () => {
+        const timer = setTimeout(async () => {
           if (cancelled || !mountedRef.current) {
             return;
           }
@@ -349,6 +407,8 @@ const OrderTrackingScreen = ({ orderId }) => {
             log: false,
           });
         }, delay);
+
+        refreshTimersRef.current.push(timer);
       });
     };
 
@@ -356,25 +416,6 @@ const OrderTrackingScreen = ({ orderId }) => {
 
     // ------------------------------------------------
     // OBSERVE ORDER
-    // ------------------------------------------------
-    //
-    // IMPORTANT:
-    //
-    // We DO NOT do:
-    //
-    // setOrder(msg.element)
-    //
-    // because an observation can be temporarily
-    // incomplete.
-    //
-    // Instead:
-    //
-    // observation
-    //      ↓
-    // fresh DataStore query
-    //      ↓
-    // merge into current React state
-    //
     // ------------------------------------------------
 
     const subscription = DataStore.observe(Order, orderId).subscribe({
@@ -389,11 +430,8 @@ const OrderTrackingScreen = ({ orderId }) => {
 
         console.log("ORDER DATASTORE EVENT:", {
           orderId: msg.element.id,
-
           status: msg.element.status,
-
           paymentStatus: msg.element.paymentStatus,
-
           version: msg.element._version,
         });
 
@@ -424,21 +462,18 @@ const OrderTrackingScreen = ({ orderId }) => {
 
       subscription?.unsubscribe();
 
+      refreshTimersRef.current.forEach((timer) => {
+        clearTimeout(timer);
+      });
+
+      refreshTimersRef.current = [];
+
       orderSubscriptionRef.current = null;
     };
   }, [orderId, refreshOrder]);
 
   // =================================================
   // REFRESH WHEN APP RETURNS TO FOREGROUND
-  // =================================================
-  //
-  // This is especially important because you said:
-  //
-  // "If I close the app and open it, the fields return."
-  //
-  // Instead of requiring a complete app restart, we
-  // explicitly refresh the Order whenever this screen
-  // returns to the foreground.
   // =================================================
 
   useEffect(() => {
@@ -567,7 +602,6 @@ const OrderTrackingScreen = ({ orderId }) => {
 
               courier: {
                 ...offerCourier,
-
                 imageUrl,
               },
             };
@@ -622,6 +656,12 @@ const OrderTrackingScreen = ({ orderId }) => {
   // =================================================
   // FETCH ASSIGNED COURIER
   // =================================================
+  //
+  // This loads the courier profile.
+  //
+  // It intentionally does NOT load courier coordinates.
+  // Coordinates come from CourierLiveLocation below.
+  // =================================================
 
   useEffect(() => {
     //-----------------------------------------
@@ -630,8 +670,10 @@ const OrderTrackingScreen = ({ orderId }) => {
 
     if (!order?.assignedCourierId) {
       setCourier(null);
-
       setCourierImageUrl(null);
+
+      // Clear any previous live location.
+      setCourierLiveLocation(null);
 
       return;
     }
@@ -707,6 +749,186 @@ const OrderTrackingScreen = ({ orderId }) => {
   }, [order?.assignedCourierId]);
 
   // =================================================
+  // FETCH ASSIGNED COURIER LIVE LOCATION
+  // =================================================
+  //
+  // IMPORTANT:
+  //
+  // This is now the PRIMARY source for the courier's
+  // current position.
+  //
+  // We only subscribe to the CourierLiveLocation
+  // belonging to the assigned courier.
+  //
+  // We do NOT subscribe to every courier in the
+  // system from this tracking screen.
+  // =================================================
+
+  useEffect(() => {
+    const courierId = order?.assignedCourierId;
+
+    //-----------------------------------------
+    // No Assigned Courier
+    //-----------------------------------------
+
+    if (!courierId) {
+      setCourierLiveLocation(null);
+
+      return;
+    }
+
+    let cancelled = false;
+
+    //-----------------------------------------
+    // Fetch Current Live Location
+    //-----------------------------------------
+
+    const fetchCourierLiveLocation = async () => {
+      try {
+        const locations = await DataStore.query(
+          CourierLiveLocation,
+          (location) => location.courierID.eq(courierId),
+        );
+
+        if (cancelled || !mountedRef.current) {
+          return;
+        }
+
+        /**
+         * There should normally be one current
+         * CourierLiveLocation per courier because
+         * Courier.liveLocationID points to the
+         * courier's current live-location record.
+         *
+         * If multiple records somehow exist, use
+         * the newest one based on lastSeenAt.
+         */
+        const latestLocation =
+          locations
+            .filter((location) => location?.courierID === courierId)
+            .sort((a, b) => {
+              const timeA = new Date(a?.lastSeenAt).getTime() || 0;
+
+              const timeB = new Date(b?.lastSeenAt).getTime() || 0;
+
+              return timeB - timeA;
+            })[0] || null;
+
+        setCourierLiveLocation(latestLocation);
+
+        if (latestLocation) {
+          console.log("COURIER LIVE LOCATION LOADED:", {
+            courierId: latestLocation.courierID,
+            latitude: latestLocation.latitude,
+            longitude: latestLocation.longitude,
+            heading: latestLocation.heading,
+            speed: latestLocation.speed,
+            isTracking: latestLocation.isTracking,
+            lastSeenAt: latestLocation.lastSeenAt,
+          });
+        } else {
+          console.log("NO COURIER LIVE LOCATION FOUND:", courierId);
+        }
+      } catch (error) {
+        console.log("FETCH COURIER LIVE LOCATION ERROR:", error);
+      }
+    };
+
+    //-----------------------------------------
+    // Initial Fetch
+    //-----------------------------------------
+
+    fetchCourierLiveLocation();
+
+    //-----------------------------------------
+    // Observe ONLY This Courier's Location
+    //-----------------------------------------
+    //
+    // The predicate prevents this screen from
+    // processing live-location updates for every
+    // other courier in the system.
+    // -----------------------------------------
+
+    const subscription = DataStore.observe(CourierLiveLocation, (location) =>
+      location.courierID.eq(courierId),
+    ).subscribe({
+      next: (msg) => {
+        if (cancelled || !mountedRef.current || !msg?.element) {
+          return;
+        }
+
+        const element = msg.element;
+
+        /**
+         * Extra safety check.
+         */
+        if (element.courierID !== courierId) {
+          return;
+        }
+
+        console.log("COURIER LIVE LOCATION EVENT:", {
+          opType: msg.opType,
+          courierId: element.courierID,
+          latitude: element.latitude,
+          longitude: element.longitude,
+          heading: element.heading,
+          speed: element.speed,
+          isTracking: element.isTracking,
+          lastSeenAt: element.lastSeenAt,
+        });
+
+        //-----------------------------------------
+        // INSERT
+        //-----------------------------------------
+
+        if (msg.opType === "INSERT") {
+          setCourierLiveLocation(element);
+
+          return;
+        }
+
+        //-----------------------------------------
+        // UPDATE
+        //-----------------------------------------
+
+        if (msg.opType === "UPDATE") {
+          setCourierLiveLocation((currentLocation) =>
+            mergeOrders(currentLocation, element),
+          );
+
+          return;
+        }
+
+        //-----------------------------------------
+        // DELETE
+        //-----------------------------------------
+
+        if (msg.opType === "DELETE") {
+          setCourierLiveLocation(null);
+        }
+      },
+
+      error: (error) => {
+        console.log("COURIER LIVE LOCATION SUBSCRIPTION ERROR:", error);
+      },
+    });
+
+    courierLiveLocationSubscriptionRef.current = subscription;
+
+    //-----------------------------------------
+    // Cleanup
+    //-----------------------------------------
+
+    return () => {
+      cancelled = true;
+
+      subscription?.unsubscribe();
+
+      courierLiveLocationSubscriptionRef.current = null;
+    };
+  }, [order?.assignedCourierId]);
+
+  // =================================================
   // FETCH COURIER PROFILE IMAGE
   // =================================================
 
@@ -765,15 +987,22 @@ const OrderTrackingScreen = ({ orderId }) => {
   // =================================================
   // SET INITIAL COURIER LOCATION
   // =================================================
+  //
+  // This now uses CourierLiveLocation.
+  //
+  // We do this immediately whenever a new live location
+  // becomes available so the marker does not start from
+  // coordinate 0,0.
+  // =================================================
 
   useEffect(() => {
     //-----------------------------------------
     // Convert Coordinates
     //-----------------------------------------
 
-    const courierLat = toCoordinate(courier?.lat);
+    const courierLat = toCoordinate(courierLiveLocation?.latitude);
 
-    const courierLng = toCoordinate(courier?.lng);
+    const courierLng = toCoordinate(courierLiveLocation?.longitude);
 
     //-----------------------------------------
     // Validate
@@ -787,13 +1016,34 @@ const OrderTrackingScreen = ({ orderId }) => {
     // Set Immediately
     //-----------------------------------------
 
-    courierAnim.latitude.setValue(courierLat);
+    if (!hasInitializedCourierPositionRef.current) {
+      courierAnim.latitude.setValue(courierLat);
+      courierAnim.longitude.setValue(courierLng);
 
-    courierAnim.longitude.setValue(courierLng);
-  }, [courier?.id, courierAnim]);
+      hasInitializedCourierPositionRef.current = true;
+    }
+  }, [
+    courierLiveLocation?.id,
+    courierLiveLocation?.latitude,
+    courierLiveLocation?.longitude,
+    courierAnim,
+  ]);
 
   // =================================================
   // ANIMATE COURIER LOCATION
+  // =================================================
+  //
+  // Every CourierLiveLocation update comes through here.
+  //
+  // Example:
+  //
+  // old:
+  // 4.8100, 7.0100
+  //
+  // new:
+  // 4.8110, 7.0115
+  //
+  // The marker smoothly animates between them.
   // =================================================
 
   useEffect(() => {
@@ -801,9 +1051,9 @@ const OrderTrackingScreen = ({ orderId }) => {
     // Convert Coordinates
     //-----------------------------------------
 
-    const courierLat = toCoordinate(courier?.lat);
+    const courierLat = toCoordinate(courierLiveLocation?.latitude);
 
-    const courierLng = toCoordinate(courier?.lng);
+    const courierLng = toCoordinate(courierLiveLocation?.longitude);
 
     //-----------------------------------------
     // Validate
@@ -820,21 +1070,21 @@ const OrderTrackingScreen = ({ orderId }) => {
     Animated.parallel([
       Animated.timing(courierAnim.latitude, {
         toValue: courierLat,
-
-        duration: 500,
-
+        duration: 700,
         useNativeDriver: false,
       }),
 
       Animated.timing(courierAnim.longitude, {
         toValue: courierLng,
-
-        duration: 500,
-
+        duration: 700,
         useNativeDriver: false,
       }),
     ]).start();
-  }, [courier?.lat, courier?.lng, courierAnim]);
+  }, [
+    courierLiveLocation?.latitude,
+    courierLiveLocation?.longitude,
+    courierAnim,
+  ]);
 
   // =================================================
   // SEARCH PULSE
@@ -859,17 +1109,13 @@ const OrderTrackingScreen = ({ orderId }) => {
       Animated.sequence([
         Animated.timing(pulseAnim, {
           toValue: 1.4,
-
           duration: 500,
-
           useNativeDriver: true,
         }),
 
         Animated.timing(pulseAnim, {
           toValue: 1,
-
           duration: 500,
-
           useNativeDriver: true,
         }),
       ]),
@@ -886,29 +1132,43 @@ const OrderTrackingScreen = ({ orderId }) => {
     };
   }, [order?.status, pulseAnim]);
 
-  // =================================================
-  // DRIVER ACCEPTED ANIMATION
-  // =================================================
+  // ==================================================
+  // COURIER CAMERA FOLLOW WITH HEADING
+  // ==================================================
+  //
+  // This keeps the camera centered on the courier and
+  // rotates the camera according to the courier's
+  // latest heading when available.
+  // ==================================================
 
   useEffect(() => {
     //-----------------------------------------
-    // Only When Accepted
+    // Delivery Statuses That Should Follow
     //-----------------------------------------
 
-    if (order?.status !== "ACCEPTED") {
+    const shouldFollowCourier = [
+      "ACCEPTED",
+      "PICKED_UP",
+      "IN_TRANSIT",
+      "ARRIVING",
+      "ARRIVED",
+      "OUT_FOR_DELIVERY",
+    ].includes(order?.status);
+
+    if (!shouldFollowCourier) {
       return;
     }
 
     //-----------------------------------------
-    // Convert Courier Coordinates
+    // Read CourierLiveLocation
     //-----------------------------------------
 
-    const courierLat = toCoordinate(courier?.lat);
-
-    const courierLng = toCoordinate(courier?.lng);
+    const courierLat = toCoordinate(courierLiveLocation?.latitude);
+    const courierLng = toCoordinate(courierLiveLocation?.longitude);
+    const courierHeading = toCoordinate(courierLiveLocation?.heading);
 
     //-----------------------------------------
-    // Validate
+    // Validate Location
     //-----------------------------------------
 
     if (!isValidCoordinate(courierLat, courierLng)) {
@@ -916,39 +1176,52 @@ const OrderTrackingScreen = ({ orderId }) => {
     }
 
     //-----------------------------------------
+    // Ensure Map Exists
+    //-----------------------------------------
+
+    if (!isMapReady || !mapRef.current) {
+      return;
+    }
+
+    //-----------------------------------------
     // Animate Driver Card
     //-----------------------------------------
 
-    Animated.spring(driverCardAnim, {
-      toValue: 1,
+    if (order?.status === "ACCEPTED") {
+      Animated.spring(driverCardAnim, {
+        toValue: 1,
+        useNativeDriver: true,
+      }).start();
 
-      useNativeDriver: true,
-    }).start();
-
-    //-----------------------------------------
-    // Expand Bottom Sheet
-    //-----------------------------------------
-
-    bottomSheetRef.current?.expand();
+      bottomSheetRef.current?.expand();
+    }
 
     //-----------------------------------------
-    // Move Map To Courier
+    // Build Camera Configuration
     //-----------------------------------------
 
-    mapRef.current?.animateToRegion(
-      {
+    const camera = {
+      center: {
         latitude: courierLat,
-
         longitude: courierLng,
-
-        latitudeDelta: 0.02,
-
-        longitudeDelta: 0.02,
       },
+      zoom: 16,
+    };
 
-      1000,
-    );
-  }, [order?.status, courier?.lat, courier?.lng, driverCardAnim]);
+    //-----------------------------------------
+    // Move Camera To Courier
+    //-----------------------------------------
+
+    mapRef.current.animateCamera(camera, {
+      duration: 900,
+    });
+  }, [
+    order?.status,
+    courierLiveLocation?.latitude,
+    courierLiveLocation?.longitude,
+    driverCardAnim,
+    isMapReady,
+  ]);
 
   // =================================================
   // CLEAR LIVE ORDER BADGE
@@ -967,41 +1240,33 @@ const OrderTrackingScreen = ({ orderId }) => {
     // Clear Badge After Delay
     //-------------------------------------
 
-    const timer = setTimeout(
-      async () => {
-        try {
-          const latestOrder = await DataStore.query(Order, order.id);
+    const timer = setTimeout(async () => {
+      try {
+        const latestOrder = await DataStore.query(Order, order.id);
 
-          if (!latestOrder) {
-            return;
-          }
-
-          await DataStore.save(
-            Order.copyOf(
-              latestOrder,
-
-              (updated) => {
-                updated.hasNewOffer = false;
-              },
-            ),
-          );
-
-          // -----------------------------------------
-          // Refresh React state from the record
-          // we just saved.
-          // -----------------------------------------
-
-          await refreshOrder({
-            reason: "CLEAR_OFFER_BADGE",
-            log: false,
-          });
-        } catch (error) {
-          console.log("CLEAR OFFER BADGE ERROR:", error);
+        if (!latestOrder) {
+          return;
         }
-      },
 
-      1500,
-    );
+        await DataStore.save(
+          Order.copyOf(latestOrder, (updated) => {
+            updated.hasNewOffer = false;
+          }),
+        );
+
+        // -----------------------------------------
+        // Refresh React state from the record
+        // we just saved.
+        // -----------------------------------------
+
+        await refreshOrder({
+          reason: "CLEAR_OFFER_BADGE",
+          log: false,
+        });
+      } catch (error) {
+        console.log("CLEAR OFFER BADGE ERROR:", error);
+      }
+    }, 1500);
 
     //-------------------------------------
     // Cleanup
@@ -1060,7 +1325,6 @@ const OrderTrackingScreen = ({ orderId }) => {
   const origin = hasValidOrigin
     ? {
         latitude: originLatitude,
-
         longitude: originLongitude,
       }
     : null;
@@ -1072,7 +1336,6 @@ const OrderTrackingScreen = ({ orderId }) => {
   const destination = hasValidDestination
     ? {
         latitude: destinationLatitude,
-
         longitude: destinationLongitude,
       }
     : null;
@@ -1084,12 +1347,19 @@ const OrderTrackingScreen = ({ orderId }) => {
   const canRenderMap = Boolean(origin && destination);
 
   // =================================================
-  // COURIER COORDINATES
+  // COURIER LIVE COORDINATES
+  // =================================================
+  //
+  // IMPORTANT:
+  //
+  // There is NO courier?.lat / courier?.lng here.
+  //
+  // Everything comes from CourierLiveLocation.
   // =================================================
 
-  const courierLatitude = toCoordinate(courier?.lat);
+  const courierLatitude = toCoordinate(courierLiveLocation?.latitude);
 
-  const courierLongitude = toCoordinate(courier?.lng);
+  const courierLongitude = toCoordinate(courierLiveLocation?.longitude);
 
   const hasValidCourierLocation = isValidCoordinate(
     courierLatitude,
@@ -1143,21 +1413,17 @@ const OrderTrackingScreen = ({ orderId }) => {
       //---------------------------------
 
       const updatedOrder = await DataStore.save(
-        Order.copyOf(
-          latestOrder,
+        Order.copyOf(latestOrder, (updated) => {
+          updated.status = "ACCEPTED";
 
-          (updated) => {
-            updated.status = "ACCEPTED";
+          updated.totalPrice = offer.amount;
 
-            updated.totalPrice = offer.amount;
+          updated.acceptedOfferID = offer.id;
 
-            updated.acceptedOfferID = offer.id;
+          updated.assignedCourierId = offer.courierID;
 
-            updated.assignedCourierId = offer.courierID;
-
-            updated.hasNewOffer = false;
-          },
-        ),
+          updated.hasNewOffer = false;
+        }),
       );
 
       //---------------------------------
@@ -1181,13 +1447,9 @@ const OrderTrackingScreen = ({ orderId }) => {
         //---------------------------------
 
         await DataStore.save(
-          Offer.copyOf(
-            latestOffer,
-
-            (updated) => {
-              updated.status = "ACCEPTED";
-            },
-          ),
+          Offer.copyOf(latestOffer, (updated) => {
+            updated.status = "ACCEPTED";
+          }),
         );
       }
     } catch (error) {
@@ -1234,17 +1496,13 @@ const OrderTrackingScreen = ({ orderId }) => {
       //-------------------------------------
 
       const updatedOrder = await DataStore.save(
-        Order.copyOf(
-          latestOrder,
+        Order.copyOf(latestOrder, (updated) => {
+          updated.hasNewOffer = true;
 
-          (updated) => {
-            updated.hasNewOffer = true;
+          updated.lastOfferAt = new Date().toISOString();
 
-            updated.lastOfferAt = new Date().toISOString();
-
-            updated.lastOfferSenderType = "USER";
-          },
-        ),
+          updated.lastOfferSenderType = "USER";
+        }),
       );
 
       //-------------------------------------
@@ -1274,15 +1532,16 @@ const OrderTrackingScreen = ({ orderId }) => {
           ref={mapRef}
           style={styles.map}
           provider={PROVIDER_GOOGLE}
+          onMapReady={() => setIsMapReady(true)}
           initialRegion={{
             latitude: origin.latitude,
-
             longitude: origin.longitude,
 
             latitudeDelta: 0.05,
-
             longitudeDelta: 0.05,
           }}
+          showsUserLocation={false}
+          followsUserLocation={false}
         >
           {/* =================================
               ROUTE
@@ -1322,7 +1581,6 @@ const OrderTrackingScreen = ({ orderId }) => {
                 <Animated.View
                   style={[
                     styles.pulseRing,
-
                     {
                       transform: [
                         {
@@ -1361,27 +1619,47 @@ const OrderTrackingScreen = ({ orderId }) => {
           </Marker>
 
           {/* =================================
-              COURIER MARKER
+              ASSIGNED COURIER MARKER
+          ================================= */}
+          {/*
+             The courier marker is now driven by
+             CourierLiveLocation.
+
+             The courier profile image still comes
+             from the Courier record.
           ================================= */}
 
           {hasValidCourierLocation && (
             <Marker.Animated
               coordinate={{
                 latitude: courierAnim.latitude,
-
                 longitude: courierAnim.longitude,
               }}
+              anchor={{
+                x: 0.5,
+                y: 0.5,
+              }}
+              flat={true}
+              tracksViewChanges={true}
             >
-              <Image
-                source={
-                  courierImageUrl
-                    ? {
-                        uri: courierImageUrl,
-                      }
-                    : require("../../assets/images/placeholder.png")
-                }
-                style={styles.courierAvatar}
-              />
+              <Animated.View
+                style={{
+                  transform: [
+                    {
+                      rotate: `${toCoordinate(courierLiveLocation?.heading) || 0}deg`,
+                    },
+                  ],
+                }}
+              >
+                <Image
+                  source={
+                    courierImageUrl
+                      ? { uri: courierImageUrl }
+                      : require("../../assets/images/placeholder.png")
+                  }
+                  style={styles.courierAvatar}
+                />
+              </Animated.View>
             </Marker.Animated>
           )}
         </MapView>

@@ -407,7 +407,6 @@ type Order @model @auth(rules: [{ allow: public }]) {
 
   # ---------------- ASSIGNMENT FIELDS ----------------
   assignedCourierId: ID @index(name: "byAssignedCourier")
-  #assignmentStatus: String
   assignmentExpiresAt: AWSDateTime
   assignmentAttempts: Int
   lastAssignedAt: AWSDateTime
@@ -415,6 +414,12 @@ type Order @model @auth(rules: [{ allow: public }]) {
   # ---------------- RELATIONS ----------------
   assignmentStatus: String
     @index(name: "byAssignmentStatus", sortKeyFields: ["assignmentExpiresAt"])
+
+  # ---------------- TRACKING FIELDS ----------------
+
+  trackingStartedAt: AWSDateTime
+  trackingEndedAt: AWSDateTime
+
   userID: ID! @index(name: "byUser")
   reviews: [CourierReview] @hasMany(indexName: "byOrder", fields: ["id"])
 
@@ -465,10 +470,50 @@ type CourierReview @model @auth(rules: [{ allow: public }]) {
   comment: String
 }
 
+type CourierLiveLocation @model @auth(rules: [{ allow: public }]) {
+  id: ID!
+
+  # The courier whose location this record belongs to
+  courierID: ID! @index(name: "byCourierLiveLocation")
+
+  # Relationship back to the Courier model
+  courier: Courier @belongsTo(fields: ["courierID"])
+
+  # Latest GPS coordinates
+  latitude: Float!
+  longitude: Float!
+
+  # Direction the courier is facing/moving
+  heading: Float
+
+  # Speed from the GPS provider
+  speed: Float
+
+  # GPS accuracy in metres
+  accuracy: Float
+
+  # Optional GPS altitude
+  altitude: Float
+
+  # Whether the background tracking task is currently active
+  isTracking: Boolean
+
+  # Example values:
+  # "FOREGROUND"
+  # "BACKGROUND"
+  # "ANDROID_BACKGROUND"
+  # "IOS_BACKGROUND"
+  trackingSource: String
+
+  # Last successful location update received
+  lastSeenAt: AWSDateTime!
+}
+
 type Courier @model @auth(rules: [{ allow: public }]) {
   id: ID!
   sub: String!
   isOnline: Boolean
+  isBlocked: Boolean
   firstName: String!
   lastName: String
   profilePic: String
@@ -501,6 +546,11 @@ type Courier @model @auth(rules: [{ allow: public }]) {
   lat: Float
   lng: Float
   heading: Float
+
+  liveLocationID: ID
+  liveLocation: CourierLiveLocation @hasOne(fields: ["liveLocationID"])
+
+  isOnboardingComplete: Boolean
   push_token: String
   isApproved: Boolean
   approvedById: String

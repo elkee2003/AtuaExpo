@@ -35,9 +35,17 @@ export default StyleSheet.create({
 
   textInput: {
     backgroundColor: "#f1f1f1",
+
     padding: 12,
     borderRadius: 10,
+
     fontSize: 15,
+
+    // Explicitly keep typed text visible in dark mode.
+    color: "#151515",
+
+    // Keep the input visually consistent with the light input background.
+    opacity: 1,
   },
 
   swapButton: {

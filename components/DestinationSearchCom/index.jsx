@@ -183,6 +183,11 @@ const DestinationSearchComponent = () => {
           debounce={400}
           enablePoweredByContainer={false}
           suppressDefaultStyles
+          textInputProps={{
+            placeholderTextColor: "#8B93A1",
+            autoCorrect: false,
+            autoCapitalize: "none",
+          }}
           query={{
             key: GOOGLE_API_KEY,
             language: "en",
@@ -235,6 +240,11 @@ const DestinationSearchComponent = () => {
           debounce={400}
           enablePoweredByContainer={false}
           suppressDefaultStyles
+          textInputProps={{
+            placeholderTextColor: "#8B93A1",
+            autoCorrect: false,
+            autoCapitalize: "none",
+          }}
           query={{
             key: GOOGLE_API_KEY,
             language: "en",

@@ -16,10 +16,24 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+
+// ============================================================
+// SAFE AREA
+// ============================================================
+// Use SafeAreaView from react-native-safe-area-context instead
+// of the deprecated/native React Native SafeAreaView.
+// ============================================================
+
+import { SafeAreaView } from "react-native-safe-area-context";
+
 import { useProfileContext } from "../../../providers/ProfileProvider";
 import styles from "./styles";
 
 const EditProfile = ({ onRefresh, refreshing }) => {
+  // ============================================================
+  // PROFILE CONTEXT
+  // ============================================================
+
   const {
     firstName,
     setFirstName,
@@ -33,221 +47,483 @@ const EditProfile = ({ onRefresh, refreshing }) => {
     onValidateInput,
   } = useProfileContext();
 
-  // ===== PROFILE IMAGE FUNCTIONS =====
+  // ============================================================
+  // PROFILE IMAGE OPTIONS
+  // ============================================================
 
   const showProfileImageOptions = () => {
     Alert.alert(
-      "Update Profile Picture",
-      "Choose an option",
+      "Profile Photo",
+      "Choose how you want to update your profile photo.",
       [
+        // --------------------------------------------------------
+        // Take photo
+        // --------------------------------------------------------
         {
-          text: "Camera",
+          text: "Take Photo",
           onPress: openProfileCamera,
         },
+
+        // --------------------------------------------------------
+        // Choose from gallery
+        // --------------------------------------------------------
         {
-          text: "Gallery",
+          text: "Choose from Gallery",
           onPress: pickProfileImage,
         },
-        {
-          text: "Remove",
-          onPress: () => setProfilePic(null),
-        },
+
+        // --------------------------------------------------------
+        // Remove photo
+        // Only show this option when a photo exists.
+        // --------------------------------------------------------
+        ...(profilePic
+          ? [
+              {
+                text: "Remove Photo",
+                style: "destructive",
+                onPress: () => setProfilePic(null),
+              },
+            ]
+          : []),
+
+        // --------------------------------------------------------
+        // Cancel
+        // --------------------------------------------------------
         {
           text: "Cancel",
           style: "cancel",
         },
       ],
       {
-        cancelable: true, // 👈 IMPORTANT FOR ANDROID
+        cancelable: true,
       },
     );
   };
 
+  // ============================================================
+  // OPEN CAMERA
+  // ============================================================
+
   const openProfileCamera = async () => {
-    const permission = await ImagePicker.requestCameraPermissionsAsync();
-    if (!permission.granted) {
-      Alert.alert("Permission required", "Camera access is needed.");
-      return;
-    }
+    try {
+      // ----------------------------------------------------------
+      // Request camera permission.
+      // ----------------------------------------------------------
 
-    let result = await ImagePicker.launchCameraAsync({
-      allowsEditing: true,
-      aspect: [1, 1], // perfect square for profile
-      quality: 0.8,
-    });
+      const permission = await ImagePicker.requestCameraPermissionsAsync();
 
-    if (!result.canceled) {
-      setProfilePic(result.assets[0].uri);
+      if (!permission.granted) {
+        Alert.alert(
+          "Camera Permission",
+          "Camera access is required to take a profile photo.",
+        );
+
+        return;
+      }
+
+      // ----------------------------------------------------------
+      // Open camera.
+      // ----------------------------------------------------------
+
+      const result = await ImagePicker.launchCameraAsync({
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+
+      // ----------------------------------------------------------
+      // Save selected image URI.
+      // ----------------------------------------------------------
+
+      if (!result.canceled && result.assets?.[0]?.uri) {
+        setProfilePic(result.assets[0].uri);
+      }
+    } catch (error) {
+      console.log("Profile camera error:", error);
+
+      Alert.alert(
+        "Camera Error",
+        "We couldn't open the camera. Please try again.",
+      );
     }
   };
+
+  // ============================================================
+  // PICK PROFILE IMAGE
+  // ============================================================
 
   const pickProfileImage = async () => {
-    let result = await ImagePicker.launchImageLibraryAsync({
-      allowsEditing: true,
-      aspect: [1, 1], // square crop like top apps
-      quality: 0.8,
-    });
-
-    if (!result.canceled) {
-      setProfilePic(result.assets[0].uri);
-    }
-  };
-
-  // Pick NIN Function
-  const showImageOptions = () => {
-    Alert.alert("Upload NIN Image", "Choose an option", [
-      { text: "Camera", onPress: openCamera },
-      { text: "Gallery", onPress: pickNINImage },
-      { text: "Cancel", style: "cancel" },
-    ]);
-  };
-
-  const openCamera = async () => {
-    const permission = await ImagePicker.requestCameraPermissionsAsync();
-    if (!permission.granted) {
-      Alert.alert("Permission required", "Camera access is needed.");
-      return;
-    }
-
-    let result = await ImagePicker.launchCameraAsync({
-      allowsEditing: true,
-      quality: 0.8,
-    });
-
-    if (!result.canceled) {
-      setCourierNINImage(result.assets[0].uri);
-    }
-  };
-
-  const pickNINImage = async () => {
-    let result = await ImagePicker.launchImageLibraryAsync({
-      allowsEditing: true,
-      quality: 0.8,
-    });
-
-    if (!result.canceled) {
-      setCourierNINImage(result.assets[0].uri);
-    }
-  };
-
-  // Navigation Function
-  const goToAddressPage = () => {
-    if (onValidateInput()) {
-      router.push("/profile/address"); // Navigate to address page
-    }
-  };
-
-  async function handleSignOut() {
     try {
-      const res = await signOut();
-      console.log(res);
+      // ----------------------------------------------------------
+      // Open device gallery.
+      // ----------------------------------------------------------
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+        mediaTypes: ["images"],
+      });
+
+      // ----------------------------------------------------------
+      // Save selected image URI.
+      // ----------------------------------------------------------
+
+      if (!result.canceled && result.assets?.[0]?.uri) {
+        setProfilePic(result.assets[0].uri);
+      }
     } catch (error) {
-      console.log("error signing out: ", error);
+      console.log("Profile image picker error:", error);
+
+      Alert.alert(
+        "Gallery Error",
+        "We couldn't open your gallery. Please try again.",
+      );
     }
-  }
+  };
+
+  // ============================================================
+  // NAVIGATION
+  // ============================================================
+
+  const goToAddressPage = () => {
+    // ----------------------------------------------------------
+    // Validate profile information before continuing.
+    // ----------------------------------------------------------
+
+    if (onValidateInput()) {
+      router.push("/profile/address");
+    }
+  };
+
+  // ============================================================
+  // SIGN OUT
+  // ============================================================
+
+  const handleSignOut = async () => {
+    try {
+      await signOut();
+    } catch (error) {
+      console.log("Error signing out:", error);
+    }
+  };
+
+  // ============================================================
+  // SIGN OUT CONFIRMATION
+  // ============================================================
 
   const onSignout = () => {
     Alert.alert(
       "Sign Out",
-      "Are you sure you want to sign out?",
+      "Are you sure you want to sign out of your account.",
       [
+        // --------------------------------------------------------
+        // Cancel
+        // --------------------------------------------------------
         {
           text: "Cancel",
           style: "cancel",
         },
+
+        // --------------------------------------------------------
+        // Confirm sign out
+        // --------------------------------------------------------
         {
-          text: "Yes",
-          onPress: () => handleSignOut(),
+          text: "Sign Out",
+          style: "destructive",
+          onPress: handleSignOut,
         },
       ],
-      { cancelable: true },
+      {
+        cancelable: true,
+      },
     );
   };
 
+  // ============================================================
+  // RENDER
+  // ============================================================
+
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-      style={{ flex: 1 }}
-      keyboardVerticalOffset={80} // tweak if needed
-    >
-      <View style={styles.container}>
-        <Text style={styles.title}>Edit Profile</Text>
+    <SafeAreaView style={styles.screen} edges={["top", "bottom"]}>
+      <KeyboardAvoidingView
+        style={styles.screen}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 20 : 0}
+      >
+        <View style={styles.container}>
+          {/* ====================================================
+              HEADER
+          ==================================================== */}
 
-        {/* Back Button */}
-        <TouchableOpacity
-          onPress={() => router.back()}
-          style={styles.bckBtnCon}
-        >
-          <Ionicons name={"arrow-back"} style={styles.bckBtnIcon} />
-        </TouchableOpacity>
-
-        {/* Sign out button */}
-        <TouchableOpacity style={styles.signoutBtn} onPress={onSignout}>
-          <Text style={styles.signoutTxt}>Sign Out</Text>
-        </TouchableOpacity>
-
-        <ScrollView
-          showsVerticalScrollIndicator={false}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-          }
-        >
-          {/* Upload Profile Picture */}
-          <View style={styles.profilePicWrapper}>
+          <View style={styles.header}>
+            {/* Back button */}
             <TouchableOpacity
-              style={styles.profilePicContainer}
-              onPress={showProfileImageOptions}
+              onPress={() => router.back()}
+              style={styles.headerIconButton}
+              activeOpacity={0.75}
+              accessibilityRole="button"
+              accessibilityLabel="Go back"
             >
-              {profilePic ? (
-                <Image source={{ uri: profilePic }} style={styles.img} />
-              ) : (
-                <View style={styles.placeholderContainer}>
-                  <Ionicons name="person-outline" size={50} color="#777" />
-                  <Text style={styles.addPhotoText}>Add Photo</Text>
-                </View>
-              )}
+              <Ionicons name="arrow-back" size={21} style={styles.headerIcon} />
+            </TouchableOpacity>
 
-              <View style={styles.cameraIconContainer}>
-                <Ionicons name="camera" size={20} color="#fff" />
-              </View>
+            {/* Header title */}
+            <View style={styles.headerCenter}>
+              <Text style={styles.title}>Edit Profile</Text>
+
+              <Text style={styles.headerSubtitle}>
+                Keep your information up to date
+              </Text>
+            </View>
+
+            {/* Sign out */}
+            <TouchableOpacity
+              onPress={onSignout}
+              style={styles.signoutButton}
+              activeOpacity={0.75}
+              accessibilityRole="button"
+              accessibilityLabel="Sign out"
+            >
+              <Ionicons
+                name="log-out-outline"
+                size={18}
+                style={styles.signoutIcon}
+              />
             </TouchableOpacity>
           </View>
 
-          <Text style={styles.subHeader}>First Name / Company name:</Text>
-          <TextInput
-            value={firstName}
-            onChangeText={setFirstName}
-            placeholder="First Name / Company name"
-            style={styles.input}
-          />
+          {/* ====================================================
+              CONTENT
+          ==================================================== */}
 
-          <Text style={styles.subHeader}>Last Name:</Text>
-          <TextInput
-            value={lastName}
-            onChangeText={setLastName}
-            placeholder="Last Name"
-            style={styles.input}
-          />
+          <ScrollView
+            style={styles.scrollView}
+            contentContainerStyle={styles.scrollContent}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+            }
+          >
+            {/* ==================================================
+                PROFILE PHOTO
+            ================================================== */}
 
-          <Text style={styles.subHeader}>Phone Number:</Text>
-          <TextInput
-            value={phoneNumber}
-            onChangeText={setPhoneNumber}
-            placeholder="Phone Number"
-            style={styles.input}
-            keyboardType="numeric"
-          />
-        </ScrollView>
+            <View style={styles.photoSection}>
+              <TouchableOpacity
+                style={styles.profilePicContainer}
+                onPress={showProfileImageOptions}
+                activeOpacity={0.88}
+                accessibilityRole="button"
+                accessibilityLabel="Change profile photo"
+              >
+                {/* ------------------------------------------------
+                    Existing profile photo
+                ------------------------------------------------ */}
 
-        {/* Error Message */}
-        <Text style={styles.error}>{errorMessage}</Text>
+                {profilePic ? (
+                  <Image
+                    source={{
+                      uri: profilePic,
+                    }}
+                    style={styles.img}
+                  />
+                ) : (
+                  /* ------------------------------------------------
+                     Empty profile photo state
+                  ------------------------------------------------ */
+                  <View style={styles.placeholderContainer}>
+                    <View style={styles.placeholderIconCircle}>
+                      <Ionicons
+                        name="person-outline"
+                        size={42}
+                        style={styles.placeholderIcon}
+                      />
+                    </View>
 
-        {/* Button */}
-        <TouchableOpacity onPress={goToAddressPage} style={styles.nxtBtn}>
-          <MaterialIcons name="navigate-next" style={styles.nxtBtnIcon} />
-        </TouchableOpacity>
-      </View>
-    </KeyboardAvoidingView>
+                    <Text style={styles.addPhotoText}>Add photo</Text>
+                  </View>
+                )}
+
+                {/* ------------------------------------------------
+                    Camera badge
+                ------------------------------------------------ */}
+
+                <View style={styles.cameraIconContainer}>
+                  <Ionicons name="camera" size={18} style={styles.cameraIcon} />
+                </View>
+              </TouchableOpacity>
+
+              <Text style={styles.photoTitle}>Profile photo</Text>
+
+              <Text style={styles.photoHint}>
+                Use a clear photo of yourself
+              </Text>
+            </View>
+
+            {/* ==================================================
+                PERSONAL INFORMATION
+            ================================================== */}
+
+            <View style={styles.section}>
+              {/* Section header */}
+              <View style={styles.sectionHeader}>
+                <View style={styles.sectionIcon}>
+                  <Ionicons
+                    name="person-outline"
+                    size={17}
+                    style={styles.sectionIconGlyph}
+                  />
+                </View>
+
+                <View>
+                  <Text style={styles.sectionTitle}>Personal information</Text>
+
+                  <Text style={styles.sectionSubtitle}>
+                    Tell us a little about you
+                  </Text>
+                </View>
+              </View>
+
+              {/* =================================================
+                  FIRST NAME / COMPANY NAME
+              ================================================= */}
+
+              <View style={styles.field}>
+                <Text style={styles.fieldLabel}>First name / Company name</Text>
+
+                <View style={styles.inputWrapper}>
+                  <Ionicons
+                    name="person-outline"
+                    size={19}
+                    style={styles.inputIcon}
+                  />
+
+                  <TextInput
+                    value={firstName}
+                    onChangeText={setFirstName}
+                    placeholder="Enter your first or company name"
+                    placeholderTextColor="#8B93A1"
+                    style={styles.input}
+                    autoCapitalize="words"
+                    autoCorrect={false}
+                    returnKeyType="next"
+                    selectionColor="#07A830"
+                  />
+                </View>
+              </View>
+
+              {/* =================================================
+                  LAST NAME
+              ================================================= */}
+
+              <View style={styles.field}>
+                <Text style={styles.fieldLabel}>Last name</Text>
+
+                <View style={styles.inputWrapper}>
+                  <Ionicons
+                    name="person-outline"
+                    size={19}
+                    style={styles.inputIcon}
+                  />
+
+                  <TextInput
+                    value={lastName}
+                    onChangeText={setLastName}
+                    placeholder="Enter your last name"
+                    placeholderTextColor="#8B93A1"
+                    style={styles.input}
+                    autoCapitalize="words"
+                    autoCorrect={false}
+                    returnKeyType="next"
+                    selectionColor="#07A830"
+                  />
+                </View>
+              </View>
+
+              {/* =================================================
+                  PHONE NUMBER
+              ================================================= */}
+
+              <View style={styles.field}>
+                <Text style={styles.fieldLabel}>Phone number</Text>
+
+                <View style={styles.inputWrapper}>
+                  <Ionicons
+                    name="call-outline"
+                    size={19}
+                    style={styles.inputIcon}
+                  />
+
+                  <TextInput
+                    value={phoneNumber}
+                    onChangeText={setPhoneNumber}
+                    placeholder="Enter your phone number"
+                    placeholderTextColor="#8B93A1"
+                    style={styles.input}
+                    keyboardType="phone-pad"
+                    autoCorrect={false}
+                    returnKeyType="done"
+                    selectionColor="#07A830"
+                  />
+                </View>
+              </View>
+            </View>
+
+            {/* ==================================================
+                ERROR MESSAGE
+            ================================================== */}
+
+            {!!errorMessage && (
+              <View style={styles.errorContainer}>
+                <Ionicons
+                  name="alert-circle-outline"
+                  size={18}
+                  style={styles.errorIcon}
+                />
+
+                <Text style={styles.error}>{errorMessage}</Text>
+              </View>
+            )}
+
+            {/* ==================================================
+                BOTTOM BREATHING ROOM
+            ================================================== */}
+
+            <View style={styles.bottomSpacer} />
+          </ScrollView>
+
+          {/* ====================================================
+              NEXT BUTTON
+          ==================================================== */}
+
+          <View style={styles.footer}>
+            <TouchableOpacity
+              onPress={goToAddressPage}
+              style={styles.nextButton}
+              activeOpacity={0.86}
+              accessibilityRole="button"
+              accessibilityLabel="Continue to address"
+            >
+              <View style={styles.nextButtonTextContainer}>
+                <Text style={styles.nextButtonLabel}>Continue</Text>
+
+                <Text style={styles.nextButtonSubLabel}>Address details</Text>
+              </View>
+
+              <View style={styles.nextButtonIconContainer}>
+                <MaterialIcons
+                  name="arrow-forward"
+                  size={23}
+                  style={styles.nextButtonIcon}
+                />
+              </View>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 };
 

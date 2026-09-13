@@ -27,11 +27,11 @@
         },
         "assignOrder": {
           "deploymentBucketName": "amplify-atua-staging-19d66-deployment",
-          "s3Key": "amplify-builds/assignOrder-44717a51666e492b7239-build.zip"
+          "s3Key": "amplify-builds/assignOrder-716f48626452514b6443-build.zip"
         },
         "reassignOrder": {
           "deploymentBucketName": "amplify-atua-staging-19d66-deployment",
-          "s3Key": "amplify-builds/reassignOrder-434e733747556c493057-build.zip"
+          "s3Key": "amplify-builds/reassignOrder-58534777635076475670-build.zip"
         },
         "forceDispatch": {
           "deploymentBucketName": "amplify-atua-staging-19d66-deployment",

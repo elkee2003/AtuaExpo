@@ -1,90 +1,75 @@
 // ============================================================
-// ATUA REASSIGN ORDER LAMBDA
+// ATUA — REASSIGN ORDER LAMBDA
+// PART 1
 // ============================================================
 //
 // PURPOSE
 // ============================================================
 //
-// Handles expired courier offers.
+// This Lambda handles EXPIRED automatic courier assignments.
 //
-// FLOW:
+// Supported automatic assignment types:
 //
-// ORDER
-//   ↓
-// Courier A OFFERED
-//   ↓
-// 25 seconds
-//   ↓
-// Courier A does not accept
-//   ↓
-// OFFER EXPIRES
-//   ↓
-// Courier A added to attempted list
-//   ↓
-// Courier B searched
-//   ↓
-// Courier B OFFERED
-//   ↓
-// 25 seconds
-//   ↓
-// ...continues...
+//     MICRO_EXPRESS
+//     MICRO_BATCH
+//     MOTO_EXPRESS
+//     MOTO_BATCH
 //
-// When the current radius is exhausted:
+// MAXI IS NOT handled by this automatic reassignment Lambda.
 //
-// MICRO:
-//   5km → 8km
-//              ↓
-//        NEW DISPATCH ROUND
-//              ↓
-//   5km → 8km again
-//
-// MOTO:
-//   5km → 10km → 15km → 20km → 25km
-//                                ↓
-//                         NEW DISPATCH ROUND
-//                                ↓
-//   5km → 10km → 15km → 20km → 25km
+// Maxi uses its separate offer / bidding workflow.
 //
 // ============================================================
 //
-// IMPORTANT
+// REASSIGNMENT FLOW
 // ============================================================
 //
-// This Lambda ONLY modifies assignment / dispatch fields.
+// assignOrder
+//      ↓
+// courier receives offer
+//      ↓
+// assignmentStatus = OFFERED
+//      ↓
+// assignmentExpiresAt = +25 seconds
+//      ↓
+// SQS
+//      ↓
+// reassignOrder
+//      ↓
+// reload order from DynamoDB
+//      ↓
+// verify offer REALLY expired
+//      ↓
+// reject expired courier
+//      ↓
+// find another eligible courier
+//      ↓
+// reserve new courier
+//      ↓
+// update order
+//      ↓
+// assignmentAttempts + 1
+//      ↓
+// SQS again for the new 25-second offer
 //
-// It NEVER reconstructs the Order.
+// IMPORTANT:
 //
-// It NEVER writes:
+// There is NO maximum number of assignment attempts.
 //
-//   userID
-//   paymentStatus
-//   paymentID
-//   paymentReference
-//   totalPrice
-//   operationalFare
-//   courierEarnings
-//   payoutStatus
-//   fundsStatus
-//   fundsReleaseBlocked
-//   pickup information
-//   destination information
-//   recipient information
-//   timestamps owned elsewhere
-//   etc.
+// Example:
 //
-// This is intentional.
+//     Courier A → attempt 1 → expires
+//     Courier B → attempt 2 → expires
+//     Courier C → attempt 3 → expires
+//     ...
+//     Courier J → attempt 10 → expires
+//     Courier K → attempt 11 → expires
+//     Courier L → attempt 12 → expires
+//     ...
 //
-// DynamoDB SET updates preserve every attribute that is not
-// included in the UpdateExpression.
+// assignmentAttempts is only a counter.
 //
-// ============================================================
-//
-// MAXI
-// ============================================================
-//
-// MAXI is NOT handled here.
-//
-// MAXI uses the separate marketplace / bidding flow.
+// It is NOT used as a stopping condition.
 //
 // ============================================================
 
@@ -96,20 +81,26 @@ const { DynamoDBClient } = require("@aws-sdk/client-dynamodb");
 
 const {
   DynamoDBDocumentClient,
+  GetCommand,
   QueryCommand,
   TransactWriteCommand,
+  UpdateCommand,
 } = require("@aws-sdk/lib-dynamodb");
 
-// ============================================================
-// CLIENT
-// ============================================================
-
-const client = new DynamoDBClient({});
-
-const docClient = DynamoDBDocumentClient.from(client);
+const { SQSClient, SendMessageCommand } = require("@aws-sdk/client-sqs");
 
 // ============================================================
-// TABLES
+// AWS CLIENTS
+// ============================================================
+
+const dynamoClient = new DynamoDBClient({});
+
+const docClient = DynamoDBDocumentClient.from(dynamoClient);
+
+const sqsClient = new SQSClient({});
+
+// ============================================================
+// TABLE NAMES
 // ============================================================
 
 const COURIER_TABLE =
@@ -119,191 +110,192 @@ const ORDER_TABLE =
   process.env.ORDER_TABLE || "Order-n4tb6ywvhnf3zesv5ibhpitqiq-staging";
 
 // ============================================================
-// DISPATCH CONFIGURATION
-// ============================================================
-//
-// MICRO:
-//   5km → 8km
-//
-// MOTO:
-//   5km → 10km → 15km → 20km → 25km
-//
+// SQS QUEUE
 // ============================================================
 
-const MICRO_RADIUS_STEPS = [5, 8];
-
-const MOTO_RADIUS_STEPS = [5, 10, 15, 20, 25];
+const ASSIGNMENT_EXPIRY_QUEUE_URL =
+  process.env.ASSIGNMENT_EXPIRY_QUEUE_URL || "";
 
 // ============================================================
-// OFFER TIMEOUT
+// ASSIGNMENT TIMING
 // ============================================================
+//
+// Courier gets 25 seconds to accept the offer.
+//
 
 const ASSIGNMENT_TIMEOUT_MS = 25 * 1000;
 
-// ============================================================
-// CAPACITY
-// ============================================================
+const ASSIGNMENT_TIMEOUT_SECONDS = 25;
 
-const MAX_BATCH_JOBS = 10;
+// ============================================================
+// COURIER CAPACITY
+// ============================================================
+//
+// EXPRESS
+//     maximum 1 active express assignment
+//
+// BATCH
+//     maximum 10 active batch assignments
+//
+// EXPRESS and BATCH are mutually exclusive.
+//
 
 const MAX_EXPRESS_JOBS = 1;
 
+const MAX_BATCH_JOBS = 10;
+
 // ============================================================
-// HANDLER
+// SEARCH RADIUS
+// ============================================================
+//
+// MICRO:
+//
+//     5 km
+//     8 km
+//
+// MOTO:
+//
+//     5 km
+//     10 km
+//     15 km
+//     20 km
+//     25 km
+//
+
+const MICRO_RADIUS_SEQUENCE = [5, 8];
+
+const MOTO_RADIUS_SEQUENCE = [5, 10, 15, 20, 25];
+
+// ============================================================
+// REJECTED COURIERS
+// ============================================================
+//
+// Prevents a courier that already failed this order from
+// receiving the same order again.
+//
+
+const MAX_REJECTED_COURIERS = 200;
+
+// ============================================================
+// SQS SEND RETRIES
+// ============================================================
+//
+// IMPORTANT:
+//
+// These are SQS delivery retries only.
+//
+// They are NOT assignment attempts.
+//
+
+const SQS_SEND_RETRIES = 3;
+
+// ============================================================
+// MAIN HANDLER
 // ============================================================
 
 exports.handler = async (event) => {
-  const startedAt = Date.now();
-
-  const now = new Date().toISOString();
-
   console.log("==================================================");
 
   console.log("🔄 ATUA REASSIGN ORDER LAMBDA STARTED");
 
   console.log("==================================================");
 
-  console.log("Current time:", now);
+  const records = Array.isArray(event?.Records) ? event.Records : [];
 
-  console.log("Environment:", {
-    ORDER_TABLE,
-    COURIER_TABLE,
+  console.log("📨 INVOCATION INFORMATION:", {
+    recordCount: records.length,
+
+    eventSource: records[0]?.eventSource || null,
+
+    queueConfigured: Boolean(ASSIGNMENT_EXPIRY_QUEUE_URL),
+
+    functionName: process.env.AWS_LAMBDA_FUNCTION_NAME,
+
+    region: process.env.AWS_REGION,
   });
 
-  console.log("Event:", JSON.stringify(event || {}));
-
   // ==========================================================
-  // FIND EXPIRED OFFERS
+  // VERIFY QUEUE CONFIGURATION
   // ==========================================================
 
-  let orders;
+  if (!ASSIGNMENT_EXPIRY_QUEUE_URL) {
+    console.error("❌ ASSIGNMENT_EXPIRY_QUEUE_URL IS NOT CONFIGURED");
 
-  try {
-    orders = await getExpiredOffers(now);
-  } catch (error) {
-    console.error("❌ FAILED TO FIND EXPIRED OFFERS");
-
-    console.error(error);
-
-    throw error;
+    throw new Error(
+      "Missing environment variable: ASSIGNMENT_EXPIRY_QUEUE_URL",
+    );
   }
 
-  console.log(`📦 Found ${orders.length} expired offer(s).`);
-
   // ==========================================================
-  // NOTHING TO DO
+  // NO RECORDS
   // ==========================================================
 
-  if (orders.length === 0) {
-    console.log("ℹ️ No expired offers require reassignment.");
-
-    console.log(`🏁 Finished in ${Date.now() - startedAt}ms`);
+  if (!records.length) {
+    console.log("⚠️ NO SQS RECORDS RECEIVED");
 
     return {
       success: true,
-
       processed: 0,
-
-      reassigned: 0,
     };
   }
 
   // ==========================================================
-  // PROCESS ORDERS
+  // PROCESS EACH SQS RECORD
   // ==========================================================
 
-  let processed = 0;
+  const results = [];
 
-  let reassigned = 0;
-
-  for (const order of orders) {
-    processed++;
-
+  for (const record of records) {
     try {
-      console.log("--------------------------------------------------");
+      const message = parseSQSMessage(record);
 
-      console.log("♻️ PROCESSING EXPIRED OFFER");
+      console.log("📨 SQS ASSIGNMENT EXPIRY MESSAGE:", message);
 
-      console.log({
-        orderId: order.id,
+      // ========================================================
+      // ONLY PROCESS ASSIGNMENT EXPIRY MESSAGES
+      // ========================================================
 
-        userID: order.userID,
+      if (!message || message.type !== "ASSIGNMENT_EXPIRY") {
+        console.log("⚠️ UNKNOWN SQS MESSAGE TYPE — IGNORING:", message);
 
-        status: order.status,
+        results.push({
+          success: true,
+          ignored: true,
+          reason: "UNKNOWN_MESSAGE_TYPE",
+        });
 
-        paymentStatus: order.paymentStatus,
+        continue;
+      }
 
-        transportationType: order.transportationType,
+      // ========================================================
+      // ORDER ID
+      // ========================================================
 
-        assignedCourierId: order.assignedCourierId,
+      if (typeof message.orderId !== "string" || !message.orderId.trim()) {
+        throw new Error("ASSIGNMENT_EXPIRY message is missing orderId");
+      }
 
-        assignmentStatus: order.assignmentStatus,
+      // ========================================================
+      // PROCESS EXPIRATION
+      // ========================================================
 
-        assignmentExpiresAt: order.assignmentExpiresAt,
+      const result = await processExpiredAssignment(message);
 
-        assignmentAttempts: order.assignmentAttempts,
+      results.push({
+        success: true,
 
-        dispatchRound: order.dispatchRound,
+        orderId: message.orderId,
 
-        dispatchRadiusKm: order.dispatchRadiusKm,
-
-        dispatchAttemptedCourierIds: order.dispatchAttemptedCourierIds,
+        result,
       });
-
-      // ========================================================
-      // MAXI
-      // ========================================================
-
-      if (order.transportationType === "MAXI") {
-        console.log(
-          "🚚 MAXI ORDER — AUTOMATIC REASSIGNMENT SKIPPED:",
-          order.id,
-        );
-
-        continue;
-      }
-
-      // ========================================================
-      // ORDER MUST STILL BE READY
-      // ========================================================
-
-      if (order.status !== "READY_FOR_PICKUP") {
-        console.log("⏭️ ORDER NO LONGER READY_FOR_PICKUP", {
-          orderId: order.id,
-
-          status: order.status,
-        });
-
-        continue;
-      }
-
-      // ========================================================
-      // PAYMENT MUST STILL BE PAID
-      // ========================================================
-
-      if (order.paymentStatus !== "PAID") {
-        console.log("⏭️ ORDER PAYMENT IS NOT PAID", {
-          orderId: order.id,
-
-          paymentStatus: order.paymentStatus,
-        });
-
-        continue;
-      }
-
-      // ========================================================
-      // PROCESS
-      // ========================================================
-
-      const result = await processExpiredOffer(order);
-
-      if (result?.reassigned) {
-        reassigned++;
-      }
     } catch (error) {
-      console.error("❌ ERROR PROCESSING EXPIRED ORDER", {
-        orderId: order.id,
+      console.error("==================================================");
 
+      console.error("❌ SQS MESSAGE PROCESSING FAILED");
+
+      console.error("==================================================");
+
+      console.error({
         errorName: error?.name,
 
         errorMessage: error?.message,
@@ -311,258 +303,1741 @@ exports.handler = async (event) => {
         stack: error?.stack,
       });
 
-      // Continue with other expired orders.
-      continue;
+      // IMPORTANT:
+      //
+      // Throwing allows SQS/Lambda to retry a genuine
+      // processing failure.
+      //
+
+      throw error;
     }
   }
-
-  // ==========================================================
-  // FINISHED
-  // ==========================================================
 
   console.log("==================================================");
 
   console.log("🏁 ATUA REASSIGN ORDER LAMBDA FINISHED");
-
-  console.log({
-    processed,
-
-    reassigned,
-
-    durationMs: Date.now() - startedAt,
-  });
 
   console.log("==================================================");
 
   return {
     success: true,
 
-    processed,
+    processed: results.length,
 
-    reassigned,
+    results,
   };
 };
 
 // ============================================================
-// FIND EXPIRED OFFERS
-// ============================================================
-//
-// Requires:
-//
-// GSI:
-//   byAssignmentStatus
-//
-// Partition key:
-//   assignmentStatus
-//
-// Sort key:
-//   assignmentExpiresAt
-//
-// Query:
-//
-//   assignmentStatus = OFFERED
-//
-// AND:
-//
-//   assignmentExpiresAt <= now
-//
+// PARSE SQS MESSAGE
 // ============================================================
 
-async function getExpiredOffers(now) {
-  const items = [];
+function parseSQSMessage(record) {
+  const body = record?.body;
 
-  let lastKey = undefined;
+  if (typeof body !== "string" || !body.trim()) {
+    throw new Error("SQS record does not contain a valid body");
+  }
 
-  do {
-    const result = await docClient.send(
-      new QueryCommand({
-        TableName: ORDER_TABLE,
+  try {
+    return JSON.parse(body);
+  } catch (error) {
+    console.error("❌ INVALID SQS MESSAGE JSON:", body);
 
-        IndexName: "byAssignmentStatus",
-
-        KeyConditionExpression:
-          "assignmentStatus = :offered AND assignmentExpiresAt <= :now",
-
-        ExpressionAttributeValues: {
-          ":offered": "OFFERED",
-
-          ":now": now,
-        },
-
-        ...(lastKey
-          ? {
-              ExclusiveStartKey: lastKey,
-            }
-          : {}),
-      }),
-    );
-
-    if (result.Items?.length) {
-      items.push(...result.Items);
-    }
-
-    lastKey = result.LastEvaluatedKey;
-  } while (lastKey);
-
-  return items;
+    throw new Error("Unable to parse SQS message body as JSON");
+  }
 }
 
 // ============================================================
-// PROCESS EXPIRED OFFER
+// PROCESS EXPIRED ASSIGNMENT
+// ============================================================
+//
+// This is the main reassignment controller.
+//
+// It ALWAYS reloads the order from DynamoDB.
+//
+// We never trust stale information from the SQS message.
+//
 // ============================================================
 
-async function processExpiredOffer(order) {
-  const previousCourierId = order.assignedCourierId;
+async function processExpiredAssignment(message) {
+  const orderId = message.orderId;
+
+  console.log("==================================================");
+
+  console.log("🔎 PROCESSING ASSIGNMENT EXPIRY:", orderId);
+
+  console.log("==================================================");
 
   // ==========================================================
-  // SAFETY
+  // LOAD FRESH ORDER
   // ==========================================================
 
-  if (!previousCourierId) {
-    console.log("⚠️ EXPIRED OFFER HAS NO ASSIGNED COURIER", {
-      orderId: order.id,
+  const order = await getOrder(orderId);
 
-      assignmentStatus: order.assignmentStatus,
-    });
+  if (!order) {
+    console.log("⚠️ ORDER NOT FOUND:", orderId);
 
     return {
-      reassigned: false,
+      assigned: false,
 
-      reason: "NO_ASSIGNED_COURIER",
+      reason: "ORDER_NOT_FOUND",
     };
   }
 
   // ==========================================================
-  // BUILD ATTEMPTED COURIER LIST
+  // CURRENT STATE
   // ==========================================================
 
-  let attemptedCourierIds = Array.isArray(order.dispatchAttemptedCourierIds)
-    ? [...order.dispatchAttemptedCourierIds]
-    : [];
-
-  // ==========================================================
-  // ADD PREVIOUS COURIER
-  // ==========================================================
-
-  if (!attemptedCourierIds.includes(previousCourierId)) {
-    attemptedCourierIds.push(previousCourierId);
-  }
-
-  // ==========================================================
-  // REMOVE DUPLICATES
-  // ==========================================================
-
-  attemptedCourierIds = Array.from(new Set(attemptedCourierIds));
-
-  console.log("📋 UPDATED ATTEMPTED COURIER LIST", {
+  console.log("📦 CURRENT ORDER STATE:", {
     orderId: order.id,
 
-    previousCourierId,
+    status: order.status,
 
-    attemptedCourierIds,
+    paymentStatus: order.paymentStatus,
+
+    transportationType: order.transportationType,
+
+    assignedCourierId: order.assignedCourierId,
+
+    assignmentStatus: order.assignmentStatus,
+
+    assignmentExpiresAt: order.assignmentExpiresAt,
+
+    assignmentAttempts: order.assignmentAttempts,
+
+    rejectedCourierIds: order.rejectedCourierIds,
+
+    messageCourierId: message.courierId,
+
+    messageExpiresAt: message.expiresAt,
+
+    messageAssignmentAttempts: message.assignmentAttempts,
   });
 
   // ==========================================================
-  // EXPIRE CURRENT OFFER ATOMICALLY
+  // TRANSPORTATION TYPE
   // ==========================================================
 
-  const expired = await expireCurrentOffer(
-    order,
-
-    previousCourierId,
-
-    attemptedCourierIds,
-  );
+  const transportationType = normalizeString(order.transportationType);
 
   // ==========================================================
-  // ANOTHER PROCESS ALREADY HANDLED IT
+  // MAXI
   // ==========================================================
+  //
+  // Maxi is NOT part of this automatic reassignment flow.
+  //
+  // This prevents this Lambda from accidentally taking over
+  // the Maxi bidding workflow.
+  //
 
-  if (!expired) {
-    console.log("⏭️ OFFER WAS ALREADY HANDLED", {
-      orderId: order.id,
-    });
+  if (transportationType === "MAXI") {
+    console.log("🚚 MAXI ORDER — SKIPPING AUTOMATIC REASSIGNMENT:", orderId);
 
     return {
-      reassigned: false,
+      assigned: false,
 
-      reason: "ALREADY_HANDLED",
+      reason: "MAXI_NOT_HANDLED",
     };
   }
 
   // ==========================================================
-  // CREATE NEXT OFFER
+  // SUPPORTED TRANSPORTATION
   // ==========================================================
 
-  const dispatchResult = await dispatchNextCourier({
-    ...order,
+  if (!isSupportedTransportationType(transportationType)) {
+    console.log("🚫 UNSUPPORTED TRANSPORTATION TYPE:", {
+      orderId,
 
-    assignedCourierId: null,
+      transportationType,
+    });
 
-    assignmentStatus: "EXPIRED",
+    return {
+      assigned: false,
 
-    dispatchAttemptedCourierIds: attemptedCourierIds,
+      reason: "UNSUPPORTED_TRANSPORTATION",
+    };
+  }
+
+  // ==========================================================
+  // PAYMENT
+  // ==========================================================
+  //
+  // The order should normally already be PAID because
+  // assignOrder is triggered after payment.
+  //
+  // Nevertheless, this is an important safety check.
+  //
+
+  const paymentStatus = normalizeString(order.paymentStatus);
+
+  if (paymentStatus && paymentStatus !== "PAID") {
+    console.log("💳 ORDER NOT PAID — SKIPPING:", {
+      orderId,
+
+      paymentStatus,
+    });
+
+    return {
+      assigned: false,
+
+      reason: "ORDER_NOT_PAID",
+    };
+  }
+
+  // ==========================================================
+  // TERMINAL STATUS
+  // ==========================================================
+
+  const status = normalizeString(order.status);
+
+  const terminalStatuses = ["DELIVERED", "CANCELLED", "DISPUTED"];
+
+  if (terminalStatuses.includes(status)) {
+    console.log("🛑 TERMINAL ORDER — SKIPPING:", {
+      orderId,
+
+      status,
+    });
+
+    return {
+      assigned: false,
+
+      reason: "TERMINAL_ORDER",
+    };
+  }
+
+  // ==========================================================
+  // ACTIVE DELIVERY STATUS
+  // ==========================================================
+
+  const activeStatuses = [
+    "ACCEPTED",
+    "ARRIVED PICKUP",
+    "LOADING",
+    "PICKED UP",
+    "IN TRANSIT",
+    "ARRIVED DROPOFF",
+    "UNLOADING",
+    "HANDOVER TO LOGISTICS",
+    "IN LOGISTICS TRANSIT",
+  ];
+
+  if (activeStatuses.includes(status)) {
+    console.log("🚚 ORDER ALREADY ACTIVE — SKIPPING:", {
+      orderId,
+
+      status,
+    });
+
+    return {
+      assigned: false,
+
+      reason: "ORDER_ALREADY_ACTIVE",
+    };
+  }
+
+  // ==========================================================
+  // ASSIGNMENT STATUS
+  // ==========================================================
+
+  const assignmentStatus = normalizeString(order.assignmentStatus);
+
+  // ----------------------------------------------------------
+  // ACCEPTED ASSIGNMENT
+  // ----------------------------------------------------------
+
+  if (assignmentStatus === "ACCEPTED") {
+    console.log("✅ ASSIGNMENT ALREADY ACCEPTED — SKIPPING:", {
+      orderId,
+    });
+
+    return {
+      assigned: false,
+
+      reason: "ASSIGNMENT_ALREADY_ACCEPTED",
+    };
+  }
+
+  // ==========================================================
+  // VERIFY EXPIRATION
+  // ==========================================================
+  //
+  // SQS delivery does NOT itself prove that the assignment
+  // is expired.
+  //
+  // DynamoDB is the source of truth.
+  //
+
+  const currentExpiry = order.assignmentExpiresAt;
+
+  if (currentExpiry) {
+    const expiryTime = new Date(currentExpiry).getTime();
+
+    if (Number.isFinite(expiryTime) && Date.now() < expiryTime) {
+      console.log("⏳ ASSIGNMENT HAS NOT EXPIRED — IGNORING SQS MESSAGE:", {
+        orderId,
+
+        assignmentExpiresAt: currentExpiry,
+
+        now: new Date().toISOString(),
+      });
+
+      return {
+        assigned: false,
+
+        reason: "ASSIGNMENT_NOT_EXPIRED",
+      };
+    }
+  }
+
+  // ==========================================================
+  // CURRENT ASSIGNMENT ATTEMPTS
+  // ==========================================================
+  //
+  // IMPORTANT:
+  //
+  // assignmentAttempts is ONLY a counter.
+  //
+  // THERE IS NO MAXIMUM.
+  //
+  // It can become:
+  //
+  //     1
+  //     2
+  //     3
+  //     ...
+  //     10
+  //     11
+  //     12
+  //     13
+  //     ...
+  //
+  // It does NOT stop reassignment.
+  //
+
+  const currentAttempts = Number(order.assignmentAttempts || 0);
+
+  console.log("🔢 CURRENT ASSIGNMENT COUNTER:", {
+    orderId,
+
+    currentAttempts,
+
+    maximumAttempts: "UNLIMITED",
   });
 
+  // ==========================================================
+  // OLD COURIER
+  // ==========================================================
+
+  const oldCourierId = order.assignedCourierId || message.courierId || null;
+
+  console.log("👤 EXPIRED COURIER:", {
+    orderId,
+
+    oldCourierId,
+  });
+
+  // ==========================================================
+  // REJECTED COURIERS
+  // ==========================================================
+  //
+  // The expired courier is permanently excluded for this
+  // order.
+  //
+  // This prevents:
+  //
+  //     Courier A
+  //       ↓
+  //     offer expires
+  //       ↓
+  //     Courier A gets same order again
+  //
+  // ==========================================================
+
+  let rejectedCourierIds = Array.isArray(order.rejectedCourierIds)
+    ? [...order.rejectedCourierIds]
+    : [];
+
+  rejectedCourierIds = normalizeIds(rejectedCourierIds);
+
+  if (oldCourierId && !rejectedCourierIds.includes(oldCourierId)) {
+    rejectedCourierIds.push(oldCourierId);
+  }
+
+  if (rejectedCourierIds.length > MAX_REJECTED_COURIERS) {
+    rejectedCourierIds = rejectedCourierIds.slice(-MAX_REJECTED_COURIERS);
+  }
+
+  console.log("🚫 REJECTED COURIERS:", {
+    orderId,
+
+    rejectedCount: rejectedCourierIds.length,
+
+    rejectedCourierIds,
+  });
+
+  // ==========================================================
+  // FIND NEXT COURIER
+  // ==========================================================
+  //
+  // Searches the configured radius sequence.
+  //
+  // IMPORTANT:
+  //
+  // Searching does NOT consume an assignment attempt.
+  //
+  // An attempt is consumed ONLY when a courier is actually
+  // selected and receives a new offer.
+  //
+
+  const candidates = await findEligibleCouriers(
+    order,
+
+    rejectedCourierIds,
+  );
+
+  console.log("🔍 ELIGIBLE COURIER SEARCH RESULT:", {
+    orderId,
+
+    currentAttempts,
+
+    candidateCount: candidates.length,
+
+    candidates: candidates.map((candidate) => ({
+      courierId: candidate?.courier?.id || null,
+
+      distanceKm: candidate?.distanceKm ?? null,
+
+      radiusKm: candidate?.radiusKm ?? null,
+    })),
+  });
+
+  // ==========================================================
+  // NO COURIER AVAILABLE
+  // ==========================================================
+  //
+  // IMPORTANT:
+  //
+  // We do NOT consume an assignment attempt.
+  //
+  // We do NOT create another SQS message.
+  //
+  // This prevents an endless SQS loop when no courier exists.
+  //
+  // We release the expired courier and leave the order in
+  // READY state so another assignment process can try later.
+  //
+
+  if (!candidates.length) {
+    console.log("⚠️ NO ELIGIBLE COURIER FOUND:", {
+      orderId,
+
+      currentAttempts,
+
+      rejectedCourierIds,
+    });
+
+    await clearExpiredAssignment(
+      order,
+
+      oldCourierId,
+
+      rejectedCourierIds,
+    );
+
+    return {
+      assigned: false,
+
+      reason: "NO_ELIGIBLE_COURIER",
+
+      assignmentAttempts: currentAttempts,
+
+      stopped: false,
+    };
+  }
+
+  // ==========================================================
+  // SELECT NEAREST COURIER
+  // ==========================================================
+  //
+  // findEligibleCouriers() returns candidates sorted by
+  // distance.
+  //
+  // Therefore the first candidate is the nearest eligible
+  // courier.
+  //
+
+  const selected = candidates[0];
+
+  const newCourier = selected?.courier;
+
+  const radiusKm = selected?.radiusKm;
+
+  if (!newCourier?.id) {
+    console.error(
+      "❌ ELIGIBLE COURIER RESULT DID NOT CONTAIN A VALID COURIER:",
+      {
+        orderId,
+
+        selected,
+      },
+    );
+
+    throw new Error("Eligible courier result is missing courier.id");
+  }
+
+  console.log("🎯 SELECTED NEXT COURIER:", {
+    orderId,
+
+    oldCourierId,
+
+    newCourierId: newCourier.id,
+
+    distanceKm: selected.distanceKm,
+
+    radiusKm,
+
+    currentAttempts,
+
+    nextAttempt: currentAttempts + 1,
+  });
+
+  // ==========================================================
+  // CREATE ATOMIC REASSIGNMENT
+  // ==========================================================
+  //
+  // Part 2 contains createReassignment().
+  //
+  // That transaction:
+  //
+  //     1. releases old courier capacity
+  //     2. updates order
+  //     3. increments assignmentAttempts
+  //     4. reserves new courier capacity
+  //     5. creates new 25-second expiry
+  //     6. queues next SQS expiry
+  //
+  // There is NO maximum attempt check.
+  //
+  // ==========================================================
+
+  const reassigned = await createReassignment(
+    order,
+
+    newCourier,
+
+    radiusKm,
+
+    rejectedCourierIds,
+
+    oldCourierId,
+
+    false,
+  );
+
   return {
-    reassigned: dispatchResult?.offered === true,
+    assigned: Boolean(reassigned),
 
-    reason: dispatchResult?.reason,
+    courierId: newCourier.id,
 
-    courierId: dispatchResult?.courierId,
+    distanceKm: selected.distanceKm,
+
+    radiusKm,
+
+    assignmentAttempts: currentAttempts + 1,
   };
 }
 
 // ============================================================
-// EXPIRE CURRENT OFFER
+// FIND ELIGIBLE COURIERS
 // ============================================================
 //
-// OFFERED
-//    ↓
-// EXPIRED
+// This function:
 //
-// assignedCourierId
-//    ↓
-// null
+//     getAvailableCouriers()
+//             ↓
+//     transportation filtering
+//             ↓
+//     rejected courier filtering
+//             ↓
+//     capacity filtering
+//             ↓
+//     distance filtering
+//             ↓
+//     radius expansion
 //
-// previous courier
-//    ↓
-// attempted list
+// The result is sorted nearest-first.
 //
 // ============================================================
+
+async function findEligibleCouriers(order, rejectedCourierIds) {
+  console.log("==================================================");
+
+  console.log("🔎 FINDING ELIGIBLE COURIERS");
+
+  console.log("==================================================");
+
+  // ==========================================================
+  // GET ONLINE / APPROVED COURIERS
+  // ==========================================================
+
+  const couriers = await getAvailableCouriers();
+
+  console.log("👥 AVAILABLE COURIERS LOADED:", {
+    orderId: order.id,
+
+    count: couriers.length,
+  });
+
+  if (!couriers.length) {
+    console.log("⚠️ NO ONLINE/APPROVED COURIERS EXIST");
+
+    return [];
+  }
+
+  // ==========================================================
+  // RADIUS SEQUENCE
+  // ==========================================================
+
+  const radiusSequence = getRadiusSequence(order.transportationType);
+
+  if (!radiusSequence.length) {
+    console.log("⚠️ NO RADIUS SEQUENCE FOR ORDER:", {
+      orderId: order.id,
+
+      transportationType: order.transportationType,
+    });
+
+    return [];
+  }
+
+  // ==========================================================
+  // SEARCH EACH RADIUS
+  // ==========================================================
+  //
+  // MICRO:
+  //
+  //     5 km
+  //       ↓
+  //     8 km
+  //
+  // MOTO:
+  //
+  //     5 km
+  //       ↓
+  //     10 km
+  //       ↓
+  //     15 km
+  //       ↓
+  //     20 km
+  //       ↓
+  //     25 km
+  //
+  // Once a courier is found at the smallest radius, we do NOT
+  // unnecessarily expand the search.
+  //
+
+  for (const radiusKm of radiusSequence) {
+    console.log("🔎 SEARCHING COURIERS WITHIN RADIUS:", {
+      orderId: order.id,
+
+      radiusKm,
+
+      transportationType: order.transportationType,
+
+      rejectedCount: normalizeIds(rejectedCourierIds).length,
+    });
+
+    const candidates = findCandidates(
+      order,
+
+      couriers,
+
+      radiusKm,
+
+      rejectedCourierIds,
+    );
+
+    console.log("📊 RADIUS SEARCH RESULT:", {
+      orderId: order.id,
+
+      radiusKm,
+
+      candidateCount: candidates.length,
+    });
+
+    if (candidates.length) {
+      // --------------------------------------------------------
+      // Every candidate returned by findCandidates() is already
+      // compatible with the order and within this radius.
+      //
+      // Candidates are sorted nearest-first.
+      // --------------------------------------------------------
+
+      return candidates.map((candidate) => ({
+        ...candidate,
+
+        radiusKm,
+      }));
+    }
+  }
+
+  // ==========================================================
+  // NO COURIER IN ANY RADIUS
+  // ==========================================================
+
+  console.log("⚠️ NO ELIGIBLE COURIER FOUND IN ANY RADIUS:", {
+    orderId: order.id,
+
+    transportationType: order.transportationType,
+
+    radiusSequence,
+  });
+
+  return [];
+}
+
+// ============================================================
+// GET ORDER
+// ============================================================
+//
+// Always reads the latest order directly from DynamoDB.
+//
+// ============================================================
+
+async function getOrder(orderId) {
+  if (!orderId) {
+    return null;
+  }
+
+  const result = await docClient.send(
+    new GetCommand({
+      TableName: ORDER_TABLE,
+
+      Key: {
+        id: orderId,
+      },
+    }),
+  );
+
+  return result?.Item || null;
+}
+
+// ============================================================
+// NORMALIZE STRING
+// ============================================================
+
+function normalizeString(value) {
+  if (value === null || value === undefined) {
+    return "";
+  }
+
+  return String(value).trim().toUpperCase();
+}
+
+// ============================================================
+// NORMALIZE IDS
+// ============================================================
+
+function normalizeIds(value) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return Array.from(
+    new Set(
+      value
+        .filter((id) => typeof id === "string" && id.trim().length > 0)
+        .map((id) => id.trim()),
+    ),
+  ).slice(0, MAX_REJECTED_COURIERS);
+}
+
+// ============================================================
+// EXPRESS ORDER
+// ============================================================
+
+function isExpressOrder(order) {
+  const type = normalizeString(order?.transportationType);
+
+  return type === "MICRO_EXPRESS" || type === "MOTO_EXPRESS";
+}
+
+// ============================================================
+// BATCH ORDER
+// ============================================================
+
+function isBatchOrder(order) {
+  const type = normalizeString(order?.transportationType);
+
+  return type === "MICRO_BATCH" || type === "MOTO_BATCH";
+}
+
+// ============================================================
+// SUPPORTED TRANSPORTATION TYPES
+// ============================================================
+
+function isSupportedTransportationType(transportationType) {
+  const type = normalizeString(transportationType);
+
+  return (
+    type === "MICRO_EXPRESS" ||
+    type === "MICRO_BATCH" ||
+    type === "MOTO_EXPRESS" ||
+    type === "MOTO_BATCH"
+  );
+}
+
+// ============================================================
+// TRANSPORT BASE
+// ============================================================
+//
+// Converts:
+//
+//     MICRO_EXPRESS → MICRO
+//     MICRO_BATCH   → MICRO
+//
+//     MOTO_EXPRESS  → MOTO
+//     MOTO_BATCH    → MOTO
+//
+// Maxi is deliberately not used by automatic reassignment.
+//
+// ============================================================
+
+function getTransportBase(transportationType) {
+  const type = normalizeString(transportationType);
+
+  if (type === "MICRO" || type.startsWith("MICRO_")) {
+    return "MICRO";
+  }
+
+  if (type === "MOTO" || type.startsWith("MOTO_")) {
+    return "MOTO";
+  }
+
+  if (type === "MAXI") {
+    return "MAXI";
+  }
+
+  return null;
+}
+
+// ============================================================
+// TRANSPORT COMPATIBILITY
+// ============================================================
+//
+// MICRO order → MICRO courier
+// MOTO order  → MOTO courier
+//
+// ============================================================
+
+function isTransportCompatible(order, courier) {
+  const orderBase = getTransportBase(order?.transportationType);
+
+  const courierBase = getTransportBase(courier?.transportationType);
+
+  if (!orderBase || !courierBase) {
+    return false;
+  }
+
+  return orderBase === courierBase;
+}
+
+// ============================================================
+// RADIUS SEQUENCE
+// ============================================================
+
+function getRadiusSequence(transportationType) {
+  const type = normalizeString(transportationType);
+
+  if (type.startsWith("MICRO")) {
+    return MICRO_RADIUS_SEQUENCE;
+  }
+
+  if (type.startsWith("MOTO")) {
+    return MOTO_RADIUS_SEQUENCE;
+  }
+
+  return [];
+}
+
+// ============================================================
+// VALID LATITUDE
+// ============================================================
+
+function isValidLatitude(value) {
+  const number = Number(value);
+
+  return Number.isFinite(number) && number >= -90 && number <= 90;
+}
+
+// ============================================================
+// VALID LONGITUDE
+// ============================================================
+
+function isValidLongitude(value) {
+  const number = Number(value);
+
+  return Number.isFinite(number) && number >= -180 && number <= 180;
+}
+
+// ============================================================
+// HAVERSINE DISTANCE
+// ============================================================
+//
+// Returns distance in kilometres.
+//
+// ============================================================
+
+function getDistance(lat1, lng1, lat2, lng2) {
+  const R = 6371;
+
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+
+  const dLng = ((lng2 - lng1) * Math.PI) / 180;
+
+  const lat1Radians = (lat1 * Math.PI) / 180;
+
+  const lat2Radians = (lat2 * Math.PI) / 180;
+
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1Radians) * Math.cos(lat2Radians) * Math.sin(dLng / 2) ** 2;
+
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+// ============================================================
+// ATUA — REASSIGN ORDER LAMBDA
+// PART 2
+// ============================================================
+//
+// This is the continuation of PART 1.
 //
 // IMPORTANT:
 //
-// This only changes assignment fields.
+// DO NOT add another exports.handler here.
 //
-// It does NOT modify:
+// PART 1 already contains:
 //
-// userID
-// paymentStatus
-// paymentID
-// paymentReference
-// pricing
-// funds
-// payout
-// pickup
-// destination
-// etc.
+//     exports.handler
+//     processExpiredAssignment()
+//     findEligibleCouriers()
+//     getOrder()
+//     transportation helpers
+//     distance helpers
+//
+// PART 2 contains:
+//
+//     1. Atomic reassignment
+//     2. Old courier capacity release
+//     3. New courier capacity reservation
+//     4. Order update
+//     5. Assignment attempt counter
+//     6. Expired assignment cleanup
+//     7. SQS expiry scheduling
+//     8. Courier lookup
+//     9. Candidate filtering
+//    10. Capacity checking
+//    11. Supporting helpers
+//
+// IMPORTANT:
+//
+// assignmentAttempts has NO maximum.
+//
+// It is only a telemetry / history counter.
+//
+// Attempt 10 → 11 → 12 → 13 → ... is allowed.
 //
 // ============================================================
 
-async function expireCurrentOffer(
+// ============================================================
+// CREATE REASSIGNMENT
+// ============================================================
+//
+// This is the MOST IMPORTANT database operation in the
+// reassignment system.
+//
+// Everything happens inside ONE DynamoDB transaction:
+//
+//     1. Release old courier capacity
+//     2. Update order
+//     3. Reserve new courier capacity
+//
+// If ANY part fails:
+//
+//     NOTHING is changed.
+//
+// This prevents:
+//
+//     Order assigned to Courier B
+//     while Courier B capacity was not reserved.
+//
+// OR:
+//
+//     Courier A capacity released
+//     but order was never reassigned.
+//
+// ============================================================
+
+async function createReassignment(
   order,
-
-  previousCourierId,
-
-  attemptedCourierIds,
+  courier,
+  radiusKm,
+  rejectedCourierIds,
+  oldCourierId,
+  restarted,
 ) {
-  const now = new Date().toISOString();
+  const now = new Date();
+
+  const nowISO = now.toISOString();
+
+  // ==========================================================
+  // NEW OFFER EXPIRATION
+  // ==========================================================
+  //
+  // Every newly selected courier gets a fresh 25-second offer.
+  //
+
+  const expiresAt = new Date(
+    now.getTime() + ASSIGNMENT_TIMEOUT_MS,
+  ).toISOString();
+
+  // ==========================================================
+  // CURRENT ATTEMPTS
+  // ==========================================================
+  //
+  // assignmentAttempts represents the number of couriers
+  // that have actually received an offer.
+  //
+  // It is NOT the number of Lambda executions.
+  //
+  // It is NOT the number of searches.
+  //
+  // It is NOT the number of SQS messages.
+  //
+  // There is NO maximum.
+  //
+
+  const currentAttempts = Number(order.assignmentAttempts || 0);
+
+  // ==========================================================
+  // NEXT ATTEMPT
+  // ==========================================================
+  //
+  // Every time a new courier actually receives an offer,
+  // increase the counter by one.
+  //
+
+  const assignmentAttempts = currentAttempts + 1;
+
+  console.log("🔢 CREATING NEW ASSIGNMENT ATTEMPT:", {
+    orderId: order.id,
+
+    oldCourierId,
+
+    newCourierId: courier.id,
+
+    currentAttempts,
+
+    nextAttempt: assignmentAttempts,
+
+    maximumAttempts: "UNLIMITED",
+  });
+
+  // ==========================================================
+  // SERVICE TYPE
+  // ==========================================================
+
+  const isExpress = isExpressOrder(order);
+
+  const isBatch = isBatchOrder(order);
+
+  if (!isExpress && !isBatch) {
+    console.error("❌ INVALID SERVICE TYPE:", {
+      orderId: order.id,
+
+      transportationType: order.transportationType,
+    });
+
+    return false;
+  }
+
+  // ==========================================================
+  // NEVER ASSIGN SAME COURIER
+  // ==========================================================
+  //
+  // The courier whose offer just expired must not immediately
+  // receive the same order again.
+  //
+
+  if (oldCourierId && oldCourierId === courier.id) {
+    console.log("🚫 SAME COURIER AS EXPIRED COURIER:", {
+      orderId: order.id,
+
+      courierId: courier.id,
+    });
+
+    return false;
+  }
+
+  // ==========================================================
+  // BUILD REJECTED COURIER LIST
+  // ==========================================================
+  //
+  // The expired courier is added to the rejected list.
+  //
+  // This prevents the same courier from being selected again
+  // for this order.
+  //
+
+  let finalRejectedIds = normalizeIds(rejectedCourierIds);
+
+  if (oldCourierId && !finalRejectedIds.includes(oldCourierId)) {
+    finalRejectedIds.push(oldCourierId);
+  }
+
+  finalRejectedIds = normalizeIds(finalRejectedIds);
+
+  // ==========================================================
+  // COURIER CAPACITY UPDATE
+  // ==========================================================
+
+  let courierUpdateExpression;
+
+  let courierConditionExpression;
+
+  // ==========================================================
+  // EXPRESS
+  // ==========================================================
+
+  if (isExpress) {
+    courierUpdateExpression = `
+      SET currentExpressCount =
+        if_not_exists(
+          currentExpressCount,
+          :zero
+        ) + :one
+    `;
+
+    courierConditionExpression = `
+      attribute_exists(id)
+
+      AND isOnline = :true
+
+      AND isApproved = :true
+
+      AND (
+        attribute_not_exists(isBlocked)
+        OR isBlocked = :false
+      )
+
+      AND (
+        attribute_not_exists(statusKey)
+        OR statusKey = :onlineApproved
+      )
+
+      AND (
+        attribute_not_exists(currentExpressCount)
+        OR currentExpressCount < :maxExpressJobs
+      )
+
+      AND (
+        attribute_not_exists(currentBatchCount)
+        OR currentBatchCount = :zero
+      )
+    `;
+  }
+
+  // ==========================================================
+  // BATCH
+  // ==========================================================
+
+  if (isBatch) {
+    courierUpdateExpression = `
+      SET currentBatchCount =
+        if_not_exists(
+          currentBatchCount,
+          :zero
+        ) + :one
+    `;
+
+    courierConditionExpression = `
+      attribute_exists(id)
+
+      AND isOnline = :true
+
+      AND isApproved = :true
+
+      AND (
+        attribute_not_exists(isBlocked)
+        OR isBlocked = :false
+      )
+
+      AND (
+        attribute_not_exists(statusKey)
+        OR statusKey = :onlineApproved
+      )
+
+      AND (
+        attribute_not_exists(currentExpressCount)
+        OR currentExpressCount = :zero
+      )
+
+      AND (
+        attribute_not_exists(currentBatchCount)
+        OR currentBatchCount < :maxBatchJobs
+      )
+    `;
+  }
+
+  // ==========================================================
+  // OLD COURIER CAPACITY RELEASE
+  // ==========================================================
+
+  let oldCourierUpdateExpression;
+
+  let oldCourierConditionExpression;
+
+  // ==========================================================
+  // EXPRESS RELEASE
+  // ==========================================================
+
+  if (isExpress) {
+    oldCourierUpdateExpression = `
+      SET currentExpressCount =
+        currentExpressCount - :one
+    `;
+
+    oldCourierConditionExpression = `
+      attribute_exists(id)
+
+      AND attribute_exists(currentExpressCount)
+
+      AND currentExpressCount > :zero
+    `;
+  }
+
+  // ==========================================================
+  // BATCH RELEASE
+  // ==========================================================
+
+  if (isBatch) {
+    oldCourierUpdateExpression = `
+      SET currentBatchCount =
+        currentBatchCount - :one
+    `;
+
+    oldCourierConditionExpression = `
+      attribute_exists(id)
+
+      AND attribute_exists(currentBatchCount)
+
+      AND currentBatchCount > :zero
+    `;
+  }
+
+  // ==========================================================
+  // BUILD TRANSACTION
+  // ==========================================================
+
+  const transactItems = [];
+
+  // ==========================================================
+  // 1. RELEASE OLD COURIER
+  // ==========================================================
+  //
+  // The old courier only gets released when there actually
+  // was an old courier.
+  //
+
+  if (oldCourierId && oldCourierId !== courier.id) {
+    transactItems.push({
+      Update: {
+        TableName: COURIER_TABLE,
+
+        Key: {
+          id: oldCourierId,
+        },
+
+        UpdateExpression: oldCourierUpdateExpression,
+
+        ConditionExpression: oldCourierConditionExpression,
+
+        ExpressionAttributeValues: {
+          ":one": 1,
+
+          ":zero": 0,
+        },
+
+        ReturnValuesOnConditionCheckFailure: "ALL_OLD",
+      },
+    });
+  }
+
+  // ==========================================================
+  // 2. UPDATE ORDER
+  // ==========================================================
+  //
+  // The order receives the NEW courier and the new offer.
+  //
+  // assignmentAttempts is incremented here.
+  //
+  // There is NO maximum attempt condition.
+  //
+
+  transactItems.push({
+    Update: {
+      TableName: ORDER_TABLE,
+
+      Key: {
+        id: order.id,
+      },
+
+      UpdateExpression: `
+        SET
+          assignedCourierId = :courierId,
+          assignmentStatus = :offered,
+          assignmentExpiresAt = :expiresAt,
+          assignmentAttempts = :attempts,
+          lastAssignedAt = :now,
+          rejectedCourierIds = :rejectedIds,
+          hasNewOffer = :true
+      `,
+
+      // --------------------------------------------------------
+      // IMPORTANT:
+      //
+      // These conditions prevent a stale SQS message from
+      // overwriting a newer assignment.
+      //
+      // assignmentAttempts here is NOT a maximum.
+      //
+      // It is simply a concurrency guard ensuring the order
+      // still has the same attempt counter that this Lambda
+      // loaded before making the reassignment.
+      // --------------------------------------------------------
+
+      ConditionExpression: `
+        #status = :ready
+
+        AND paymentStatus = :paid
+
+        AND assignmentStatus = :offered
+
+        AND assignedCourierId = :oldCourierId
+
+        AND assignmentExpiresAt <= :now
+
+        AND (
+          attribute_not_exists(assignmentAttempts)
+          OR assignmentAttempts = :currentAttempts
+        )
+      `,
+
+      ExpressionAttributeNames: {
+        "#status": "status",
+      },
+
+      ExpressionAttributeValues: {
+        ":courierId": courier.id,
+
+        ":offered": "OFFERED",
+
+        ":expiresAt": expiresAt,
+
+        ":attempts": assignmentAttempts,
+
+        ":now": nowISO,
+
+        ":ready": "READY_FOR_PICKUP",
+
+        ":paid": "PAID",
+
+        ":oldCourierId": oldCourierId,
+
+        ":currentAttempts": currentAttempts,
+
+        ":rejectedIds": finalRejectedIds,
+
+        ":true": true,
+      },
+
+      ReturnValuesOnConditionCheckFailure: "ALL_OLD",
+    },
+  });
+
+  // ==========================================================
+  // 3. RESERVE NEW COURIER
+  // ==========================================================
+  //
+  // This is done inside the SAME transaction as:
+  //
+  //     - order update
+  //     - old courier release
+  //
+  // ==========================================================
+
+  transactItems.push({
+    Update: {
+      TableName: COURIER_TABLE,
+
+      Key: {
+        id: courier.id,
+      },
+
+      UpdateExpression: courierUpdateExpression,
+
+      ConditionExpression: courierConditionExpression,
+
+      ExpressionAttributeValues: {
+        ":one": 1,
+
+        ":zero": 0,
+
+        ":true": true,
+
+        ":false": false,
+
+        ":onlineApproved": "ONLINE#APPROVED",
+
+        ...(isExpress
+          ? {
+              ":maxExpressJobs": MAX_EXPRESS_JOBS,
+            }
+          : {
+              ":maxBatchJobs": MAX_BATCH_JOBS,
+            }),
+      },
+
+      ReturnValuesOnConditionCheckFailure: "ALL_OLD",
+    },
+  });
+
+  // ==========================================================
+  // LOG BEFORE TRANSACTION
+  // ==========================================================
+
+  console.log("🔐 STARTING ATOMIC REASSIGNMENT:", {
+    orderId: order.id,
+
+    oldCourierId,
+
+    newCourierId: courier.id,
+
+    transportationType: order.transportationType,
+
+    serviceType: isExpress ? "EXPRESS" : "BATCH",
+
+    radiusKm,
+
+    restarted,
+
+    currentAttempts,
+
+    assignmentAttempts,
+
+    maximumAttempts: "UNLIMITED",
+
+    assignmentExpiresAt: expiresAt,
+
+    rejectedCourierIds: finalRejectedIds,
+
+    transactionItems: transactItems.length,
+  });
+
+  // ==========================================================
+  // EXECUTE TRANSACTION
+  // ==========================================================
+
+  try {
+    await docClient.send(
+      new TransactWriteCommand({
+        TransactItems: transactItems,
+      }),
+    );
+
+    console.log("==================================================");
+
+    console.log("✅ ATOMIC REASSIGNMENT SUCCEEDED:", {
+      orderId: order.id,
+
+      oldCourierId,
+
+      newCourierId: courier.id,
+
+      radiusKm,
+
+      restarted,
+
+      assignmentStatus: "OFFERED",
+
+      currentAttempts,
+
+      assignmentAttempts,
+
+      maximumAttempts: "UNLIMITED",
+
+      assignmentExpiresAt: expiresAt,
+
+      capacityReleased: Boolean(oldCourierId),
+
+      capacityReserved: true,
+    });
+
+    console.log("==================================================");
+  } catch (error) {
+    // ========================================================
+    // TRANSACTION CANCELLED
+    // ========================================================
+
+    if (error?.name === "TransactionCanceledException") {
+      console.error("⚠️ REASSIGNMENT TRANSACTION CANCELLED:", {
+        orderId: order.id,
+
+        oldCourierId,
+
+        newCourierId: courier.id,
+
+        radiusKm,
+
+        restarted,
+
+        currentAttempts,
+
+        assignmentAttempts,
+
+        cancellationReasons: error?.CancellationReasons || null,
+
+        message: error?.message,
+      });
+
+      return false;
+    }
+
+    // ========================================================
+    // REAL AWS ERROR
+    // ========================================================
+
+    console.error("❌ REAL REASSIGNMENT ERROR:", {
+      orderId: order.id,
+
+      oldCourierId,
+
+      newCourierId: courier.id,
+
+      errorName: error?.name,
+
+      errorMessage: error?.message,
+
+      stack: error?.stack,
+    });
+
+    throw error;
+  }
+
+  // ==========================================================
+  // QUEUE NEXT EXPIRY
+  // ==========================================================
+  //
+  // The database assignment has already succeeded.
+  //
+  // We now tell SQS to wake this Lambda after 25 seconds.
+  //
+  // ==========================================================
+
+  try {
+    await queueAssignmentExpiryWithRetry({
+      orderId: order.id,
+
+      courierId: courier.id,
+
+      expiresAt,
+
+      assignmentAttempts,
+    });
+  } catch (error) {
+    console.error("❌ FAILED TO QUEUE NEXT ASSIGNMENT EXPIRY:", {
+      orderId: order.id,
+
+      courierId: courier.id,
+
+      expiresAt,
+
+      assignmentAttempts,
+
+      errorName: error?.name,
+
+      errorMessage: error?.message,
+    });
+
+    // --------------------------------------------------------
+    // IMPORTANT:
+    //
+    // We DO NOT undo the successful DynamoDB assignment here.
+    //
+    // The assignment already exists.
+    //
+    // --------------------------------------------------------
+
+    throw error;
+  }
+
+  console.log("✅ NEW ASSIGNMENT EXPIRY QUEUED:", {
+    orderId: order.id,
+
+    courierId: courier.id,
+
+    expiresAt,
+
+    assignmentAttempts,
+  });
+
+  return true;
+}
+
+// ============================================================
+// CLEAR EXPIRED ASSIGNMENT
+// ============================================================
+//
+// Used when there is currently NO replacement courier.
+//
+// This:
+//
+//     1. releases the expired courier
+//     2. removes the active assignment
+//     3. keeps the order available for another assignment cycle
+//
+// IMPORTANT:
+//
+// assignmentAttempts is NOT increased.
+//
+// No new courier received an offer.
+//
+// No new SQS expiry message is created.
+//
+// ============================================================
+
+async function clearExpiredAssignment(order, oldCourierId, rejectedCourierIds) {
+  if (!oldCourierId) {
+    console.log("⚠️ NO OLD COURIER TO CLEAR:", {
+      orderId: order.id,
+    });
+
+    return false;
+  }
+
+  const isExpress = isExpressOrder(order);
+
+  const isBatch = isBatchOrder(order);
+
+  if (!isExpress && !isBatch) {
+    console.error("❌ CANNOT CLEAR INVALID SERVICE TYPE:", {
+      orderId: order.id,
+
+      transportationType: order.transportationType,
+    });
+
+    return false;
+  }
+
+  // ==========================================================
+  // OLD COURIER RELEASE EXPRESSION
+  // ==========================================================
+
+  let courierUpdateExpression;
+
+  let courierConditionExpression;
+
+  // ==========================================================
+  // EXPRESS
+  // ==========================================================
+
+  if (isExpress) {
+    courierUpdateExpression = `
+      SET currentExpressCount =
+        currentExpressCount - :one
+    `;
+
+    courierConditionExpression = `
+      attribute_exists(id)
+
+      AND attribute_exists(currentExpressCount)
+
+      AND currentExpressCount > :zero
+    `;
+  }
+
+  // ==========================================================
+  // BATCH
+  // ==========================================================
+
+  if (isBatch) {
+    courierUpdateExpression = `
+      SET currentBatchCount =
+        currentBatchCount - :one
+    `;
+
+    courierConditionExpression = `
+      attribute_exists(id)
+
+      AND attribute_exists(currentBatchCount)
+
+      AND currentBatchCount > :zero
+    `;
+  }
+
+  const finalRejectedIds = normalizeIds(rejectedCourierIds);
+
+  console.log("🧹 CLEARING EXPIRED ASSIGNMENT:", {
+    orderId: order.id,
+
+    oldCourierId,
+
+    serviceType: isExpress ? "EXPRESS" : "BATCH",
+
+    rejectedCourierIds: finalRejectedIds,
+  });
+
+  // ==========================================================
+  // ATOMIC CLEAR
+  // ==========================================================
 
   try {
     await docClient.send(
       new TransactWriteCommand({
         TransactItems: [
+          // ----------------------------------------------------
+          // RELEASE OLD COURIER
+          // ----------------------------------------------------
+
+          {
+            Update: {
+              TableName: COURIER_TABLE,
+
+              Key: {
+                id: oldCourierId,
+              },
+
+              UpdateExpression: courierUpdateExpression,
+
+              ConditionExpression: courierConditionExpression,
+
+              ExpressionAttributeValues: {
+                ":one": 1,
+
+                ":zero": 0,
+              },
+
+              ReturnValuesOnConditionCheckFailure: "ALL_OLD",
+            },
+          },
+
+          // ----------------------------------------------------
+          // CLEAR ORDER ASSIGNMENT
+          // ----------------------------------------------------
+
           {
             Update: {
               TableName: ORDER_TABLE,
@@ -571,54 +2046,25 @@ async function expireCurrentOffer(
                 id: order.id,
               },
 
-              // =================================================
-              // ONLY ASSIGNMENT FIELDS
-              // =================================================
-
               UpdateExpression: `
-
                 SET
-
-                  assignmentStatus =
-                    :expired,
-
-                  assignedCourierId =
-                    :nullCourier,
-
-                  dispatchAttemptedCourierIds =
-                    :attemptedIds
-
+                  assignmentStatus = :ready,
+                  assignmentExpiresAt = :nullValue,
+                  assignedCourierId = :nullValue,
+                  rejectedCourierIds = :rejectedIds,
+                  hasNewOffer = :falseValue
               `,
 
-              // =================================================
-              // ATOMIC SAFETY CONDITION
-              // =================================================
-
               ConditionExpression: `
+                #status = :orderReady
 
-                #status =
-                  :ready
+                AND paymentStatus = :paid
 
-                AND
+                AND assignmentStatus = :offered
 
-                paymentStatus =
-                  :paid
+                AND assignedCourierId = :oldCourierId
 
-                AND
-
-                assignmentStatus =
-                  :offered
-
-                AND
-
-                assignedCourierId =
-                  :previousCourier
-
-                AND
-
-                assignmentExpiresAt <=
-                  :now
-
+                AND assignmentExpiresAt <= :now
               `,
 
               ExpressionAttributeNames: {
@@ -626,67 +2072,72 @@ async function expireCurrentOffer(
               },
 
               ExpressionAttributeValues: {
-                ":expired": "EXPIRED",
+                ":ready": "READY",
 
-                ":nullCourier": null,
+                ":nullValue": null,
 
-                ":attemptedIds": attemptedCourierIds,
+                ":rejectedIds": finalRejectedIds,
 
-                ":previousCourier": previousCourierId,
+                ":falseValue": false,
 
-                ":now": now,
-
-                ":ready": "READY_FOR_PICKUP",
+                ":orderReady": "READY_FOR_PICKUP",
 
                 ":paid": "PAID",
 
                 ":offered": "OFFERED",
+
+                ":oldCourierId": oldCourierId,
+
+                ":now": new Date().toISOString(),
               },
+
+              ReturnValuesOnConditionCheckFailure: "ALL_OLD",
             },
           },
         ],
       }),
     );
 
-    console.log("♻️ OFFER EXPIRED SUCCESSFULLY", {
+    console.log("✅ EXPIRED ASSIGNMENT CLEARED:", {
       orderId: order.id,
 
-      previousCourierId,
+      oldCourierId,
 
-      assignmentStatus: "EXPIRED",
+      assignmentAttempts: Number(order.assignmentAttempts || 0),
 
-      assignedCourierId: null,
+      assignmentStatus: "READY",
 
-      attemptedCourierIds,
+      newSqsMessage: false,
     });
 
     return true;
   } catch (error) {
     // ========================================================
-    // RACE CONDITION
+    // TRANSACTION CANCELLED
     // ========================================================
 
     if (error?.name === "TransactionCanceledException") {
-      console.log("⚠️ EXPIRATION TRANSACTION CANCELLED", {
+      console.log("⚠️ EXPIRED ASSIGNMENT CLEAR TRANSACTION CANCELLED:", {
         orderId: order.id,
 
-        previousCourierId,
+        oldCourierId,
 
-        reason:
-          "Offer was probably accepted, replaced, cancelled, or already processed.",
+        cancellationReasons: error?.CancellationReasons || null,
       });
 
       return false;
     }
 
-    console.error("❌ FAILED TO EXPIRE OFFER", {
+    console.error("❌ FAILED TO CLEAR EXPIRED ASSIGNMENT:", {
       orderId: order.id,
 
-      previousCourierId,
+      oldCourierId,
 
       errorName: error?.name,
 
       errorMessage: error?.message,
+
+      stack: error?.stack,
     });
 
     throw error;
@@ -694,203 +2145,326 @@ async function expireCurrentOffer(
 }
 
 // ============================================================
-// DISPATCH NEXT COURIER
+// QUEUE ASSIGNMENT EXPIRY WITH RETRY
 // ============================================================
 //
-// This function is responsible for:
+// If SQS temporarily fails, retry the SQS send a few times.
 //
-// 1. Finding the next courier.
-// 2. Skipping couriers already attempted in this round.
-// 3. Searching the current radius.
-// 4. Expanding the radius when necessary.
-// 5. Starting a new round after maximum radius.
-// 6. Resetting attemptedCourierIds for the new round.
+// IMPORTANT:
+//
+// These are SQS delivery retries only.
+//
+// They are NOT assignment retries.
+//
+// They do NOT increase assignmentAttempts.
 //
 // ============================================================
 
-async function dispatchNextCourier(order) {
-  // ==========================================================
-  // MAXI
-  // ==========================================================
+async function queueAssignmentExpiryWithRetry({
+  orderId,
+  courierId,
+  expiresAt,
+  assignmentAttempts,
+}) {
+  let lastError;
 
-  if (order.transportationType === "MAXI") {
-    console.log("🚚 MAXI — AUTOMATIC DISPATCH DISABLED", order.id);
+  for (let attempt = 1; attempt <= SQS_SEND_RETRIES; attempt++) {
+    try {
+      return await queueAssignmentExpiry({
+        orderId,
 
-    return {
-      offered: false,
+        courierId,
 
-      reason: "MAXI",
-    };
+        expiresAt,
+
+        assignmentAttempts,
+      });
+    } catch (error) {
+      lastError = error;
+
+      console.error("⚠️ SQS SEND ATTEMPT FAILED:", {
+        attempt,
+
+        maxAttempts: SQS_SEND_RETRIES,
+
+        orderId,
+
+        courierId,
+
+        errorName: error?.name,
+
+        errorMessage: error?.message,
+      });
+
+      if (attempt < SQS_SEND_RETRIES) {
+        await sleep(250 * attempt);
+      }
+    }
   }
 
-  // ==========================================================
-  // LOCATION
-  // ==========================================================
+  throw lastError;
+}
 
-  if (
-    !isValidCoordinate(order.originLat) ||
-    !isValidCoordinate(order.originLng)
-  ) {
-    console.log("❌ INVALID PICKUP COORDINATES", {
-      orderId: order.id,
+// ============================================================
+// QUEUE ASSIGNMENT EXPIRY
+// ============================================================
+//
+// Creates the SQS message that wakes reassignOrder after
+// approximately 25 seconds.
+//
+// ============================================================
 
-      originLat: order.originLat,
-
-      originLng: order.originLng,
-    });
-
-    return {
-      offered: false,
-
-      reason: "INVALID_COORDINATES",
-    };
+async function queueAssignmentExpiry({
+  orderId,
+  courierId,
+  expiresAt,
+  assignmentAttempts,
+}) {
+  if (!ASSIGNMENT_EXPIRY_QUEUE_URL) {
+    throw new Error("ASSIGNMENT_EXPIRY_QUEUE_URL is not configured");
   }
 
-  // ==========================================================
-  // RADIUS STEPS
-  // ==========================================================
+  const message = {
+    type: "ASSIGNMENT_EXPIRY",
 
-  const radiusSteps = getRadiusSteps(order.transportationType);
+    orderId,
 
-  if (radiusSteps.length === 0) {
-    console.log("🚫 NO RADIUS CONFIGURATION", {
-      orderId: order.id,
+    courierId,
 
-      transportationType: order.transportationType,
-    });
+    expiresAt,
 
-    return {
-      offered: false,
+    assignmentAttempts,
+  };
 
-      reason: "NO_RADIUS_CONFIGURATION",
-    };
-  }
+  console.log("📨 SENDING ASSIGNMENT EXPIRY MESSAGE:", {
+    queueUrl: ASSIGNMENT_EXPIRY_QUEUE_URL,
 
-  // ==========================================================
-  // DISPATCH ROUND
-  // ==========================================================
+    message,
 
-  let dispatchRound = Number(order.dispatchRound) || 1;
+    delaySeconds: ASSIGNMENT_TIMEOUT_SECONDS,
+  });
 
-  // ==========================================================
-  // CURRENT RADIUS
-  // ==========================================================
+  const result = await sqsClient.send(
+    new SendMessageCommand({
+      QueueUrl: ASSIGNMENT_EXPIRY_QUEUE_URL,
 
-  let currentRadius = Number(order.dispatchRadiusKm) || radiusSteps[0];
+      MessageBody: JSON.stringify(message),
 
-  // ==========================================================
-  // NORMALIZE RADIUS
-  // ==========================================================
-
-  if (!radiusSteps.includes(currentRadius)) {
-    currentRadius = radiusSteps[0];
-  }
-
-  // ==========================================================
-  // ATTEMPTED COURIERS
-  // ==========================================================
-
-  let attemptedCourierIds = normalizeCourierIds(
-    order.dispatchAttemptedCourierIds,
+      DelaySeconds: ASSIGNMENT_TIMEOUT_SECONDS,
+    }),
   );
 
-  console.log("📡 CURRENT DISPATCH STATE", {
-    orderId: order.id,
+  console.log("✅ ASSIGNMENT EXPIRY MESSAGE SENT:", {
+    messageId: result.MessageId,
 
-    dispatchRound,
+    orderId,
 
-    currentRadius,
+    courierId,
 
-    radiusSteps,
+    expiresAt,
 
-    attemptedCourierCount: attemptedCourierIds.length,
-
-    attemptedCourierIds,
+    assignmentAttempts,
   });
 
-  // ==========================================================
-  // GET AVAILABLE COURIERS
-  // ==========================================================
+  return result;
+}
 
-  const couriers = await getAvailableCouriers();
+// ============================================================
+// GET AVAILABLE COURIERS
+// ============================================================
+//
+// Uses the existing Courier.byStatus index.
+//
+// Only couriers with:
+//
+//     ONLINE#APPROVED
+//
+// are retrieved.
+//
+// A second safety filter is applied afterwards.
+//
+// ============================================================
 
-  console.log("👥 AVAILABLE COURIERS", {
-    orderId: order.id,
+async function getAvailableCouriers() {
+  const items = [];
 
-    count: couriers.length,
-  });
+  let lastEvaluatedKey;
 
-  if (couriers.length === 0) {
-    console.log("⚠️ NO ONLINE + APPROVED COURIERS", order.id);
+  do {
+    const params = {
+      TableName: COURIER_TABLE,
 
-    return {
-      offered: false,
+      IndexName: "byStatus",
 
-      reason: "NO_AVAILABLE_COURIERS",
+      KeyConditionExpression: "statusKey = :status",
+
+      ExpressionAttributeValues: {
+        ":status": "ONLINE#APPROVED",
+      },
     };
-  }
+
+    if (lastEvaluatedKey) {
+      params.ExclusiveStartKey = lastEvaluatedKey;
+    }
+
+    console.log("🔎 QUERYING COURIER.byStatus:", {
+      TableName: COURIER_TABLE,
+
+      IndexName: "byStatus",
+
+      statusKey: "ONLINE#APPROVED",
+    });
+
+    const result = await docClient.send(new QueryCommand(params));
+
+    console.log("📊 COURIER QUERY RESULT:", {
+      count: result.Items?.length || 0,
+
+      scannedCount: result.ScannedCount,
+
+      hasMore: Boolean(result.LastEvaluatedKey),
+    });
+
+    if (result.Items?.length) {
+      items.push(...result.Items);
+    }
+
+    lastEvaluatedKey = result.LastEvaluatedKey;
+  } while (lastEvaluatedKey);
 
   // ==========================================================
-  // SEARCH CURRENT RADIUS
+  // FINAL SAFETY FILTER
   // ==========================================================
 
-  const candidates = getCandidates(
-    order,
+  const filtered = items.filter((courier) => {
+    if (!courier?.id) {
+      return false;
+    }
 
-    couriers,
+    if (courier.isOnline !== true) {
+      return false;
+    }
 
-    currentRadius,
+    if (courier.isApproved !== true) {
+      return false;
+    }
 
-    attemptedCourierIds,
-  );
+    if (courier.isBlocked === true) {
+      return false;
+    }
 
-  console.log("📍 CURRENT RADIUS SEARCH", {
-    orderId: order.id,
+    if (normalizeString(courier.statusKey) !== "ONLINE#APPROVED") {
+      return false;
+    }
 
-    radius: currentRadius,
-
-    candidateCount: candidates.length,
+    return true;
   });
 
-  // ==========================================================
-  // TRY EACH COURIER
-  // ==========================================================
+  console.log("👥 FINAL AVAILABLE COURIERS:", {
+    queried: items.length,
 
-  for (const candidate of candidates) {
-    const courier = candidate.courier;
+    eligible: filtered.length,
 
-    const distance = candidate.distance;
+    courierIds: filtered.map((courier) => courier.id),
+  });
 
-    console.log("🔎 EVALUATING COURIER", {
-      orderId: order.id,
+  return filtered;
+}
 
-      courierId: courier.id,
+// ============================================================
+// FIND CANDIDATES
+// ============================================================
+//
+// Filters couriers according to:
+//
+//     - rejected list
+//     - online status
+//     - approval
+//     - blocked status
+//     - location
+//     - transportation type
+//     - capacity
+//     - distance
+//     - search radius
+//
+// Candidates are sorted nearest first.
+//
+// ============================================================
 
-      distanceKm: Number(distance.toFixed(2)),
+function findCandidates(order, couriers, radiusKm, rejectedCourierIds) {
+  const rejected = normalizeIds(rejectedCourierIds);
 
-      transportationType: courier.transportationType,
+  const candidates = [];
 
-      vehicleClass: courier.vehicleClass,
-
-      isOnline: courier.isOnline,
-
-      isApproved: courier.isApproved,
-
-      isBlocked: courier.isBlocked,
-
-      currentBatchCount: courier.currentBatchCount || 0,
-
-      currentExpressCount: courier.currentExpressCount || 0,
-    });
+  for (const courier of couriers) {
+    if (!courier?.id) {
+      continue;
+    }
 
     // ========================================================
-    // TRANSPORT COMPATIBILITY
+    // REJECTED COURIER
+    // ========================================================
+
+    if (rejected.includes(courier.id)) {
+      console.log("🚫 COURIER REJECTED — ALREADY USED:", courier.id);
+
+      continue;
+    }
+
+    // ========================================================
+    // ONLINE
+    // ========================================================
+
+    if (courier.isOnline !== true) {
+      continue;
+    }
+
+    // ========================================================
+    // APPROVED
+    // ========================================================
+
+    if (courier.isApproved !== true) {
+      continue;
+    }
+
+    // ========================================================
+    // BLOCKED
+    // ========================================================
+
+    if (courier.isBlocked === true) {
+      continue;
+    }
+
+    // ========================================================
+    // STATUS
+    // ========================================================
+
+    if (normalizeString(courier.statusKey) !== "ONLINE#APPROVED") {
+      continue;
+    }
+
+    // ========================================================
+    // LOCATION
+    // ========================================================
+
+    if (!isValidLatitude(courier.lat) || !isValidLongitude(courier.lng)) {
+      console.log("🚫 INVALID COURIER LOCATION:", {
+        courierId: courier.id,
+
+        lat: courier.lat,
+
+        lng: courier.lng,
+      });
+
+      continue;
+    }
+
+    // ========================================================
+    // TRANSPORTATION
     // ========================================================
 
     if (!isTransportCompatible(order, courier)) {
-      console.log("🚫 TRANSPORT INCOMPATIBLE", {
-        orderId: order.id,
-
+      console.log("🚫 TRANSPORT INCOMPATIBLE:", {
         courierId: courier.id,
 
         orderTransportationType: order.transportationType,
@@ -906,837 +2480,116 @@ async function dispatchNextCourier(order) {
     // ========================================================
 
     if (!canAccept(courier, order)) {
-      console.log("🚫 COURIER HAS NO CURRENT CAPACITY", {
+      console.log("🚫 COURIER CAPACITY FULL:", {
         courierId: courier.id,
 
-        currentBatchCount: courier.currentBatchCount || 0,
+        currentExpressCount: Number(courier.currentExpressCount || 0),
 
-        currentExpressCount: courier.currentExpressCount || 0,
+        currentBatchCount: Number(courier.currentBatchCount || 0),
       });
 
       continue;
     }
 
     // ========================================================
-    // CREATE OFFER
+    // ORDER LOCATION
     // ========================================================
 
-    const success = await createOffer(
-      order,
-
-      courier,
-
-      currentRadius,
-
-      dispatchRound,
-
-      attemptedCourierIds,
-    );
-
-    // ========================================================
-    // SUCCESS
-    // ========================================================
-
-    if (success) {
-      console.log("==================================================");
-
-      console.log("✅ COURIER OFFERED ORDER", {
+    if (
+      !isValidLatitude(order.originLat) ||
+      !isValidLongitude(order.originLng)
+    ) {
+      console.log("🚫 INVALID ORDER ORIGIN:", {
         orderId: order.id,
 
-        courierId: courier.id,
+        originLat: order.originLat,
 
-        distanceKm: Number(distance.toFixed(2)),
-
-        dispatchRound,
-
-        dispatchRadiusKm: currentRadius,
-
-        assignmentStatus: "OFFERED",
-
-        expiresInSeconds: 25,
+        originLng: order.originLng,
       });
 
-      console.log("==================================================");
-
-      return {
-        offered: true,
-
-        reason: "OFFER_CREATED",
-
-        courierId: courier.id,
-      };
+      continue;
     }
 
     // ========================================================
-    // FAILED
+    // DISTANCE
     // ========================================================
 
-    console.log("⚠️ OFFER TRANSACTION FAILED — TRYING NEXT COURIER", {
-      orderId: order.id,
+    const distanceKm = getDistance(
+      Number(courier.lat),
 
-      courierId: courier.id,
-    });
-  }
+      Number(courier.lng),
 
-  // ==========================================================
-  // CURRENT RADIUS EXHAUSTED
-  // ==========================================================
+      Number(order.originLat),
 
-  console.log("⚠️ NO COURIER COULD RECEIVE OFFER AT CURRENT RADIUS", {
-    orderId: order.id,
-
-    currentRadius,
-
-    dispatchRound,
-  });
-
-  // ==========================================================
-  // FIND NEXT RADIUS
-  // ==========================================================
-
-  const radiusIndex = radiusSteps.indexOf(currentRadius);
-
-  const nextRadius = radiusSteps[radiusIndex + 1];
-
-  // ==========================================================
-  // NEXT RADIUS EXISTS
-  // ==========================================================
-
-  if (nextRadius !== undefined) {
-    console.log("📈 EXPANDING DISPATCH RADIUS", {
-      orderId: order.id,
-
-      previousRadius: currentRadius,
-
-      nextRadius,
-
-      dispatchRound,
-    });
-
-    const updated = await updateDispatchState(
-      order,
-
-      {
-        dispatchRound,
-
-        dispatchRadiusKm: nextRadius,
-
-        dispatchAttemptedCourierIds: attemptedCourierIds,
-      },
+      Number(order.originLng),
     );
 
-    if (!updated) {
-      console.log("⏭️ RADIUS UPDATE CANCELLED — ORDER STATE CHANGED", order.id);
-
-      return {
-        offered: false,
-
-        reason: "STATE_CHANGED",
-      };
-    }
-
-    // ========================================================
-    // SEARCH NEXT RADIUS
-    // ========================================================
-
-    return dispatchNextCourier({
-      ...order,
-
-      dispatchRound,
-
-      dispatchRadiusKm: nextRadius,
-
-      dispatchAttemptedCourierIds: attemptedCourierIds,
-
-      assignmentStatus: "EXPIRED",
-
-      assignedCourierId: null,
-    });
-  }
-
-  // ==========================================================
-  // MAXIMUM RADIUS EXHAUSTED
-  // ==========================================================
-
-  console.log("🔚 MAXIMUM RADIUS EXHAUSTED", {
-    orderId: order.id,
-
-    dispatchRound,
-
-    maximumRadius: radiusSteps[radiusSteps.length - 1],
-
-    attemptedCourierCount: attemptedCourierIds.length,
-  });
-
-  // ==========================================================
-  // NEW DISPATCH ROUND
-  // ==========================================================
-
-  dispatchRound += 1;
-
-  const resetRadius = radiusSteps[0];
-
-  console.log("🔄 STARTING NEW DISPATCH ROUND", {
-    orderId: order.id,
-
-    previousRound: dispatchRound - 1,
-
-    newRound: dispatchRound,
-
-    resetRadius,
-  });
-
-  // ==========================================================
-  // IMPORTANT
-  // ==========================================================
-  //
-  // RESET THE COURIER ATTEMPT LIST.
-  //
-  // This means:
-  //
-  // Round 1:
-  //
-  // A → B → C → D
-  //
-  // Round 2:
-  //
-  // A → B → C → D
-  //
-  // Round 3:
-  //
-  // A → B → C → D
-  //
-  // etc.
-  //
-  // ==========================================================
-
-  attemptedCourierIds = [];
-
-  const updated = await updateDispatchState(
-    order,
-
-    {
-      dispatchRound,
-
-      dispatchRadiusKm: resetRadius,
-
-      dispatchAttemptedCourierIds: [],
-    },
-  );
-
-  if (!updated) {
-    console.log(
-      "⏭️ NEW DISPATCH ROUND CANCELLED — ORDER STATE CHANGED",
-      order.id,
-    );
-
-    return {
-      offered: false,
-
-      reason: "STATE_CHANGED",
-    };
-  }
-
-  // ==========================================================
-  // START NEW ROUND
-  // ==========================================================
-
-  return dispatchNextCourier({
-    ...order,
-
-    dispatchRound,
-
-    dispatchRadiusKm: resetRadius,
-
-    dispatchAttemptedCourierIds: [],
-
-    assignmentStatus: "EXPIRED",
-
-    assignedCourierId: null,
-  });
-}
-
-// ============================================================
-// CREATE NEW OFFER
-// ============================================================
-
-async function createOffer(
-  order,
-
-  courier,
-
-  radiusKm,
-
-  dispatchRound,
-
-  attemptedCourierIds,
-) {
-  const now = new Date();
-
-  const expiresAt = new Date(
-    now.getTime() + ASSIGNMENT_TIMEOUT_MS,
-  ).toISOString();
-
-  const nowISO = now.toISOString();
-
-  // ==========================================================
-  // ADD COURIER TO ATTEMPTED LIST
-  // ==========================================================
-
-  const updatedAttemptedIds = Array.from(
-    new Set([...(attemptedCourierIds || []), courier.id]),
-  );
-
-  // ==========================================================
-  // ATTEMPT COUNT
-  // ==========================================================
-
-  const assignmentAttempts = Number(order.assignmentAttempts || 0) + 1;
-
-  try {
-    await docClient.send(
-      new TransactWriteCommand({
-        TransactItems: [
-          {
-            Update: {
-              TableName: ORDER_TABLE,
-
-              Key: {
-                id: order.id,
-              },
-
-              // =================================================
-              // ONLY ASSIGNMENT / DISPATCH FIELDS
-              // =================================================
-
-              UpdateExpression: `
-
-                SET
-
-                  assignedCourierId =
-                    :courierId,
-
-                  assignmentStatus =
-                    :offered,
-
-                  assignmentExpiresAt =
-                    :expiresAt,
-
-                  assignmentAttempts =
-                    :attempts,
-
-                  lastAssignedAt =
-                    :now,
-
-                  dispatchAttemptedCourierIds =
-                    :attemptedIds,
-
-                  dispatchRound =
-                    :dispatchRound,
-
-                  dispatchRadiusKm =
-                    :radiusKm
-
-              `,
-
-              // =================================================
-              // SAFETY CONDITION
-              // =================================================
-
-              ConditionExpression: `
-
-                #status =
-                  :ready
-
-                AND
-
-                paymentStatus =
-                  :paid
-
-                AND
-
-                assignmentStatus =
-                  :expired
-
-                AND
-
-                (
-
-                  attribute_not_exists(
-                    assignedCourierId
-                  )
-
-                  OR
-
-                  assignedCourierId =
-                    :nullCourier
-
-                )
-
-              `,
-
-              ExpressionAttributeNames: {
-                "#status": "status",
-              },
-
-              ExpressionAttributeValues: {
-                ":courierId": courier.id,
-
-                ":offered": "OFFERED",
-
-                ":expiresAt": expiresAt,
-
-                ":attempts": assignmentAttempts,
-
-                ":now": nowISO,
-
-                ":attemptedIds": updatedAttemptedIds,
-
-                ":dispatchRound": dispatchRound,
-
-                ":radiusKm": radiusKm,
-
-                ":ready": "READY_FOR_PICKUP",
-
-                ":paid": "PAID",
-
-                ":expired": "EXPIRED",
-
-                ":nullCourier": null,
-              },
-            },
-          },
-        ],
-      }),
-    );
-
-    console.log("✅ NEW OFFER CREATED", {
-      orderId: order.id,
-
+    console.log("📏 COURIER DISTANCE:", {
       courierId: courier.id,
 
-      expiresAt,
-
-      dispatchRound,
+      distanceKm: Number(distanceKm.toFixed(4)),
 
       radiusKm,
-
-      assignmentAttempts,
-
-      assignmentStatus: "OFFERED",
-
-      attemptedCourierIds: updatedAttemptedIds,
     });
 
-    return true;
-  } catch (error) {
     // ========================================================
-    // RACE CONDITION
+    // RADIUS
     // ========================================================
 
-    if (error?.name === "TransactionCanceledException") {
-      console.log("⚠️ CREATE OFFER TRANSACTION CANCELLED", {
-        orderId: order.id,
-
-        courierId: courier.id,
-
-        reason: "Order state changed before offer could be created.",
-      });
-
-      return false;
+    if (distanceKm > radiusKm) {
+      continue;
     }
 
-    console.error("❌ CREATE OFFER FAILED", {
-      orderId: order.id,
+    // ========================================================
+    // ELIGIBLE
+    // ========================================================
 
-      courierId: courier.id,
+    candidates.push({
+      courier,
 
-      errorName: error?.name,
-
-      errorMessage: error?.message,
+      distanceKm,
     });
-
-    throw error;
   }
-}
-
-// ============================================================
-// UPDATE DISPATCH STATE
-// ============================================================
-//
-// Used for:
-//
-// MICRO:
-//
-//   5 → 8
-//
-// MOTO:
-//
-//   5 → 10
-//   10 → 15
-//   15 → 20
-//   20 → 25
-//
-// And for:
-//
-//   New dispatch round
-//
-// ============================================================
-
-async function updateDispatchState(
-  order,
-
-  state,
-) {
-  try {
-    await docClient.send(
-      new TransactWriteCommand({
-        TransactItems: [
-          {
-            Update: {
-              TableName: ORDER_TABLE,
-
-              Key: {
-                id: order.id,
-              },
-
-              // =================================================
-              // ONLY DISPATCH FIELDS
-              // =================================================
-
-              UpdateExpression: `
-
-                SET
-
-                  dispatchRound =
-                    :dispatchRound,
-
-                  dispatchRadiusKm =
-                    :radiusKm,
-
-                  dispatchAttemptedCourierIds =
-                    :attemptedIds
-
-              `,
-
-              // =================================================
-              // SAFETY CONDITION
-              // =================================================
-
-              ConditionExpression: `
-
-                #status =
-                  :ready
-
-                AND
-
-                paymentStatus =
-                  :paid
-
-                AND
-
-                assignmentStatus =
-                  :expired
-
-                AND
-
-                (
-
-                  attribute_not_exists(
-                    assignedCourierId
-                  )
-
-                  OR
-
-                  assignedCourierId =
-                    :nullCourier
-
-                )
-
-              `,
-
-              ExpressionAttributeNames: {
-                "#status": "status",
-              },
-
-              ExpressionAttributeValues: {
-                ":dispatchRound": state.dispatchRound,
-
-                ":radiusKm": state.dispatchRadiusKm,
-
-                ":attemptedIds": state.dispatchAttemptedCourierIds,
-
-                ":ready": "READY_FOR_PICKUP",
-
-                ":paid": "PAID",
-
-                ":expired": "EXPIRED",
-
-                ":nullCourier": null,
-              },
-            },
-          },
-        ],
-      }),
-    );
-
-    console.log("📡 DISPATCH STATE UPDATED", {
-      orderId: order.id,
-
-      dispatchRound: state.dispatchRound,
-
-      dispatchRadiusKm: state.dispatchRadiusKm,
-
-      attemptedCourierCount: state.dispatchAttemptedCourierIds.length,
-    });
-
-    return true;
-  } catch (error) {
-    if (error?.name === "TransactionCanceledException") {
-      console.log("⚠️ DISPATCH STATE UPDATE CANCELLED", order.id);
-
-      return false;
-    }
-
-    console.error("❌ DISPATCH STATE UPDATE FAILED", {
-      orderId: order.id,
-
-      errorName: error?.name,
-
-      errorMessage: error?.message,
-    });
-
-    throw error;
-  }
-}
-
-// ============================================================
-// GET AVAILABLE COURIERS
-// ============================================================
-
-async function getAvailableCouriers() {
-  const items = [];
-
-  let lastKey = undefined;
-
-  do {
-    const result = await docClient.send(
-      new QueryCommand({
-        TableName: COURIER_TABLE,
-
-        IndexName: "byStatus",
-
-        KeyConditionExpression: "statusKey = :status",
-
-        ExpressionAttributeValues: {
-          ":status": "ONLINE#APPROVED",
-        },
-
-        ...(lastKey
-          ? {
-              ExclusiveStartKey: lastKey,
-            }
-          : {}),
-      }),
-    );
-
-    if (result.Items?.length) {
-      items.push(...result.Items);
-    }
-
-    lastKey = result.LastEvaluatedKey;
-  } while (lastKey);
 
   // ==========================================================
-  // EXTRA SAFETY
+  // NEAREST COURIER FIRST
   // ==========================================================
 
-  return items.filter((courier) => {
-    return (
-      courier.id &&
-      courier.isOnline === true &&
-      courier.isApproved === true &&
-      courier.isBlocked !== true
-    );
-  });
+  candidates.sort((a, b) => a.distanceKm - b.distanceKm);
+
+  return candidates;
 }
 
 // ============================================================
-// GET CANDIDATES
-// ============================================================
-
-function getCandidates(
-  order,
-
-  couriers,
-
-  radius,
-
-  attemptedCourierIds,
-) {
-  const attempted = new Set(normalizeCourierIds(attemptedCourierIds));
-
-  return (
-    couriers
-
-      // ========================================================
-      // BASIC FILTER
-      // ========================================================
-
-      .filter((courier) => {
-        if (!isValidCoordinate(courier.lat)) {
-          return false;
-        }
-
-        if (!isValidCoordinate(courier.lng)) {
-          return false;
-        }
-
-        if (courier.isOnline !== true) {
-          return false;
-        }
-
-        if (courier.isApproved !== true) {
-          return false;
-        }
-
-        if (courier.isBlocked === true) {
-          return false;
-        }
-
-        // -----------------------------------------------
-        // Already attempted in this dispatch round.
-        // -----------------------------------------------
-
-        if (attempted.has(courier.id)) {
-          return false;
-        }
-
-        const distance = getDistance(
-          courier.lat,
-
-          courier.lng,
-
-          order.originLat,
-
-          order.originLng,
-        );
-
-        return distance <= radius;
-      })
-
-      // ========================================================
-      // CALCULATE DISTANCE
-      // ========================================================
-
-      .map((courier) => {
-        const distance = getDistance(
-          courier.lat,
-
-          courier.lng,
-
-          order.originLat,
-
-          order.originLng,
-        );
-
-        return {
-          courier,
-
-          distance,
-        };
-      })
-
-      // ========================================================
-      // NEAREST FIRST
-      // ========================================================
-
-      .sort((a, b) => {
-        return a.distance - b.distance;
-      })
-  );
-}
-
-// ============================================================
-// RADIUS CONFIGURATION
-// ============================================================
-
-function getRadiusSteps(transportationType) {
-  switch (transportationType) {
-    case "MICRO_EXPRESS":
-
-    case "MICRO_BATCH":
-      return [...MICRO_RADIUS_STEPS];
-
-    case "MOTO_EXPRESS":
-
-    case "MOTO_BATCH":
-      return [...MOTO_RADIUS_STEPS];
-
-    case "MAXI":
-      return [];
-
-    default:
-      return [];
-  }
-}
-
-// ============================================================
-// EXPRESS ORDER
-// ============================================================
-
-function isExpressOrder(order) {
-  return (
-    typeof order?.transportationType === "string" &&
-    order.transportationType.endsWith("_EXPRESS")
-  );
-}
-
-// ============================================================
-// BATCH ORDER
-// ============================================================
-
-function isBatchOrder(order) {
-  return (
-    typeof order?.transportationType === "string" &&
-    order.transportationType.endsWith("_BATCH")
-  );
-}
-
-// ============================================================
-// CAPACITY
+// CAPACITY CHECK
 // ============================================================
 //
 // EXPRESS:
 //
-//   maximum = 1
-//
-//   Express + Batch are mutually exclusive.
+//     maximum 1 express assignment
+//     cannot simultaneously carry batch assignments
 //
 // BATCH:
 //
-//   maximum = 10
-//
-//   Express + Batch are mutually exclusive.
+//     maximum 10 batch assignments
+//     cannot simultaneously carry an express assignment
 //
 // ============================================================
 
 function canAccept(courier, order) {
-  const batch = Number(courier.currentBatchCount || 0);
+  const expressCount = Number(courier.currentExpressCount || 0);
 
-  const express = Number(courier.currentExpressCount || 0);
+  const batchCount = Number(courier.currentBatchCount || 0);
 
   const isExpress = isExpressOrder(order);
 
   const isBatch = isBatchOrder(order);
 
   // ==========================================================
-  // UNKNOWN TYPE
+  // INVALID
   // ==========================================================
 
   if (!isExpress && !isBatch) {
-    console.log("🚫 UNKNOWN TRANSPORTATION TYPE", order.transportationType);
-
     return false;
   }
 
@@ -1745,11 +2598,15 @@ function canAccept(courier, order) {
   // ==========================================================
 
   if (isExpress) {
-    if (express >= MAX_EXPRESS_JOBS) {
+    if (expressCount >= MAX_EXPRESS_JOBS) {
       return false;
     }
 
-    if (batch > 0) {
+    // --------------------------------------------------------
+    // Express courier cannot simultaneously have batch jobs.
+    // --------------------------------------------------------
+
+    if (batchCount !== 0) {
       return false;
     }
 
@@ -1761,11 +2618,15 @@ function canAccept(courier, order) {
   // ==========================================================
 
   if (isBatch) {
-    if (express > 0) {
+    // --------------------------------------------------------
+    // Batch courier cannot simultaneously have express jobs.
+    // --------------------------------------------------------
+
+    if (expressCount !== 0) {
       return false;
     }
 
-    if (batch >= MAX_BATCH_JOBS) {
+    if (batchCount >= MAX_BATCH_JOBS) {
       return false;
     }
 
@@ -1776,98 +2637,105 @@ function canAccept(courier, order) {
 }
 
 // ============================================================
-// NORMALIZE COURIER IDS
-// ============================================================
-
-function normalizeCourierIds(value) {
-  if (!Array.isArray(value)) {
-    return [];
-  }
-
-  return Array.from(
-    new Set(
-      value.filter((id) => {
-        return typeof id === "string" && id.trim().length > 0;
-      }),
-    ),
-  );
-}
-
-// ============================================================
-// VALID COORDINATE
-// ============================================================
-
-function isValidCoordinate(value) {
-  const number = Number(value);
-
-  return Number.isFinite(number);
-}
-
-// ============================================================
-// HAVERSINE DISTANCE
-// ============================================================
-
-function getDistance(
-  lat1,
-
-  lon1,
-
-  lat2,
-
-  lon2,
-) {
-  const R = 6371;
-
-  const dLat = ((Number(lat2) - Number(lat1)) * Math.PI) / 180;
-
-  const dLon = ((Number(lon2) - Number(lon1)) * Math.PI) / 180;
-
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos((Number(lat1) * Math.PI) / 180) *
-      Math.cos((Number(lat2) * Math.PI) / 180) *
-      Math.sin(dLon / 2) ** 2;
-
-  return (
-    R *
-    2 *
-    Math.atan2(
-      Math.sqrt(a),
-
-      Math.sqrt(1 - a),
-    )
-  );
-}
-
-// ============================================================
-// TRANSPORT COMPATIBILITY
+// SLEEP
 // ============================================================
 //
-// This is kept inside this Lambda so that this Lambda does not
-// depend on transportLambda.js.
+// Used only for short SQS retry delays.
+//
+// This is NOT an assignment retry.
 //
 // ============================================================
 
-function isTransportCompatible(order, courier) {
-  const orderType = String(order?.transportationType || "").toUpperCase();
-
-  const courierType = String(courier?.transportationType || "").toUpperCase();
-
-  // ==========================================================
-  // MICRO
-  // ==========================================================
-
-  if (orderType.startsWith("MICRO_")) {
-    return courierType === "MICRO";
-  }
-
-  // ==========================================================
-  // MOTO
-  // ==========================================================
-
-  if (orderType.startsWith("MOTO_")) {
-    return courierType === "MOTO";
-  }
-
-  return false;
+function sleep(milliseconds) {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
+
+// ============================================================
+// END OF PART 2
+// ============================================================
+//
+// FINAL ASSIGNMENT FLOW:
+//
+//     Courier #1
+//          ↓
+//     assignmentAttempts = 1
+//          ↓
+//     25 seconds
+//          ↓
+//     reassignOrder
+//          ↓
+//     Courier #2
+//          ↓
+//     assignmentAttempts = 2
+//          ↓
+//     25 seconds
+//          ↓
+//     ...
+//          ↓
+//     Courier #10
+//          ↓
+//     assignmentAttempts = 10
+//          ↓
+//     25 seconds
+//          ↓
+//     reassignOrder
+//          ↓
+//     Courier #11
+//          ↓
+//     assignmentAttempts = 11
+//          ↓
+//     25 seconds
+//          ↓
+//     ...
+//          ↓
+//     Continue while eligible couriers exist
+//
+// If NO eligible courier exists:
+//
+//          ↓
+//     RELEASE EXPIRED COURIER
+//          ↓
+//     assignmentStatus = READY
+//          ↓
+//     assignedCourierId = null
+//          ↓
+//     assignmentExpiresAt = null
+//          ↓
+//     hasNewOffer = false
+//          ↓
+//     NO NEW SQS MESSAGE
+//
+// This stops the current SQS chain without imposing an
+// artificial maximum number of courier attempts.
+//
+// ============================================================
+
+// ============================================================
+// OPTIONAL EXPORTS
+// ============================================================
+//
+// These are useful if you want the functions available for
+// Lambda testing or debugging.
+//
+// They do NOT affect the normal handler flow.
+//
+// ============================================================
+
+exports.getOrder = getOrder;
+
+exports.findEligibleCouriers = findEligibleCouriers;
+
+exports.updateOrderAssignment =
+  typeof updateOrderAssignment !== "undefined"
+    ? updateOrderAssignment
+    : undefined;
+
+exports.verifyAssignmentInDynamoDB =
+  typeof verifyAssignmentInDynamoDB !== "undefined"
+    ? verifyAssignmentInDynamoDB
+    : undefined;
+
+exports.sendAssignmentExpiryMessage =
+  typeof sendAssignmentExpiryMessage !== "undefined"
+    ? sendAssignmentExpiryMessage
+    : undefined;

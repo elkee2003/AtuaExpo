@@ -115,7 +115,7 @@ const CourierReportStatus = {
   "DISMISSED": "DISMISSED"
 };
 
-const { CompanyVehicle, CourierCompany, Payout, Transaction, Wallet, Payment, Offer, Order, CourierReport, CourierReview, Courier, User, VerifyAtuaPaymentResult, VerifiedPaymentDetails } = initSchema(schema);
+const { CompanyVehicle, CourierCompany, Payout, Transaction, Wallet, Payment, Offer, Order, CourierReport, CourierReview, CourierLiveLocation, Courier, User, VerifyAtuaPaymentResult, VerifiedPaymentDetails } = initSchema(schema);
 
 export {
   CompanyVehicle,
@@ -128,6 +128,7 @@ export {
   Order,
   CourierReport,
   CourierReview,
+  CourierLiveLocation,
   Courier,
   User,
   EarningsAllocationStatus,
