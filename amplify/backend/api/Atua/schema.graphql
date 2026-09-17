@@ -420,6 +420,18 @@ type Order @model @auth(rules: [{ allow: public }]) {
   trackingStartedAt: AWSDateTime
   trackingEndedAt: AWSDateTime
 
+  # ---------------- RECIPIENT PUBLIC TRACKING ----------------
+
+  # Secure random token used in:
+  # https://atuainc.com/send/track/:trackingToken
+  recipientTrackingToken: String @index(name: "byRecipientTrackingToken")
+
+  # Allows Atua to manually enable or disable recipient tracking
+  recipientTrackingEnabled: Boolean
+
+  # Timestamp showing when the public link was revoked
+  recipientTrackingRevokedAt: AWSDateTime
+
   userID: ID! @index(name: "byUser")
   reviews: [CourierReview] @hasMany(indexName: "byOrder", fields: ["id"])
 

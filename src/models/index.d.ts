@@ -590,6 +590,9 @@ type EagerOrder = {
   readonly assignmentStatus?: string | null;
   readonly trackingStartedAt?: string | null;
   readonly trackingEndedAt?: string | null;
+  readonly recipientTrackingToken?: string | null;
+  readonly recipientTrackingEnabled?: boolean | null;
+  readonly recipientTrackingRevokedAt?: string | null;
   readonly userID: string;
   readonly reviews?: (CourierReview | null)[] | null;
   readonly reports?: (CourierReport | null)[] | null;
@@ -715,6 +718,9 @@ type LazyOrder = {
   readonly assignmentStatus?: string | null;
   readonly trackingStartedAt?: string | null;
   readonly trackingEndedAt?: string | null;
+  readonly recipientTrackingToken?: string | null;
+  readonly recipientTrackingEnabled?: boolean | null;
+  readonly recipientTrackingRevokedAt?: string | null;
   readonly userID: string;
   readonly reviews: AsyncCollection<CourierReview>;
   readonly reports: AsyncCollection<CourierReport>;

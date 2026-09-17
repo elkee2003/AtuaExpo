@@ -63,6 +63,14 @@ const generateVerificationCode = () => {
 };
 
 /* ==========================================================
+   GENERATE RECIPIENT TRACKING TOKEN
+========================================================== */
+
+const generateRecipientTrackingToken = () => {
+  return crypto.randomBytes(24).toString("hex");
+};
+
+/* ==========================================================
    GRAPHQL REQUEST
 ========================================================== */
 
@@ -227,6 +235,10 @@ const ORDER_FIELDS = `
   platformNetRevenue
 
   deliveryVerificationCode
+
+    recipientTrackingToken
+  recipientTrackingEnabled
+  recipientTrackingRevokedAt
 
   declaredWeightBracket
 
@@ -549,6 +561,7 @@ const markOrderAsPaidFallback = async ({
   order,
   paymentId,
   verificationCode,
+  recipientTrackingToken,
 }) => {
   if (!order?.id) {
     throw new Error("Order is required before fallback update.");
@@ -564,6 +577,10 @@ const markOrderAsPaidFallback = async ({
 
   if (!verificationCode) {
     throw new Error("Delivery verification code is required.");
+  }
+
+  if (!recipientTrackingToken) {
+    throw new Error("Recipient tracking token is required.");
   }
 
   const mutation = `
@@ -592,6 +609,14 @@ const markOrderAsPaidFallback = async ({
     fundsStatus: "HELD",
 
     deliveryVerificationCode: verificationCode,
+
+    // Enable recipient tracking when payment is successfully confirmed.
+    recipientTrackingToken,
+
+    recipientTrackingEnabled: true,
+
+    // The field is nullable and should be clear for a fresh payment.
+    recipientTrackingRevokedAt: null,
   };
 
   if (Number.isInteger(order._version)) {
@@ -614,6 +639,9 @@ const markOrderAsPaidFallback = async ({
     fundsStatus: "HELD",
 
     verificationCode,
+    recipientTrackingToken,
+    recipientTrackingEnabled: true,
+    recipientTrackingRevokedAt: null,
   });
 
   const data = await graphqlRequest(
@@ -858,7 +886,7 @@ const buildPaymentDetails = ({
  */
 
 /* ==========================================================
-   REPAIR CODE ONLY
+   REPAIR DELIVERY CODE AND RECIPIENT TRACKING DATA
 ========================================================== */
 
 /*
@@ -870,21 +898,27 @@ const buildPaymentDetails = ({
  *
  * AND
  *
- *     Order.deliveryVerificationCode is missing
+ *     Order.deliveryVerificationCode or recipient tracking data is missing
  *
  * In that situation the webhook already processed the
  * payment, so we DO NOT change payment status, Payment ID,
  * funds status, etc.
  *
- * We ONLY add the missing verification code.
+ * We only repair the missing delivery or recipient tracking data.
  *
  * This prevents verifyAtuaPayment from becoming a second
  * payment processor.
  */
 
-const repairMissingVerificationCode = async ({ order, verificationCode }) => {
+const repairMissingVerificationCode = async ({
+  order,
+  verificationCode,
+  recipientTrackingToken,
+}) => {
   if (!order?.id) {
-    throw new Error("Order is required to repair verification code.");
+    throw new Error(
+      "Order is required to repair delivery and recipient tracking data.",
+    );
   }
 
   if (!order?.userID) {
@@ -893,6 +927,10 @@ const repairMissingVerificationCode = async ({ order, verificationCode }) => {
 
   if (!verificationCode) {
     throw new Error("Verification code is required.");
+  }
+
+  if (!recipientTrackingToken) {
+    throw new Error("Recipient tracking token is required.");
   }
 
   const mutation = `
@@ -929,32 +967,32 @@ const repairMissingVerificationCode = async ({ order, verificationCode }) => {
 
     status: order.status,
 
-    /*
-     * THIS is the actual repair.
-     */
     deliveryVerificationCode: verificationCode,
+
+    // Repair or restore recipient tracking fields as well.
+    recipientTrackingToken,
+
+    recipientTrackingEnabled: true,
+
+    recipientTrackingRevokedAt: null,
   };
 
   if (Number.isInteger(order._version)) {
     input._version = order._version;
   }
 
-  console.log("REPAIRING MISSING VERIFICATION CODE:", {
+  console.log("REPAIRING DELIVERY AND RECIPIENT TRACKING DATA:", {
     orderID: order.id,
-
     userID: order.userID,
-
     currentVersion: order._version,
-
     paymentStatus: order.paymentStatus,
-
     paymentID: order.paymentID,
-
     fundsStatus: order.fundsStatus,
-
     status: order.status,
-
     verificationCode,
+    recipientTrackingToken,
+    recipientTrackingEnabled: true,
+    recipientTrackingRevokedAt: null,
   });
 
   const data = await graphqlRequest(
@@ -988,6 +1026,12 @@ const repairMissingVerificationCode = async ({ order, verificationCode }) => {
         status: updatedOrder.status,
 
         deliveryVerificationCode: updatedOrder.deliveryVerificationCode,
+
+        recipientTrackingToken: updatedOrder.recipientTrackingToken,
+
+        recipientTrackingEnabled: updatedOrder.recipientTrackingEnabled,
+
+        recipientTrackingRevokedAt: updatedOrder.recipientTrackingRevokedAt,
 
         recipientName: updatedOrder.recipientName,
 
@@ -1069,6 +1113,10 @@ exports.handler = async (event) => {
           status: order.status,
 
           deliveryVerificationCode: order.deliveryVerificationCode,
+
+          recipientTrackingToken: order.recipientTrackingToken,
+          recipientTrackingEnabled: order.recipientTrackingEnabled,
+          recipientTrackingRevokedAt: order.recipientTrackingRevokedAt,
 
           totalPrice: order.totalPrice,
 
@@ -1342,7 +1390,12 @@ exports.handler = async (event) => {
      * There is nothing for verifyAtuaPayment to change.
      */
 
-    if (order.paymentStatus === "PAID" && order.deliveryVerificationCode) {
+    if (
+      order.paymentStatus === "PAID" &&
+      order.deliveryVerificationCode &&
+      order.recipientTrackingToken &&
+      order.recipientTrackingEnabled === true
+    ) {
       console.log("==========================================");
 
       console.log("WEBHOOK ALREADY COMPLETED PAYMENT.");
@@ -1385,7 +1438,7 @@ exports.handler = async (event) => {
     }
 
     /* ======================================================
-       15. PAID BUT VERIFICATION CODE MISSING
+       15. PAID BUT DELIVERY OR RECIPIENT TRACKING DATA MISSING
     ====================================================== */
 
     /*
@@ -1399,7 +1452,7 @@ exports.handler = async (event) => {
      *
      * BUT:
      *
-     *     deliveryVerificationCode = null
+     *     deliveryVerificationCode or recipient tracking data is missing
      *
      * Therefore:
      *
@@ -1413,21 +1466,35 @@ exports.handler = async (event) => {
      *
      *     DO NOT change status.
      *
-     *     ONLY generate/save the missing code.
+     *     ONLY generate/save the missing delivery code
+     *      and/or recipient tracking data.
      */
 
-    if (order.paymentStatus === "PAID" && !order.deliveryVerificationCode) {
+    if (
+      order.paymentStatus === "PAID" &&
+      (!order.deliveryVerificationCode ||
+        !order.recipientTrackingToken ||
+        order.recipientTrackingEnabled !== true)
+    ) {
       console.log("==========================================");
 
-      console.log("ORDER IS PAID BUT VERIFICATION CODE IS MISSING.");
+      console.log(
+        "ORDER IS PAID BUT DELIVERY CODE OR RECIPIENT TRACKING DATA IS MISSING.",
+      );
 
       console.log("WEBHOOK PROCESSED PAYMENT.");
 
-      console.log("VERIFY ATUA PAYMENT IS REPAIRING ONLY THE MISSING CODE.");
+      console.log(
+        "VERIFY ATUA PAYMENT IS REPAIRING MISSING DELIVERY/TRACKING DATA ONLY.",
+      );
 
       console.log("==========================================");
 
-      const verificationCode = generateVerificationCode();
+      const verificationCode =
+        order.deliveryVerificationCode || generateVerificationCode();
+
+      const recipientTrackingToken =
+        order.recipientTrackingToken || generateRecipientTrackingToken();
 
       console.log("GENERATED FALLBACK VERIFICATION CODE:", {
         orderId: order.id,
@@ -1441,6 +1508,8 @@ exports.handler = async (event) => {
         order,
 
         verificationCode,
+
+        recipientTrackingToken,
       });
 
       if (!repairedOrder) {
@@ -1453,13 +1522,36 @@ exports.handler = async (event) => {
         );
       }
 
+      if (!repairedOrder.recipientTrackingToken) {
+        throw new Error(
+          "Tracking repair completed without a saved recipient tracking token.",
+        );
+      }
+
+      if (repairedOrder.recipientTrackingEnabled !== true) {
+        throw new Error(
+          "Tracking repair completed but recipient tracking is not enabled.",
+        );
+      }
+
       console.log("==========================================");
 
-      console.log("VERIFICATION CODE FALLBACK COMPLETED.");
+      console.log("DELIVERY AND RECIPIENT TRACKING REPAIR COMPLETED.");
 
       console.log("ORDER:", repairedOrder.id);
 
-      console.log("CODE:", repairedOrder.deliveryVerificationCode);
+      console.log(
+        "DELIVERY VERIFICATION CODE:",
+        repairedOrder.deliveryVerificationCode,
+      );
+      console.log(
+        "RECIPIENT TRACKING TOKEN:",
+        repairedOrder.recipientTrackingToken,
+      );
+      console.log(
+        "RECIPIENT TRACKING ENABLED:",
+        repairedOrder.recipientTrackingEnabled,
+      );
 
       console.log("VERSION:", repairedOrder._version);
 
@@ -1475,7 +1567,7 @@ exports.handler = async (event) => {
         fallbackUsed: true,
 
         message:
-          "Payment was already confirmed. The missing delivery verification code was repaired.",
+          "Payment was already confirmed. Missing delivery or recipient tracking data was repaired.",
 
         orderId: repairedOrder.id,
 
@@ -1526,6 +1618,9 @@ exports.handler = async (event) => {
     const verificationCode =
       order.deliveryVerificationCode || generateVerificationCode();
 
+    const recipientTrackingToken =
+      order.recipientTrackingToken || generateRecipientTrackingToken();
+
     console.log("FALLBACK VERIFICATION CODE:", {
       orderId: order.id,
 
@@ -1542,6 +1637,8 @@ exports.handler = async (event) => {
       paymentId: payment.id,
 
       verificationCode,
+
+      recipientTrackingToken,
     });
 
     if (!updatedOrder) {
@@ -1627,6 +1724,14 @@ exports.handler = async (event) => {
       throw new Error("Fallback verification code was not saved.");
     }
 
+    if (!finalOrder.recipientTrackingToken) {
+      throw new Error("Fallback recipient tracking token was not saved.");
+    }
+
+    if (finalOrder.recipientTrackingEnabled !== true) {
+      throw new Error("Fallback recipient tracking was not enabled.");
+    }
+
     if (!finalOrder.userID) {
       throw new Error("Order userID disappeared during fallback update.");
     }
@@ -1664,6 +1769,10 @@ exports.handler = async (event) => {
       orderId: finalOrder.id,
 
       deliveryVerificationCode: finalOrder.deliveryVerificationCode,
+
+      recipientTrackingToken: finalOrder.recipientTrackingToken,
+      recipientTrackingEnabled: finalOrder.recipientTrackingEnabled,
+      recipientTrackingRevokedAt: finalOrder.recipientTrackingRevokedAt,
 
       payment: buildPaymentDetails({
         reference: transaction.reference,

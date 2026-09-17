@@ -293,6 +293,10 @@ const ORDER_FIELDS = `
 
   deliveryVerificationCode
 
+  recipientTrackingToken
+  recipientTrackingEnabled
+  recipientTrackingRevokedAt
+
   declaredWeightBracket
 
   senderPreTransferPhotos
@@ -603,6 +607,20 @@ const createPayment = async ({ order, transaction }) => {
 const generateVerificationCode = () => {
   return crypto.randomInt(0, 1000000).toString().padStart(6, "0");
 };
+
+/* ==========================================================
+   GENERATE RECIPIENT TRACKING TOKEN
+========================================================== */
+
+/*
+ * Generates a unique public tracking token for the recipient.
+ *
+ * The existing token is always preserved during webhook retries.
+ */
+const generateRecipientTrackingToken = () => {
+  return crypto.randomBytes(24).toString("hex");
+};
+
 /* ==========================================================
    UPDATE ORDER AFTER SUCCESSFUL PAYMENT
 ========================================================== */
@@ -654,7 +672,9 @@ const finalizePaidOrder = async ({ order, payment }) => {
   if (
     order.paymentStatus === "PAID" &&
     order.paymentID === payment.id &&
-    order.deliveryVerificationCode
+    order.deliveryVerificationCode &&
+    order.recipientTrackingEnabled === true &&
+    order.recipientTrackingToken
   ) {
     console.log("ORDER ALREADY FULLY FINALIZED:", {
       orderID: order.id,
@@ -662,6 +682,10 @@ const finalizePaidOrder = async ({ order, payment }) => {
       paymentID: payment.id,
 
       deliveryVerificationCode: order.deliveryVerificationCode,
+
+      recipientTrackingToken: order.recipientTrackingToken,
+
+      recipientTrackingEnabled: order.recipientTrackingEnabled,
 
       version: order._version,
     });
@@ -684,6 +708,15 @@ const finalizePaidOrder = async ({ order, payment }) => {
 
   const deliveryVerificationCode =
     order.deliveryVerificationCode || generateVerificationCode();
+
+  /*
+   * Enable recipient tracking for every successfully paid order.
+   *
+   * If a token already exists, preserve it so webhook retries
+   * do not generate a different public tracking link.
+   */
+  const recipientTrackingToken =
+    order.recipientTrackingToken || generateRecipientTrackingToken();
 
   console.log("DELIVERY VERIFICATION CODE:", {
     orderID: order.id,
@@ -733,6 +766,11 @@ const finalizePaidOrder = async ({ order, payment }) => {
     fundsStatus: "HELD",
 
     deliveryVerificationCode: deliveryVerificationCode,
+
+    recipientTrackingToken: recipientTrackingToken,
+
+    recipientTrackingEnabled: true,
+    recipientTrackingRevokedAt: null,
   };
 
   /*
@@ -849,6 +887,12 @@ const finalizePaidOrder = async ({ order, payment }) => {
         fundsStatus: updatedOrder.fundsStatus,
 
         deliveryVerificationCode: updatedOrder.deliveryVerificationCode,
+
+        recipientTrackingToken: updatedOrder.recipientTrackingToken,
+
+        recipientTrackingEnabled: updatedOrder.recipientTrackingEnabled,
+
+        recipientTrackingRevokedAt: updatedOrder.recipientTrackingRevokedAt,
 
         assignedCourierId: updatedOrder.assignedCourierId,
 
@@ -1316,6 +1360,18 @@ exports.handler = async (event) => {
       );
     }
 
+    if (!finalizedOrder.recipientTrackingToken) {
+      throw new Error(
+        `Order ${order.id} was marked PAID but has no recipient tracking token.`,
+      );
+    }
+
+    if (finalizedOrder.recipientTrackingEnabled !== true) {
+      throw new Error(
+        `Order ${order.id} was marked PAID but recipient tracking is not enabled.`,
+      );
+    }
+
     /*
      * ------------------------------------------------------
      * 14. FINAL SUCCESS
@@ -1361,6 +1417,10 @@ exports.handler = async (event) => {
       fundsStatus: finalizedOrder.fundsStatus,
 
       deliveryVerificationCode: finalizedOrder.deliveryVerificationCode,
+
+      recipientTrackingToken: finalizedOrder.recipientTrackingToken,
+
+      recipientTrackingEnabled: finalizedOrder.recipientTrackingEnabled,
     });
   } catch (error) {
     console.error("==========================================");

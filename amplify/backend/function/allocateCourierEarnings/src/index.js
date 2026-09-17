@@ -78,33 +78,24 @@ availableBalance
 ============================================================
 */
 
-
 /* ==========================================================
    ENVIRONMENT VARIABLES
 ========================================================== */
 
-const GRAPHQL_ENDPOINT =
-  process.env.API_ATUA_GRAPHQLAPIENDPOINTOUTPUT;
+const GRAPHQL_ENDPOINT = process.env.API_ATUA_GRAPHQLAPIENDPOINTOUTPUT;
 
-const API_KEY =
-  process.env.API_ATUA_GRAPHQLAPIKEYOUTPUT;
-
+const API_KEY = process.env.API_ATUA_GRAPHQLAPIKEYOUTPUT;
 
 /* ==========================================================
    MAIN HANDLER
 ========================================================== */
 
 exports.handler = async (event) => {
-
-  console.log(
-    "ALLOCATE COURIER EARNINGS EVENT:",
-    JSON.stringify(event)
-  );
+  console.log("ALLOCATE COURIER EARNINGS EVENT:", JSON.stringify(event));
 
   let orderID = null;
 
   try {
-
     /*
     ----------------------------------------------------------
     1. GET ORDER ID
@@ -112,19 +103,13 @@ exports.handler = async (event) => {
     */
 
     orderID =
-      event?.orderID ||
-      event?.arguments?.orderID ||
-      event?.detail?.orderID;
+      event?.orderID || event?.arguments?.orderID || event?.detail?.orderID;
 
     if (!orderID) {
       throw new Error("orderID is required");
     }
 
-    console.log(
-      "Processing order:",
-      orderID
-    );
-
+    console.log("Processing order:", orderID);
 
     /*
     ----------------------------------------------------------
@@ -156,43 +141,23 @@ exports.handler = async (event) => {
       }
     `;
 
-
-    const orderResponse =
-      await graphqlRequest(
-        getOrderQuery,
-        {
-          id: orderID,
-        }
-      );
-
+    const orderResponse = await graphqlRequest(getOrderQuery, {
+      id: orderID,
+    });
 
     if (orderResponse.errors) {
-
       throw new Error(
-        `Failed to fetch order: ${JSON.stringify(
-          orderResponse.errors
-        )}`
+        `Failed to fetch order: ${JSON.stringify(orderResponse.errors)}`,
       );
     }
 
-
-    const order =
-      orderResponse?.data?.getOrder;
-
+    const order = orderResponse?.data?.getOrder;
 
     if (!order) {
-
-      throw new Error(
-        `Order not found: ${orderID}`
-      );
+      throw new Error(`Order not found: ${orderID}`);
     }
 
-
-    console.log(
-      "ORDER:",
-      JSON.stringify(order)
-    );
-
+    console.log("ORDER:", JSON.stringify(order));
 
     /*
     ----------------------------------------------------------
@@ -208,15 +173,11 @@ exports.handler = async (event) => {
     ----------------------------------------------------------
     */
 
-    if (
-      order.paymentStatus !== "PAID"
-    ) {
-
+    if (order.paymentStatus !== "PAID") {
       throw new Error(
-        `Order ${orderID} is not PAID. Current paymentStatus: ${order.paymentStatus}`
+        `Order ${orderID} is not PAID. Current paymentStatus: ${order.paymentStatus}`,
       );
     }
-
 
     /*
     ----------------------------------------------------------
@@ -224,23 +185,13 @@ exports.handler = async (event) => {
     ----------------------------------------------------------
     */
 
-    const courierID =
-      order.assignedCourierId;
-
+    const courierID = order.assignedCourierId;
 
     if (!courierID) {
-
-      throw new Error(
-        `Order ${orderID} does not have an assigned courier`
-      );
+      throw new Error(`Order ${orderID} does not have an assigned courier`);
     }
 
-
-    console.log(
-      "Assigned courier:",
-      courierID
-    );
-
+    console.log("Assigned courier:", courierID);
 
     /*
     ----------------------------------------------------------
@@ -248,26 +199,15 @@ exports.handler = async (event) => {
     ----------------------------------------------------------
     */
 
-    const earnings =
-      Number(order.courierEarnings || 0);
+    const earnings = Number(order.courierEarnings || 0);
 
-
-    if (
-      !Number.isFinite(earnings) ||
-      earnings <= 0
-    ) {
-
+    if (!Number.isFinite(earnings) || earnings <= 0) {
       throw new Error(
-        `Invalid courier earnings for order ${orderID}: ${order.courierEarnings}`
+        `Invalid courier earnings for order ${orderID}: ${order.courierEarnings}`,
       );
     }
 
-
-    console.log(
-      "Courier earnings:",
-      earnings
-    );
-
+    console.log("Courier earnings:", earnings);
 
     /*
     ----------------------------------------------------------
@@ -285,77 +225,49 @@ exports.handler = async (event) => {
     ----------------------------------------------------------
     */
 
-    const allocationStatus =
-      order.earningsAllocationStatus;
+    const allocationStatus = order.earningsAllocationStatus;
 
-
-    if (
-      allocationStatus === "ALLOCATED"
-    ) {
-
-      console.log(
-        `Order ${orderID} earnings already allocated`
-      );
-
+    if (allocationStatus === "ALLOCATED") {
+      console.log(`Order ${orderID} earnings already allocated`);
 
       return successResponse({
-        message:
-          "Courier earnings already allocated",
+        message: "Courier earnings already allocated",
 
         orderID,
 
         courierID,
 
-        amount:
-          earnings,
+        amount: earnings,
 
-        status:
-          "ALLOCATED",
+        status: "ALLOCATED",
 
-        alreadyAllocated:
-          true,
+        alreadyAllocated: true,
       });
     }
 
-
-    if (
-      allocationStatus === "PROCESSING"
-    ) {
-
-      console.log(
-        `Order ${orderID} allocation is already processing`
-      );
-
+    if (allocationStatus === "PROCESSING") {
+      console.log(`Order ${orderID} allocation is already processing`);
 
       return successResponse({
-        message:
-          "Courier earnings allocation is already processing",
+        message: "Courier earnings allocation is already processing",
 
         orderID,
 
         courierID,
 
-        amount:
-          earnings,
+        amount: earnings,
 
-        status:
-          "PROCESSING",
+        status: "PROCESSING",
 
-        alreadyProcessing:
-          true,
+        alreadyProcessing: true,
       });
     }
 
-
-    if (
-      allocationStatus !== "NOT_ALLOCATED"
-    ) {
-
+    if (allocationStatus !== "NOT_ALLOCATED") {
       throw new Error(
-        `Order ${orderID} has invalid earningsAllocationStatus: ${allocationStatus}`
+        `Order ${orderID} has invalid earningsAllocationStatus: ${allocationStatus}`,
       );
     }
-
 
     /*
     ----------------------------------------------------------
@@ -394,33 +306,19 @@ exports.handler = async (event) => {
       }
     `;
 
+    const claimResponse = await graphqlRequest(claimOrderMutation, {
+      input: {
+        id: orderID,
 
-    const claimResponse =
-      await graphqlRequest(
-        claimOrderMutation,
-        {
+        earningsAllocationStatus: "PROCESSING",
+      },
 
-          input: {
-
-            id:
-              orderID,
-
-            earningsAllocationStatus:
-              "PROCESSING",
-          },
-
-
-          condition: {
-
-            earningsAllocationStatus: {
-              eq: "NOT_ALLOCATED",
-            },
-
-          },
-
-        }
-      );
-
+      condition: {
+        earningsAllocationStatus: {
+          eq: "NOT_ALLOCATED",
+        },
+      },
+    });
 
     /*
     ----------------------------------------------------------
@@ -428,17 +326,11 @@ exports.handler = async (event) => {
     ----------------------------------------------------------
     */
 
-    if (
-      claimResponse.errors
-    ) {
-
+    if (claimResponse.errors) {
       console.error(
         "ORDER CLAIM FAILED:",
-        JSON.stringify(
-          claimResponse.errors
-        )
+        JSON.stringify(claimResponse.errors),
       );
-
 
       /*
       Re-read the order.
@@ -446,84 +338,50 @@ exports.handler = async (event) => {
       Another Lambda invocation may have claimed it.
       */
 
-      const checkResponse =
-        await graphqlRequest(
-          getOrderQuery,
-          {
-            id:
-              orderID,
-          }
-        );
+      const checkResponse = await graphqlRequest(getOrderQuery, {
+        id: orderID,
+      });
 
+      const currentOrder = checkResponse?.data?.getOrder;
 
-      const currentOrder =
-        checkResponse?.data?.getOrder;
-
-
-      if (
-        currentOrder?.earningsAllocationStatus ===
-        "ALLOCATED"
-      ) {
-
+      if (currentOrder?.earningsAllocationStatus === "ALLOCATED") {
         return successResponse({
-
-          message:
-            "Courier earnings were already allocated",
+          message: "Courier earnings were already allocated",
 
           orderID,
 
           courierID,
 
-          amount:
-            earnings,
+          amount: earnings,
 
-          status:
-            "ALLOCATED",
+          status: "ALLOCATED",
 
-          alreadyAllocated:
-            true,
-
+          alreadyAllocated: true,
         });
       }
 
-
-      if (
-        currentOrder?.earningsAllocationStatus ===
-        "PROCESSING"
-      ) {
-
+      if (currentOrder?.earningsAllocationStatus === "PROCESSING") {
         return successResponse({
-
-          message:
-            "Courier earnings are already being processed",
+          message: "Courier earnings are already being processed",
 
           orderID,
 
           courierID,
 
-          amount:
-            earnings,
+          amount: earnings,
 
-          status:
-            "PROCESSING",
+          status: "PROCESSING",
 
-          alreadyProcessing:
-            true,
-
+          alreadyProcessing: true,
         });
       }
-
 
       throw new Error(
-        `Unable to claim order ${orderID} for earnings allocation`
+        `Unable to claim order ${orderID} for earnings allocation`,
       );
     }
 
-
-    console.log(
-      `Order ${orderID} successfully claimed`
-    );
-
+    console.log(`Order ${orderID} successfully claimed`);
 
     /*
     ----------------------------------------------------------
@@ -552,46 +410,23 @@ exports.handler = async (event) => {
       }
     `;
 
+    const courierResponse = await graphqlRequest(getCourierQuery, {
+      id: courierID,
+    });
 
-    const courierResponse =
-      await graphqlRequest(
-        getCourierQuery,
-        {
-          id:
-            courierID,
-        }
-      );
-
-
-    if (
-      courierResponse.errors
-    ) {
-
+    if (courierResponse.errors) {
       throw new Error(
-        `Failed to fetch courier: ${JSON.stringify(
-          courierResponse.errors
-        )}`
+        `Failed to fetch courier: ${JSON.stringify(courierResponse.errors)}`,
       );
     }
 
-
-    const courier =
-      courierResponse?.data?.getCourier;
-
+    const courier = courierResponse?.data?.getCourier;
 
     if (!courier) {
-
-      throw new Error(
-        `Courier not found: ${courierID}`
-      );
+      throw new Error(`Courier not found: ${courierID}`);
     }
 
-
-    console.log(
-      "COURIER:",
-      JSON.stringify(courier)
-    );
-
+    console.log("COURIER:", JSON.stringify(courier));
 
     /*
     ----------------------------------------------------------
@@ -600,7 +435,6 @@ exports.handler = async (event) => {
     */
 
     let wallet = null;
-
 
     /*
     ----------------------------------------------------------
@@ -613,10 +447,7 @@ exports.handler = async (event) => {
     ----------------------------------------------------------
     */
 
-    if (
-      courier.walletID
-    ) {
-
+    if (courier.walletID) {
       const getWalletQuery = `
         query GetWallet($id: ID!) {
 
@@ -634,33 +465,20 @@ exports.handler = async (event) => {
         }
       `;
 
+      const walletResponse = await graphqlRequest(getWalletQuery, {
+        id: courier.walletID,
+      });
 
-      const walletResponse =
-        await graphqlRequest(
-          getWalletQuery,
-          {
-            id:
-              courier.walletID,
-          }
-        );
-
-
-      if (
-        walletResponse.errors
-      ) {
-
+      if (walletResponse.errors) {
         throw new Error(
           `Failed to fetch courier wallet: ${JSON.stringify(
-            walletResponse.errors
-          )}`
+            walletResponse.errors,
+          )}`,
         );
       }
 
-
-      wallet =
-        walletResponse?.data?.getWallet;
+      wallet = walletResponse?.data?.getWallet;
     }
-
 
     /*
     ----------------------------------------------------------
@@ -675,7 +493,6 @@ exports.handler = async (event) => {
     */
 
     if (!wallet) {
-
       const listWalletsQuery = `
         query ListWallets(
           $filter: ModelWalletFilterInput
@@ -700,46 +517,28 @@ exports.handler = async (event) => {
         }
       `;
 
+      const walletResponse = await graphqlRequest(listWalletsQuery, {
+        filter: {
+          ownerID: {
+            eq: courierID,
+          },
 
-      const walletResponse =
-        await graphqlRequest(
-          listWalletsQuery,
-          {
+          ownerType: {
+            eq: "COURIER",
+          },
+        },
+      });
 
-            filter: {
-
-              ownerID: {
-                eq:
-                  courierID,
-              },
-
-              ownerType: {
-                eq:
-                  "COURIER",
-              },
-
-            },
-
-          }
-        );
-
-
-      if (
-        walletResponse.errors
-      ) {
-
+      if (walletResponse.errors) {
         throw new Error(
           `Failed to search courier wallet: ${JSON.stringify(
-            walletResponse.errors
-          )}`
+            walletResponse.errors,
+          )}`,
         );
       }
 
-
-      wallet =
-        walletResponse?.data?.listWallets?.items?.[0];
+      wallet = walletResponse?.data?.listWallets?.items?.[0];
     }
-
 
     /*
     ----------------------------------------------------------
@@ -748,12 +547,8 @@ exports.handler = async (event) => {
     */
 
     if (!wallet) {
-
-      throw new Error(
-        `Wallet not found for courier ${courierID}`
-      );
+      throw new Error(`Wallet not found for courier ${courierID}`);
     }
-
 
     /*
     ----------------------------------------------------------
@@ -761,31 +556,17 @@ exports.handler = async (event) => {
     ----------------------------------------------------------
     */
 
-    if (
-      wallet.ownerID !== courierID
-    ) {
-
+    if (wallet.ownerID !== courierID) {
       throw new Error(
-        `Wallet ${wallet.id} does not belong to courier ${courierID}`
+        `Wallet ${wallet.id} does not belong to courier ${courierID}`,
       );
     }
 
-
-    if (
-      wallet.ownerType !== "COURIER"
-    ) {
-
-      throw new Error(
-        `Wallet ${wallet.id} is not a courier wallet`
-      );
+    if (wallet.ownerType !== "COURIER") {
+      throw new Error(`Wallet ${wallet.id} is not a courier wallet`);
     }
 
-
-    console.log(
-      "COURIER WALLET:",
-      JSON.stringify(wallet)
-    );
-
+    console.log("COURIER WALLET:", JSON.stringify(wallet));
 
     /*
     ----------------------------------------------------------
@@ -806,27 +587,13 @@ exports.handler = async (event) => {
     ----------------------------------------------------------
     */
 
-    const currentPendingBalance =
-      Number(
-        wallet.pendingBalance || 0
-      );
+    const currentPendingBalance = Number(wallet.pendingBalance || 0);
 
+    const currentLifetimeEarnings = Number(wallet.lifetimeEarnings || 0);
 
-    const currentLifetimeEarnings =
-      Number(
-        wallet.lifetimeEarnings || 0
-      );
+    const newPendingBalance = currentPendingBalance + earnings;
 
-
-    const newPendingBalance =
-      currentPendingBalance +
-      earnings;
-
-
-    const newLifetimeEarnings =
-      currentLifetimeEarnings +
-      earnings;
-
+    const newLifetimeEarnings = currentLifetimeEarnings + earnings;
 
     /*
     ----------------------------------------------------------
@@ -854,51 +621,32 @@ exports.handler = async (event) => {
       }
     `;
 
+    const walletUpdateResponse = await graphqlRequest(updateWalletMutation, {
+      input: {
+        id: wallet.id,
 
-    const walletUpdateResponse =
-      await graphqlRequest(
-        updateWalletMutation,
-        {
-
-          input: {
-
-            id:
-              wallet.id,
-
-            /*
+        /*
             DO NOT CHANGE availableBalance HERE.
             */
 
-            pendingBalance:
-              newPendingBalance,
+        pendingBalance: newPendingBalance,
 
-            lifetimeEarnings:
-              newLifetimeEarnings,
-          },
+        lifetimeEarnings: newLifetimeEarnings,
+      },
+    });
 
-        }
-      );
-
-
-    if (
-      walletUpdateResponse.errors
-    ) {
-
+    if (walletUpdateResponse.errors) {
       throw new Error(
         `Failed to update wallet: ${JSON.stringify(
-          walletUpdateResponse.errors
-        )}`
+          walletUpdateResponse.errors,
+        )}`,
       );
     }
 
-
     console.log(
       "WALLET UPDATED:",
-      JSON.stringify(
-        walletUpdateResponse?.data?.updateWallet
-      )
+      JSON.stringify(walletUpdateResponse?.data?.updateWallet),
     );
-
 
     /*
     ----------------------------------------------------------
@@ -916,9 +664,7 @@ exports.handler = async (event) => {
     ----------------------------------------------------------
     */
 
-    const transactionReference =
-      `EARNINGS-${orderID}`;
-
+    const transactionReference = `EARNINGS-${orderID}`;
 
     /*
     ----------------------------------------------------------
@@ -960,44 +706,27 @@ exports.handler = async (event) => {
       }
     `;
 
-
-    const existingTransactionResponse =
-      await graphqlRequest(
-        existingTransactionQuery,
-        {
-
-          filter: {
-
-            reference: {
-              eq:
-                transactionReference,
-            },
-
+    const existingTransactionResponse = await graphqlRequest(
+      existingTransactionQuery,
+      {
+        filter: {
+          reference: {
+            eq: transactionReference,
           },
+        },
+      },
+    );
 
-        }
-      );
-
-
-    if (
-      existingTransactionResponse.errors
-    ) {
-
+    if (existingTransactionResponse.errors) {
       throw new Error(
         `Failed to check existing transaction: ${JSON.stringify(
-          existingTransactionResponse.errors
-        )}`
+          existingTransactionResponse.errors,
+        )}`,
       );
     }
 
-
     const existingTransaction =
-      existingTransactionResponse
-        ?.data
-        ?.listTransactions
-        ?.items
-        ?.[0];
-
+      existingTransactionResponse?.data?.listTransactions?.items?.[0];
 
     /*
     ----------------------------------------------------------
@@ -1006,7 +735,6 @@ exports.handler = async (event) => {
     */
 
     if (!existingTransaction) {
-
       const createTransactionMutation = `
         mutation CreateTransaction(
           $input: CreateTransactionInput!
@@ -1037,73 +765,47 @@ exports.handler = async (event) => {
         }
       `;
 
+      const transactionResponse = await graphqlRequest(
+        createTransactionMutation,
+        {
+          input: {
+            walletID: wallet.id,
 
-      const transactionResponse =
-        await graphqlRequest(
-          createTransactionMutation,
-          {
+            type: "CREDIT",
 
-            input: {
+            amount: earnings,
 
-              walletID:
-                wallet.id,
+            description: "Courier earnings allocated to pending balance",
 
-              type:
-                "CREDIT",
+            orderID: orderID,
 
-              amount:
-                earnings,
+            paymentID: order.paymentID || null,
 
-              description:
-                "Courier earnings allocated to pending balance",
+            reference: transactionReference,
 
-              orderID:
-                orderID,
+            status: "PENDING",
+          },
+        },
+      );
 
-              paymentID:
-                order.paymentID || null,
-
-              reference:
-                transactionReference,
-
-              status:
-                "PENDING",
-            },
-
-          }
-        );
-
-
-      if (
-        transactionResponse.errors
-      ) {
-
+      if (transactionResponse.errors) {
         throw new Error(
           `Failed to create transaction: ${JSON.stringify(
-            transactionResponse.errors
-          )}`
+            transactionResponse.errors,
+          )}`,
         );
       }
 
-
       console.log(
         "TRANSACTION CREATED:",
-        JSON.stringify(
-          transactionResponse?.data?.createTransaction
-        )
+        JSON.stringify(transactionResponse?.data?.createTransaction),
       );
-
     } else {
-
       console.log(
         "TRANSACTION ALREADY EXISTS:",
-        JSON.stringify(
-          existingTransaction
-        )
+        JSON.stringify(existingTransaction),
       );
-
     }
-
 
     /*
     ----------------------------------------------------------
@@ -1143,51 +845,30 @@ exports.handler = async (event) => {
       }
     `;
 
+    const finalizedAt = new Date().toISOString();
 
-    const finalizedAt =
-      new Date().toISOString();
+    const finalizeResponse = await graphqlRequest(finalizeOrderMutation, {
+      input: {
+        id: orderID,
 
+        earningsAllocationStatus: "ALLOCATED",
 
-    const finalizeResponse =
-      await graphqlRequest(
-        finalizeOrderMutation,
-        {
+        earningsAllocatedAt: finalizedAt,
+      },
+    });
 
-          input: {
-
-            id:
-              orderID,
-
-            earningsAllocationStatus:
-              "ALLOCATED",
-
-            earningsAllocatedAt:
-              finalizedAt,
-          },
-
-        }
-      );
-
-
-    if (
-      finalizeResponse.errors
-    ) {
-
+    if (finalizeResponse.errors) {
       throw new Error(
         `Wallet was updated but order could not be finalized: ${JSON.stringify(
-          finalizeResponse.errors
-        )}`
+          finalizeResponse.errors,
+        )}`,
       );
     }
 
-
     console.log(
       "ORDER FINALIZED:",
-      JSON.stringify(
-        finalizeResponse?.data?.updateOrder
-      )
+      JSON.stringify(finalizeResponse?.data?.updateOrder),
     );
-
 
     /*
     ----------------------------------------------------------
@@ -1196,50 +877,30 @@ exports.handler = async (event) => {
     */
 
     return successResponse({
-
-      message:
-        "Courier earnings allocated successfully",
+      message: "Courier earnings allocated successfully",
 
       orderID,
 
       courierID,
 
-      amount:
-        earnings,
+      amount: earnings,
 
-      walletID:
-        wallet.id,
+      walletID: wallet.id,
 
-      previousPendingBalance:
-        currentPendingBalance,
+      previousPendingBalance: currentPendingBalance,
 
-      newPendingBalance:
-        newPendingBalance,
+      newPendingBalance: newPendingBalance,
 
-      previousLifetimeEarnings:
-        currentLifetimeEarnings,
+      previousLifetimeEarnings: currentLifetimeEarnings,
 
-      newLifetimeEarnings:
-        newLifetimeEarnings,
+      newLifetimeEarnings: newLifetimeEarnings,
 
-      availableBalance:
-        Number(
-          wallet.availableBalance || 0
-        ),
+      availableBalance: Number(wallet.availableBalance || 0),
 
-      status:
-        "ALLOCATED",
-
+      status: "ALLOCATED",
     });
-
-
   } catch (error) {
-
-    console.error(
-      "ALLOCATE COURIER EARNINGS ERROR:",
-      error
-    );
-
+    console.error("ALLOCATE COURIER EARNINGS ERROR:", error);
 
     /*
     ----------------------------------------------------------
@@ -1255,9 +916,7 @@ exports.handler = async (event) => {
     */
 
     try {
-
       if (orderID) {
-
         const markFailedMutation = `
           mutation UpdateOrder(
             $input: UpdateOrderInput!
@@ -1276,60 +935,33 @@ exports.handler = async (event) => {
           }
         `;
 
+        const failedResponse = await graphqlRequest(markFailedMutation, {
+          input: {
+            id: orderID,
 
-        const failedResponse =
-          await graphqlRequest(
-            markFailedMutation,
-            {
+            earningsAllocationStatus: "FAILED",
+          },
 
-              input: {
+          condition: {
+            earningsAllocationStatus: {
+              eq: "PROCESSING",
+            },
+          },
+        });
 
-                id:
-                  orderID,
-
-                earningsAllocationStatus:
-                  "FAILED",
-              },
-
-
-              condition: {
-
-                earningsAllocationStatus: {
-                  eq:
-                    "PROCESSING",
-                },
-
-              },
-
-            }
-          );
-
-
-        if (
-          failedResponse.errors
-        ) {
-
+        if (failedResponse.errors) {
           console.error(
             "FAILED TO MARK ALLOCATION AS FAILED:",
-            JSON.stringify(
-              failedResponse.errors
-            )
+            JSON.stringify(failedResponse.errors),
           );
         }
-
       }
-
-    } catch (
-      failureUpdateError
-    ) {
-
+    } catch (failureUpdateError) {
       console.error(
         "ERROR WHILE MARKING ALLOCATION FAILED:",
-        failureUpdateError
+        failureUpdateError,
       );
-
     }
-
 
     /*
     ----------------------------------------------------------
@@ -1338,147 +970,77 @@ exports.handler = async (event) => {
     */
 
     return {
+      statusCode: 500,
 
-      statusCode:
-        500,
+      body: JSON.stringify({
+        success: false,
 
-      body:
-        JSON.stringify({
+        message: error.message || "Courier earnings allocation failed",
 
-          success:
-            false,
-
-          message:
-            error.message ||
-            "Courier earnings allocation failed",
-
-          orderID,
-
-        }),
-
+        orderID,
+      }),
     };
   }
 };
-
 
 /* ==========================================================
    GRAPHQL REQUEST HELPER
 ========================================================== */
 
-async function graphqlRequest(
-  query,
-  variables = {}
-) {
-
+async function graphqlRequest(query, variables = {}) {
   if (!GRAPHQL_ENDPOINT) {
-
-    throw new Error(
-      "Missing API_ATUA_GRAPHQLAPIENDPOINTOUTPUT"
-    );
-
+    throw new Error("Missing API_ATUA_GRAPHQLAPIENDPOINTOUTPUT");
   }
-
 
   if (!API_KEY) {
-
-    throw new Error(
-      "Missing API_ATUA_GRAPHQLAPIKEYOUTPUT"
-    );
-
+    throw new Error("Missing API_ATUA_GRAPHQLAPIKEYOUTPUT");
   }
 
+  const response = await fetch(GRAPHQL_ENDPOINT, {
+    method: "POST",
 
-  const response =
-    await fetch(
-      GRAPHQL_ENDPOINT,
-      {
+    headers: {
+      "Content-Type": "application/json",
 
-        method:
-          "POST",
+      "x-api-key": API_KEY,
+    },
 
-        headers: {
+    body: JSON.stringify({
+      query,
 
-          "Content-Type":
-            "application/json",
+      variables,
+    }),
+  });
 
-          "x-api-key":
-            API_KEY,
-
-        },
-
-        body:
-          JSON.stringify({
-
-            query,
-
-            variables,
-
-          }),
-
-      }
-    );
-
-
-  const responseText =
-    await response.text();
-
+  const responseText = await response.text();
 
   let responseData;
 
-
   try {
-
-    responseData =
-      JSON.parse(
-        responseText
-      );
-
+    responseData = JSON.parse(responseText);
   } catch (error) {
-
-    throw new Error(
-      `GraphQL returned invalid JSON: ${responseText}`
-    );
-
+    throw new Error(`GraphQL returned invalid JSON: ${responseText}`);
   }
 
-
-  if (
-    !response.ok
-  ) {
-
-    throw new Error(
-      `GraphQL HTTP ${response.status}: ${responseText}`
-    );
-
+  if (!response.ok) {
+    throw new Error(`GraphQL HTTP ${response.status}: ${responseText}`);
   }
-
 
   return responseData;
 }
-
 
 /* ==========================================================
    SUCCESS RESPONSE HELPER
 ========================================================== */
 
-function successResponse(
-  data
-) {
-
+function successResponse(data) {
   return {
+    statusCode: 200,
 
-    statusCode:
-      200,
+    body: JSON.stringify({
+      success: true,
 
-    body:
-      JSON.stringify({
-
-        success:
-          true,
-
-        ...data,
-
-      }),
-
+      ...data,
+    }),
   };
 }

@@ -6,71 +6,51 @@
 	REGION
  Amplify Params - DO NOT EDIT */
 
-const {
-  SSMClient,
-  GetParameterCommand,
-} = require("@aws-sdk/client-ssm");
+const { SSMClient, GetParameterCommand } = require("@aws-sdk/client-ssm");
 
 const https = require("https");
 const crypto = require("crypto");
-
 
 /* ==========================================================
    CONFIGURATION
 ========================================================== */
 
-const GRAPHQL_ENDPOINT =
-  process.env.API_ATUA_GRAPHQLAPIENDPOINTOUTPUT;
+const GRAPHQL_ENDPOINT = process.env.API_ATUA_GRAPHQLAPIENDPOINTOUTPUT;
 
-const GRAPHQL_API_KEY =
-  process.env.API_ATUA_GRAPHQLAPIKEYOUTPUT;
+const GRAPHQL_API_KEY = process.env.API_ATUA_GRAPHQLAPIKEYOUTPUT;
 
-const REGION =
-  process.env.REGION ||
-  process.env.AWS_REGION;
-
+const REGION = process.env.REGION || process.env.AWS_REGION;
 
 /* ==========================================================
    GET PAYSTACK SECRET
 ========================================================== */
 
 const getPaystackSecretKey = async () => {
-
-  const parameterName =
-    process.env.PAYSTACK_SECRET_KEY;
+  const parameterName = process.env.PAYSTACK_SECRET_KEY;
 
   if (!parameterName) {
-    throw new Error(
-      "PAYSTACK_SECRET_KEY is not configured."
-    );
+    throw new Error("PAYSTACK_SECRET_KEY is not configured.");
   }
 
-  const ssmClient =
-    new SSMClient({
-      region: REGION,
-    });
+  const ssmClient = new SSMClient({
+    region: REGION,
+  });
 
-  const command =
-    new GetParameterCommand({
-      Name: parameterName,
-      WithDecryption: true,
-    });
+  const command = new GetParameterCommand({
+    Name: parameterName,
+    WithDecryption: true,
+  });
 
-  const result =
-    await ssmClient.send(command);
+  const result = await ssmClient.send(command);
 
-  const secretKey =
-    result?.Parameter?.Value;
+  const secretKey = result?.Parameter?.Value;
 
   if (!secretKey) {
-    throw new Error(
-      "Unable to retrieve Paystack secret key."
-    );
+    throw new Error("Unable to retrieve Paystack secret key.");
   }
 
   return secretKey;
 };
-
 
 /* ==========================================================
    GRAPHQL REQUEST
@@ -79,279 +59,168 @@ const getPaystackSecretKey = async () => {
 const graphqlRequest = async (
   query,
   variables = {},
-  operationName = "GraphQL operation"
+  operationName = "GraphQL operation",
 ) => {
-
   if (!GRAPHQL_ENDPOINT) {
-    throw new Error(
-      "Atua GraphQL endpoint is not configured."
-    );
+    throw new Error("Atua GraphQL endpoint is not configured.");
   }
 
   if (!GRAPHQL_API_KEY) {
-    throw new Error(
-      "Atua GraphQL API key is not configured."
-    );
+    throw new Error("Atua GraphQL API key is not configured.");
   }
 
-  const endpoint =
-    new URL(GRAPHQL_ENDPOINT);
+  const endpoint = new URL(GRAPHQL_ENDPOINT);
 
-  const body =
-    JSON.stringify({
-      query,
-      variables,
-    });
+  const body = JSON.stringify({
+    query,
+    variables,
+  });
 
   const options = {
-    hostname:
-      endpoint.hostname,
+    hostname: endpoint.hostname,
 
-    path:
-      endpoint.pathname || "/graphql",
+    path: endpoint.pathname || "/graphql",
 
-    method:
-      "POST",
+    method: "POST",
 
     headers: {
-      "Content-Type":
-        "application/json",
+      "Content-Type": "application/json",
 
-      "Content-Length":
-        Buffer.byteLength(body),
+      "Content-Length": Buffer.byteLength(body),
 
-      "x-api-key":
-        GRAPHQL_API_KEY,
+      "x-api-key": GRAPHQL_API_KEY,
     },
   };
 
-  return new Promise(
-    (resolve, reject) => {
+  return new Promise((resolve, reject) => {
+    const request = https.request(options, (response) => {
+      let data = "";
 
-      const request =
-        https.request(
-          options,
-          (response) => {
+      response.on("data", (chunk) => {
+        data += chunk;
+      });
 
-            let data = "";
+      response.on("end", () => {
+        if (response.statusCode < 200 || response.statusCode >= 300) {
+          return reject(
+            new Error(
+              `${operationName} returned HTTP ${response.statusCode}: ${data}`,
+            ),
+          );
+        }
 
-            response.on(
-              "data",
-              (chunk) => {
-                data += chunk;
-              }
-            );
+        let parsed;
 
-            response.on(
-              "end",
-              () => {
+        try {
+          parsed = JSON.parse(data);
+        } catch (error) {
+          return reject(
+            new Error(`${operationName} returned invalid JSON: ${data}`),
+          );
+        }
 
-                if (
-                  response.statusCode < 200 ||
-                  response.statusCode >= 300
-                ) {
-
-                  return reject(
-                    new Error(
-                      `${operationName} returned HTTP ${response.statusCode}: ${data}`
-                    )
-                  );
-                }
-
-                let parsed;
-
-                try {
-
-                  parsed =
-                    JSON.parse(data);
-
-                } catch (error) {
-
-                  return reject(
-                    new Error(
-                      `${operationName} returned invalid JSON: ${data}`
-                    )
-                  );
-                }
-
-                if (
-                  parsed?.errors?.length
-                ) {
-
-                  console.error(
-                    `${operationName} GraphQL errors:`,
-                    JSON.stringify(
-                      parsed.errors
-                    )
-                  );
-
-                  return reject(
-                    new Error(
-                      parsed.errors
-                        .map(
-                          (item) =>
-                            item?.message
-                        )
-                        .filter(Boolean)
-                        .join(" | ") ||
-                      `${operationName} failed.`
-                    )
-                  );
-                }
-
-                resolve(
-                  parsed?.data ||
-                  null
-                );
-              }
-            );
-          }
-        );
-
-      request.on(
-        "error",
-        (error) => {
-
+        if (parsed?.errors?.length) {
           console.error(
-            `${operationName} request error:`,
-            error
+            `${operationName} GraphQL errors:`,
+            JSON.stringify(parsed.errors),
           );
 
-          reject(error);
+          return reject(
+            new Error(
+              parsed.errors
+                .map((item) => item?.message)
+                .filter(Boolean)
+                .join(" | ") || `${operationName} failed.`,
+            ),
+          );
         }
-      );
 
-      request.write(body);
-      request.end();
-    }
-  );
+        resolve(parsed?.data || null);
+      });
+    });
+
+    request.on("error", (error) => {
+      console.error(`${operationName} request error:`, error);
+
+      reject(error);
+    });
+
+    request.write(body);
+    request.end();
+  });
 };
-
 
 /* ==========================================================
    PAYSTACK REQUEST
 ========================================================== */
 
-const paystackRequest = async ({
-  method,
-  path,
-  secretKey,
-  body = null,
-}) => {
-
-  const payload =
-    body !== null
-      ? JSON.stringify(body)
-      : null;
+const paystackRequest = async ({ method, path, secretKey, body = null }) => {
+  const payload = body !== null ? JSON.stringify(body) : null;
 
   const options = {
-    hostname:
-      "api.paystack.co",
+    hostname: "api.paystack.co",
 
     path,
 
     method,
 
     headers: {
-      Authorization:
-        `Bearer ${secretKey}`,
+      Authorization: `Bearer ${secretKey}`,
 
-      Accept:
-        "application/json",
+      Accept: "application/json",
     },
   };
 
   if (payload) {
+    options.headers["Content-Type"] = "application/json";
 
-    options.headers[
-      "Content-Type"
-    ] =
-      "application/json";
-
-    options.headers[
-      "Content-Length"
-    ] =
-      Buffer.byteLength(payload);
+    options.headers["Content-Length"] = Buffer.byteLength(payload);
   }
 
-  return new Promise(
-    (resolve, reject) => {
+  return new Promise((resolve, reject) => {
+    const request = https.request(options, (response) => {
+      let data = "";
 
-      const request =
-        https.request(
-          options,
-          (response) => {
+      response.on("data", (chunk) => {
+        data += chunk;
+      });
 
-            let data = "";
+      response.on("end", () => {
+        let parsed;
 
-            response.on(
-              "data",
-              (chunk) => {
-                data += chunk;
-              }
-            );
-
-            response.on(
-              "end",
-              () => {
-
-                let parsed;
-
-                try {
-
-                  parsed =
-                    JSON.parse(data);
-
-                } catch (error) {
-
-                  return reject(
-                    new Error(
-                      `Paystack returned invalid JSON: ${data}`
-                    )
-                  );
-                }
-
-                resolve({
-                  statusCode:
-                    response.statusCode,
-
-                  body:
-                    parsed,
-                });
-              }
-            );
-          }
-        );
-
-      request.on(
-        "error",
-        (error) => {
-
-          error.isPaystackNetworkError =
-            true;
-
-          reject(error);
+        try {
+          parsed = JSON.parse(data);
+        } catch (error) {
+          return reject(new Error(`Paystack returned invalid JSON: ${data}`));
         }
-      );
 
-      if (payload) {
-        request.write(payload);
-      }
+        resolve({
+          statusCode: response.statusCode,
 
-      request.end();
+          body: parsed,
+        });
+      });
+    });
+
+    request.on("error", (error) => {
+      error.isPaystackNetworkError = true;
+
+      reject(error);
+    });
+
+    if (payload) {
+      request.write(payload);
     }
-  );
-};
 
+    request.end();
+  });
+};
 
 /* ==========================================================
    GET COURIER
 ========================================================== */
 
-const getCourier = async (
-  courierID
-) => {
-
+const getCourier = async (courierID) => {
   const query = `
     query GetCourier($id: ID!) {
 
@@ -376,31 +245,22 @@ const getCourier = async (
     }
   `;
 
-  const data =
-    await graphqlRequest(
-      query,
-      {
-        id:
-          courierID,
-      },
-      "GetCourier"
-    );
-
-  return (
-    data?.getCourier ||
-    null
+  const data = await graphqlRequest(
+    query,
+    {
+      id: courierID,
+    },
+    "GetCourier",
   );
-};
 
+  return data?.getCourier || null;
+};
 
 /* ==========================================================
    GET COURIER WALLET
 ========================================================== */
 
-const getCourierWallet = async (
-  courierID
-) => {
-
+const getCourierWallet = async (courierID) => {
   const query = `
     query ListWallets(
       $filter: ModelWalletFilterInput
@@ -431,33 +291,24 @@ const getCourierWallet = async (
     }
   `;
 
-  const data =
-    await graphqlRequest(
-      query,
-      {
-        filter: {
+  const data = await graphqlRequest(
+    query,
+    {
+      filter: {
+        ownerID: {
+          eq: courierID,
+        },
 
-          ownerID: {
-            eq:
-              courierID,
-          },
-
-          ownerType: {
-            eq:
-              "COURIER",
-          },
-
+        ownerType: {
+          eq: "COURIER",
         },
       },
-      "GetCourierWallet"
-    );
-
-  return (
-    data?.listWallets?.items?.[0] ||
-    null
+    },
+    "GetCourierWallet",
   );
-};
 
+  return data?.listWallets?.items?.[0] || null;
+};
 
 /* ==========================================================
    GET PAYOUTS FOR COURIER
@@ -473,10 +324,7 @@ or:
 
 ========================================================== */
 
-const getActiveCourierPayouts = async (
-  courierID
-) => {
-
+const getActiveCourierPayouts = async (courierID) => {
   const query = `
     query ListPayouts(
       $filter: ModelPayoutFilterInput
@@ -522,44 +370,30 @@ const getActiveCourierPayouts = async (
     }
   `;
 
-  const data =
-    await graphqlRequest(
-      query,
-      {
-        filter: {
-
-          courierID: {
-            eq:
-              courierID,
-          },
-
+  const data = await graphqlRequest(
+    query,
+    {
+      filter: {
+        courierID: {
+          eq: courierID,
         },
       },
-      "GetCourierPayouts"
-    );
+    },
+    "GetCourierPayouts",
+  );
 
-  const payouts =
-    data?.listPayouts?.items ||
-    [];
+  const payouts = data?.listPayouts?.items || [];
 
   return payouts.filter(
-    (payout) =>
-      payout.status ===
-        "PENDING" ||
-      payout.status ===
-        "PROCESSING"
+    (payout) => payout.status === "PENDING" || payout.status === "PROCESSING",
   );
 };
-
 
 /* ==========================================================
    GET PAYOUT BY REFERENCE
 ========================================================== */
 
-const getPayoutByReference = async (
-  reference
-) => {
-
+const getPayoutByReference = async (reference) => {
   const query = `
     query ListPayouts(
       $filter: ModelPayoutFilterInput
@@ -606,37 +440,26 @@ const getPayoutByReference = async (
     }
   `;
 
-  const data =
-    await graphqlRequest(
-      query,
-      {
-        filter: {
-
-          reference: {
-            eq:
-              reference,
-          },
-
+  const data = await graphqlRequest(
+    query,
+    {
+      filter: {
+        reference: {
+          eq: reference,
         },
       },
-      "GetPayoutByReference"
-    );
-
-  return (
-    data?.listPayouts?.items?.[0] ||
-    null
+    },
+    "GetPayoutByReference",
   );
-};
 
+  return data?.listPayouts?.items?.[0] || null;
+};
 
 /* ==========================================================
    GET TRANSACTION BY REFERENCE
 ========================================================== */
 
-const getTransactionByReference = async (
-  reference
-) => {
-
+const getTransactionByReference = async (reference) => {
   const query = `
     query ListTransactions(
       $filter: ModelTransactionFilterInput
@@ -675,126 +498,79 @@ const getTransactionByReference = async (
     }
   `;
 
-  const data =
-    await graphqlRequest(
-      query,
-      {
-        filter: {
-
-          reference: {
-            eq:
-              reference,
-          },
-
+  const data = await graphqlRequest(
+    query,
+    {
+      filter: {
+        reference: {
+          eq: reference,
         },
       },
-      "GetTransactionByReference"
-    );
-
-  return (
-    data?.listTransactions?.items?.[0] ||
-    null
+    },
+    "GetTransactionByReference",
   );
-};
 
+  return data?.listTransactions?.items?.[0] || null;
+};
 
 /* ==========================================================
    CREATE TRANSFER RECIPIENT
 ========================================================== */
 
-const createTransferRecipient = async ({
-  courier,
-  secretKey,
-}) => {
-
-  if (
-    !courier.accountNumber ||
-    !courier.bankCode
-  ) {
-
-    throw new Error(
-      "Courier bank account details are incomplete."
-    );
+const createTransferRecipient = async ({ courier, secretKey }) => {
+  if (!courier.accountNumber || !courier.bankCode) {
+    throw new Error("Courier bank account details are incomplete.");
   }
 
-  if (
-    !courier.accountName
-  ) {
-
-    throw new Error(
-      "Courier account name is missing."
-    );
+  if (!courier.accountName) {
+    throw new Error("Courier account name is missing.");
   }
 
-  const response =
-    await paystackRequest({
+  const response = await paystackRequest({
+    method: "POST",
 
-      method:
-        "POST",
+    path: "/transferrecipient",
 
-      path:
-        "/transferrecipient",
+    secretKey,
 
-      secretKey,
+    body: {
+      type: "nuban",
 
-      body: {
+      name: courier.accountName,
 
-        type:
-          "nuban",
+      account_number: courier.accountNumber,
 
-        name:
-          courier.accountName,
+      bank_code: courier.bankCode,
 
-        account_number:
-          courier.accountNumber,
+      currency: "NGN",
 
-        bank_code:
-          courier.bankCode,
+      description: `Atua courier ${courier.id}`,
 
-        currency:
-          "NGN",
-
-        description:
-          `Atua courier ${courier.id}`,
-
-        metadata: {
-
-          courierID:
-            courier.id,
-
-        },
-
+      metadata: {
+        courierID: courier.id,
       },
-
-    });
+    },
+  });
 
   if (
     response.statusCode < 200 ||
     response.statusCode >= 300 ||
     !response.body?.status
   ) {
-
     throw new Error(
       response.body?.message ||
-      "Paystack transfer recipient could not be created."
+        "Paystack transfer recipient could not be created.",
     );
   }
 
-  const recipient =
-    response.body?.data;
+  const recipient = response.body?.data;
 
-  if (
-    !recipient?.recipient_code
-  ) {
-
-    throw new Error(
-      "Paystack did not return a recipient code."
-    );
+  if (!recipient?.recipient_code) {
+    throw new Error("Paystack did not return a recipient code.");
   }
 
   return recipient;
 };
-
 
 /* ==========================================================
    INITIATE TRANSFER
@@ -807,98 +583,62 @@ const initiateTransfer = async ({
   secretKey,
   courierID,
 }) => {
+  const amountInKobo = Math.round(Number(amount) * 100);
 
-  const amountInKobo =
-    Math.round(
-      Number(amount) * 100
-    );
-
-  if (
-    !Number.isFinite(
-      amountInKobo
-    ) ||
-    amountInKobo <= 0
-  ) {
-
-    throw new Error(
-      "Invalid payout amount."
-    );
+  if (!Number.isFinite(amountInKobo) || amountInKobo <= 0) {
+    throw new Error("Invalid payout amount.");
   }
 
-  const response =
-    await paystackRequest({
+  const response = await paystackRequest({
+    method: "POST",
 
-      method:
-        "POST",
+    path: "/transfer",
 
-      path:
-        "/transfer",
+    secretKey,
 
-      secretKey,
+    body: {
+      source: "balance",
 
-      body: {
+      amount: amountInKobo,
 
-        source:
-          "balance",
+      recipient: recipientCode,
 
-        amount:
-          amountInKobo,
+      reference,
 
-        recipient:
-          recipientCode,
+      reason: `Atua courier payout - ${courierID}`,
 
-        reference,
-
-        reason:
-          `Atua courier payout - ${courierID}`,
-
-        currency:
-          "NGN",
-
-      },
-
-    });
+      currency: "NGN",
+    },
+  });
 
   if (
     response.statusCode < 200 ||
     response.statusCode >= 300 ||
     !response.body?.status
   ) {
+    const error = new Error(
+      response.body?.message || "Paystack transfer could not be initiated.",
+    );
 
-    const error =
-      new Error(
-        response.body?.message ||
-        "Paystack transfer could not be initiated."
-      );
+    error.isPaystackRejected = true;
 
-    error.isPaystackRejected =
-      true;
-
-    error.paystackResponse =
-      response.body;
+    error.paystackResponse = response.body;
 
     throw error;
   }
 
-  const transfer =
-    response.body?.data;
+  const transfer = response.body?.data;
 
   if (!transfer) {
+    const error = new Error("Paystack did not return transfer data.");
 
-    const error =
-      new Error(
-        "Paystack did not return transfer data."
-      );
-
-    error.isPaystackUnknown =
-      true;
+    error.isPaystackUnknown = true;
 
     throw error;
   }
 
   return transfer;
 };
-
 
 /* ==========================================================
    VERIFY PAYSTACK TRANSFER
@@ -908,82 +648,53 @@ Used when transfer initiation has an uncertain outcome.
 
 ========================================================== */
 
-const verifyPaystackTransfer =
-  async (
-    reference,
-    secretKey
-  ) => {
+const verifyPaystackTransfer = async (reference, secretKey) => {
+  const encodedReference = encodeURIComponent(reference);
 
-    const encodedReference =
-      encodeURIComponent(
-        reference
-      );
+  const response = await paystackRequest({
+    method: "GET",
 
-    const response =
-      await paystackRequest({
+    path: `/transfer/verify/${encodedReference}`,
 
-        method:
-          "GET",
+    secretKey,
+  });
 
-        path:
-          `/transfer/verify/${encodedReference}`,
+  /*
+   * Paystack returns an error when the transfer doesn't
+   * exist yet. That is useful information for us.
+   */
 
-        secretKey,
-
-      });
-
-    /*
-     * Paystack returns an error when the transfer doesn't
-     * exist yet. That is useful information for us.
-     */
-
-    if (
-      response.statusCode ===
-        404 ||
-      response.body?.message ===
-        "Transfer not found"
-    ) {
-
-      return {
-        exists:
-          false,
-
-        status:
-          null,
-
-        transfer:
-          null,
-      };
-    }
-
-    if (
-      response.statusCode < 200 ||
-      response.statusCode >= 300 ||
-      !response.body?.status
-    ) {
-
-      throw new Error(
-        response.body?.message ||
-        "Could not verify Paystack transfer."
-      );
-    }
-
+  if (
+    response.statusCode === 404 ||
+    response.body?.message === "Transfer not found"
+  ) {
     return {
+      exists: false,
 
-      exists:
-        true,
+      status: null,
 
-      status:
-        response.body?.data?.status ||
-        null,
-
-      transfer:
-        response.body?.data ||
-        null,
-
+      transfer: null,
     };
-  };
+  }
 
+  if (
+    response.statusCode < 200 ||
+    response.statusCode >= 300 ||
+    !response.body?.status
+  ) {
+    throw new Error(
+      response.body?.message || "Could not verify Paystack transfer.",
+    );
+  }
+
+  return {
+    exists: true,
+
+    status: response.body?.data?.status || null,
+
+    transfer: response.body?.data || null,
+  };
+};
 
 /* ==========================================================
    CREATE PAYOUT
@@ -997,7 +708,6 @@ const createPayout = async ({
   reference,
   payoutMethod,
 }) => {
-
   const mutation = `
     mutation CreatePayout(
       $input: CreatePayoutInput!
@@ -1039,52 +749,38 @@ const createPayout = async ({
     }
   `;
 
-  const data =
-    await graphqlRequest(
-      mutation,
-      {
-        input: {
+  const data = await graphqlRequest(
+    mutation,
+    {
+      input: {
+        courierID,
 
-          courierID,
+        walletID,
 
-          walletID,
+        amount,
 
-          amount,
+        status: "PENDING",
 
-          status:
-            "PENDING",
+        bankName: courier.bankName,
 
-          bankName:
-            courier.bankName,
+        accountNumber: courier.accountNumber,
 
-          accountNumber:
-            courier.accountNumber,
+        reference,
 
-          reference,
-
-          payoutMethod,
-
-        },
+        payoutMethod,
       },
-      "CreatePayout"
-    );
-
-  return (
-    data?.createPayout ||
-    null
+    },
+    "CreatePayout",
   );
-};
 
+  return data?.createPayout || null;
+};
 
 /* ==========================================================
    UPDATE PAYOUT
 ========================================================== */
 
-const updatePayout = async ({
-  payout,
-  fields,
-}) => {
-
+const updatePayout = async ({ payout, fields }) => {
   const mutation = `
     mutation UpdatePayout(
       $input: UpdatePayoutInput!
@@ -1127,73 +823,40 @@ const updatePayout = async ({
   `;
 
   const input = {
-
-    id:
-      payout.id,
+    id: payout.id,
 
     ...fields,
-
   };
 
-  if (
-    Number.isInteger(
-      payout._version
-    )
-  ) {
-
-    input._version =
-      payout._version;
+  if (Number.isInteger(payout._version)) {
+    input._version = payout._version;
   }
 
-  const data =
-    await graphqlRequest(
-      mutation,
-      {
-        input,
-      },
-      "UpdatePayout"
-    );
-
-  return (
-    data?.updatePayout ||
-    null
+  const data = await graphqlRequest(
+    mutation,
+    {
+      input,
+    },
+    "UpdatePayout",
   );
-};
 
+  return data?.updatePayout || null;
+};
 
 /* ==========================================================
    UPDATE WALLET WITH VERSION LOCK
 ========================================================== */
 
-const reserveWalletBalance =
-  async ({
-    wallet,
-    amount,
-  }) => {
+const reserveWalletBalance = async ({ wallet, amount }) => {
+  const currentAvailable = Number(wallet.availableBalance || 0);
 
-    const currentAvailable =
-      Number(
-        wallet.availableBalance || 0
-      );
+  const newAvailable = Number((currentAvailable - amount).toFixed(2));
 
-    const newAvailable =
-      Number(
-        (
-          currentAvailable -
-          amount
-        ).toFixed(2)
-      );
+  if (newAvailable < 0) {
+    throw new Error("Insufficient available balance.");
+  }
 
-    if (
-      newAvailable < 0
-    ) {
-
-      throw new Error(
-        "Insufficient available balance."
-      );
-    }
-
-    const mutation = `
+  const mutation = `
       mutation UpdateWallet(
         $input: UpdateWalletInput!
       ) {
@@ -1215,17 +878,13 @@ const reserveWalletBalance =
       }
     `;
 
-    const input = {
+  const input = {
+    id: wallet.id,
 
-      id:
-        wallet.id,
+    availableBalance: newAvailable,
+  };
 
-      availableBalance:
-        newAvailable,
-
-    };
-
-    /*
+  /*
      * This is extremely important.
 
      * If another payout changes this wallet between the read
@@ -1234,75 +893,45 @@ const reserveWalletBalance =
      * payout's balance.
      */
 
-    if (
-      Number.isInteger(
-        wallet._version
-      )
-    ) {
+  if (Number.isInteger(wallet._version)) {
+    input._version = wallet._version;
+  }
 
-      input._version =
-        wallet._version;
-    }
+  const data = await graphqlRequest(
+    mutation,
+    {
+      input,
+    },
+    "ReserveWalletBalance",
+  );
 
-    const data =
-      await graphqlRequest(
-        mutation,
-        {
-          input,
-        },
-        "ReserveWalletBalance"
-      );
+  const updatedWallet = data?.updateWallet;
 
-    const updatedWallet =
-      data?.updateWallet;
+  if (!updatedWallet) {
+    throw new Error("Wallet reservation failed.");
+  }
 
-    if (!updatedWallet) {
-
-      throw new Error(
-        "Wallet reservation failed."
-      );
-    }
-
-    return updatedWallet;
-  };
-
+  return updatedWallet;
+};
 
 /* ==========================================================
    RESTORE WALLET BALANCE
 ========================================================== */
 
-const restoreWalletBalance =
-  async ({
-    courierID,
-    amount,
-  }) => {
+const restoreWalletBalance = async ({ courierID, amount }) => {
+  const wallet = await getCourierWallet(courierID);
 
-    const wallet =
-      await getCourierWallet(
-        courierID
-      );
+  if (!wallet) {
+    throw new Error(
+      `Cannot restore balance: wallet not found for courier ${courierID}.`,
+    );
+  }
 
-    if (!wallet) {
+  const currentAvailable = Number(wallet.availableBalance || 0);
 
-      throw new Error(
-        `Cannot restore balance: wallet not found for courier ${courierID}.`
-      );
-    }
+  const restored = Number((currentAvailable + amount).toFixed(2));
 
-    const currentAvailable =
-      Number(
-        wallet.availableBalance || 0
-      );
-
-    const restored =
-      Number(
-        (
-          currentAvailable +
-          amount
-        ).toFixed(2)
-      );
-
-    const mutation = `
+  const mutation = `
       mutation UpdateWallet(
         $input: UpdateWalletInput!
       ) {
@@ -1324,61 +953,41 @@ const restoreWalletBalance =
       }
     `;
 
-    const input = {
+  const input = {
+    id: wallet.id,
 
-      id:
-        wallet.id,
-
-      availableBalance:
-        restored,
-
-    };
-
-    if (
-      Number.isInteger(
-        wallet._version
-      )
-    ) {
-
-      input._version =
-        wallet._version;
-    }
-
-    const data =
-      await graphqlRequest(
-        mutation,
-        {
-          input,
-        },
-        "RestoreWalletBalance"
-      );
-
-    const updatedWallet =
-      data?.updateWallet;
-
-    if (!updatedWallet) {
-
-      throw new Error(
-        `Unable to restore wallet balance for courier ${courierID}.`
-      );
-    }
-
-    return updatedWallet;
+    availableBalance: restored,
   };
 
+  if (Number.isInteger(wallet._version)) {
+    input._version = wallet._version;
+  }
+
+  const data = await graphqlRequest(
+    mutation,
+    {
+      input,
+    },
+    "RestoreWalletBalance",
+  );
+
+  const updatedWallet = data?.updateWallet;
+
+  if (!updatedWallet) {
+    throw new Error(
+      `Unable to restore wallet balance for courier ${courierID}.`,
+    );
+  }
+
+  return updatedWallet;
+};
 
 /* ==========================================================
    CREATE DEBIT TRANSACTION
 ========================================================== */
 
-const createDebitTransaction =
-  async ({
-    walletID,
-    amount,
-    reference,
-  }) => {
-
-    const mutation = `
+const createDebitTransaction = async ({ walletID, amount, reference }) => {
+  const mutation = `
       mutation CreateTransaction(
         $input: CreateTransactionInput!
       ) {
@@ -1411,47 +1020,35 @@ const createDebitTransaction =
       }
     `;
 
-    const data =
-      await graphqlRequest(
-        mutation,
-        {
-          input: {
+  const data = await graphqlRequest(
+    mutation,
+    {
+      input: {
+        walletID,
 
-            walletID,
+        type: "DEBIT",
 
-            type:
-              "DEBIT",
+        amount,
 
-            amount,
+        description: "Courier payout initiated.",
 
-            description:
-              "Courier payout initiated.",
+        reference,
 
-            reference,
+        status: "PENDING",
+      },
+    },
+    "CreatePayoutTransaction",
+  );
 
-            status:
-              "PENDING",
-
-          },
-        },
-        "CreatePayoutTransaction"
-      );
-
-    return (
-      data?.createTransaction ||
-      null
-    );
-  };
-
+  return data?.createTransaction || null;
+};
 
 /* ==========================================================
    GET ELIGIBLE WALLETS
 ========================================================== */
 
-const getEligibleWallets =
-  async () => {
-
-    const query = `
+const getEligibleWallets = async () => {
+  const query = `
       query ListCourierWallets {
 
         listWallets(
@@ -1482,25 +1079,12 @@ const getEligibleWallets =
       }
     `;
 
-    const data =
-      await graphqlRequest(
-        query,
-        {},
-        "GetEligibleWallets"
-      );
+  const data = await graphqlRequest(query, {}, "GetEligibleWallets");
 
-    const wallets =
-      data?.listWallets?.items ||
-      [];
+  const wallets = data?.listWallets?.items || [];
 
-    return wallets.filter(
-      (wallet) =>
-        Number(
-          wallet.availableBalance || 0
-        ) > 0
-    );
-  };
-
+  return wallets.filter((wallet) => Number(wallet.availableBalance || 0) > 0);
+};
 
 /* ==========================================================
    GENERATE VALID PAYSTACK REFERENCE
@@ -1519,124 +1103,66 @@ Allowed:
 
 ========================================================== */
 
-const generatePayoutReference =
-  (courierID) => {
+const generatePayoutReference = (courierID) => {
+  const courierPart = String(courierID)
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "")
+    .slice(0, 8);
 
-    const courierPart =
-      String(
-        courierID
-      )
-        .toLowerCase()
-        .replace(
-          /[^a-z0-9]/g,
-          ""
-        )
-        .slice(
-          0,
-          8
-        );
+  const randomPart = crypto.randomBytes(12).toString("hex");
 
-    const randomPart =
-      crypto
-        .randomBytes(12)
-        .toString("hex");
+  const timestampPart = Date.now().toString(36).toLowerCase();
 
-    const timestampPart =
-      Date.now()
-        .toString(36)
-        .toLowerCase();
+  const reference = `atua_${courierPart}_${timestampPart}_${randomPart}`;
 
-    const reference =
-      `atua_${courierPart}_${timestampPart}_${randomPart}`;
-
-    return reference.slice(
-      0,
-      50
-    );
-  };
-
+  return reference.slice(0, 50);
+};
 
 /* ==========================================================
    MARK PAYOUT FAILED
 ========================================================== */
 
-const markPayoutFailed =
-  async ({
+const markPayoutFailed = async ({ payout, reason, transfer = null }) => {
+  const updated = await updatePayout({
     payout,
-    reason,
-    transfer = null,
-  }) => {
 
-    const updated =
-      await updatePayout({
+    fields: {
+      status: "FAILED",
 
-        payout,
+      failureReason: reason,
 
-        fields: {
+      failedAt: new Date().toISOString(),
 
-          status:
-            "FAILED",
+      transferCode: transfer?.transfer_code || payout.transferCode || null,
 
-          failureReason:
-            reason,
+      transferID:
+        transfer?.id != null ? String(transfer.id) : payout.transferID || null,
+    },
+  });
 
-          failedAt:
-            new Date().toISOString(),
+  if (!updated) {
+    throw new Error(`Could not mark payout ${payout.id} as FAILED.`);
+  }
 
-          transferCode:
-            transfer?.transfer_code ||
-            payout.transferCode ||
-            null,
-
-          transferID:
-            transfer?.id != null
-              ? String(
-                  transfer.id
-                )
-              : payout.transferID ||
-                null,
-
-        },
-
-      });
-
-    if (!updated) {
-
-      throw new Error(
-        `Could not mark payout ${payout.id} as FAILED.`
-      );
-    }
-
-    return updated;
-  };
-
+  return updated;
+};
 
 /* ==========================================================
    FINALIZE TRANSACTION AS FAILED
 ========================================================== */
 
-const markTransactionFailed =
-  async (
-    reference
-  ) => {
+const markTransactionFailed = async (reference) => {
+  const transaction = await getTransactionByReference(reference);
 
-    const transaction =
-      await getTransactionByReference(
-        reference
-      );
+  if (!transaction) {
+    return null;
+  }
 
-    if (!transaction) {
-      return null;
-    }
+  if (transaction.status === "FAILED") {
+    return transaction;
+  }
 
-    if (
-      transaction.status ===
-      "FAILED"
-    ) {
-      return transaction;
-    }
-
-    const mutation = `
+  const mutation = `
       mutation UpdateTransaction(
         $input: UpdateTransactionInput!
       ) {
@@ -1663,332 +1189,192 @@ const markTransactionFailed =
       }
     `;
 
-    const data =
-      await graphqlRequest(
-        mutation,
-        {
-          input: {
+  const data = await graphqlRequest(
+    mutation,
+    {
+      input: {
+        id: transaction.id,
 
-            id:
-              transaction.id,
+        status: "FAILED",
 
-            status:
-              "FAILED",
+        description: "Courier payout failed.",
+      },
+    },
+    "MarkPayoutTransactionFailed",
+  );
 
-            description:
-              "Courier payout failed.",
-
-          },
-        },
-        "MarkPayoutTransactionFailed"
-      );
-
-    return (
-      data?.updateTransaction ||
-      null
-    );
-  };
-
+  return data?.updateTransaction || null;
+};
 
 /* ==========================================================
    PROCESS ONE COURIER PAYOUT
 ========================================================== */
 
-const processCourierPayout =
-  async ({
+const processCourierPayout = async ({
+  courierID,
+  requestedAmount,
+  payoutMethod,
+  secretKey,
+}) => {
+  console.log("==========================================");
+
+  console.log("PROCESSING COURIER PAYOUT");
+
+  console.log({
     courierID,
     requestedAmount,
     payoutMethod,
-    secretKey,
-  }) => {
+  });
 
-    console.log(
-      "=========================================="
-    );
+  console.log("==========================================");
 
-    console.log(
-      "PROCESSING COURIER PAYOUT"
-    );
-
-    console.log(
-      {
-        courierID,
-        requestedAmount,
-        payoutMethod,
-      }
-    );
-
-    console.log(
-      "=========================================="
-    );
-
-
-    /* ======================================================
+  /* ======================================================
        1. GET COURIER
     ====================================================== */
 
-    const courier =
-      await getCourier(
-        courierID
-      );
+  const courier = await getCourier(courierID);
 
-    if (!courier) {
+  if (!courier) {
+    throw new Error(`Courier ${courierID} not found.`);
+  }
 
-      throw new Error(
-        `Courier ${courierID} not found.`
-      );
-    }
-
-
-    /* ======================================================
+  /* ======================================================
        2. APPROVAL
     ====================================================== */
 
-    if (
-      courier.isApproved ===
-      false
-    ) {
+  if (courier.isApproved === false) {
+    throw new Error("Courier is not approved for payouts.");
+  }
 
-      throw new Error(
-        "Courier is not approved for payouts."
-      );
-    }
-
-
-    /* ======================================================
+  /* ======================================================
        3. BANK DETAILS
     ====================================================== */
 
-    if (
-      !courier.bankCode ||
-      !courier.accountNumber ||
-      !courier.accountName
-    ) {
+  if (!courier.bankCode || !courier.accountNumber || !courier.accountName) {
+    throw new Error("Courier does not have complete bank account details.");
+  }
 
-      throw new Error(
-        "Courier does not have complete bank account details."
-      );
-    }
-
-
-    /* ======================================================
+  /* ======================================================
        4. GET WALLET
     ====================================================== */
 
-    const wallet =
-      await getCourierWallet(
-        courierID
-      );
+  const wallet = await getCourierWallet(courierID);
 
-    if (!wallet) {
+  if (!wallet) {
+    throw new Error("Courier wallet not found.");
+  }
 
-      throw new Error(
-        "Courier wallet not found."
-      );
-    }
-
-
-    /* ======================================================
+  /* ======================================================
        5. AVAILABLE BALANCE
     ====================================================== */
 
-    const availableBalance =
-      Number(
-        wallet.availableBalance || 0
-      );
+  const availableBalance = Number(wallet.availableBalance || 0);
 
-    if (
-      !Number.isFinite(
-        availableBalance
-      ) ||
-      availableBalance <= 0
-    ) {
+  if (!Number.isFinite(availableBalance) || availableBalance <= 0) {
+    throw new Error("Courier has no available balance for payout.");
+  }
 
-      throw new Error(
-        "Courier has no available balance for payout."
-      );
-    }
-
-
-    /* ======================================================
+  /* ======================================================
        6. CHECK ACTIVE PAYOUT
     ====================================================== */
 
-    const activePayouts =
-      await getActiveCourierPayouts(
-        courierID
-      );
+  const activePayouts = await getActiveCourierPayouts(courierID);
 
-    if (
-      activePayouts.length > 0
-    ) {
+  if (activePayouts.length > 0) {
+    const active = activePayouts[0];
 
-      const active =
-        activePayouts[0];
+    return {
+      success: true,
 
-      return {
+      skipped: true,
 
-        success:
-          true,
+      status: "PROCESSING",
 
-        skipped:
-          true,
+      courierID,
 
-        status:
-          "PROCESSING",
+      payoutID: active.id,
 
-        courierID,
+      payoutReference: active.reference,
 
-        payoutID:
-          active.id,
+      amount: active.amount,
 
-        payoutReference:
-          active.reference,
+      message: "Courier already has a payout pending or processing.",
+    };
+  }
 
-        amount:
-          active.amount,
-
-        message:
-          "Courier already has a payout pending or processing.",
-
-      };
-    }
-
-
-    /* ======================================================
+  /* ======================================================
        7. DETERMINE PAYOUT AMOUNT
     ====================================================== */
 
-    let payoutAmount =
-      availableBalance;
+  let payoutAmount = availableBalance;
 
+  if (
+    requestedAmount !== undefined &&
+    requestedAmount !== null &&
+    requestedAmount !== ""
+  ) {
+    payoutAmount = Number(requestedAmount);
 
-    if (
-      requestedAmount !==
-        undefined &&
-      requestedAmount !==
-        null &&
-      requestedAmount !==
-        ""
-    ) {
-
-      payoutAmount =
-        Number(
-          requestedAmount
-        );
-
-      if (
-        !Number.isFinite(
-          payoutAmount
-        ) ||
-        payoutAmount <= 0
-      ) {
-
-        throw new Error(
-          "Requested payout amount is invalid."
-        );
-      }
-
-      if (
-        payoutAmount >
-        availableBalance
-      ) {
-
-        throw new Error(
-          "Requested payout amount exceeds available balance."
-        );
-      }
+    if (!Number.isFinite(payoutAmount) || payoutAmount <= 0) {
+      throw new Error("Requested payout amount is invalid.");
     }
 
+    if (payoutAmount > availableBalance) {
+      throw new Error("Requested payout amount exceeds available balance.");
+    }
+  }
 
-    payoutAmount =
-      Number(
-        payoutAmount.toFixed(2)
-      );
+  payoutAmount = Number(payoutAmount.toFixed(2));
 
-
-    /* ======================================================
+  /* ======================================================
        8. VALIDATE FINAL AMOUNT
     ====================================================== */
 
-    if (
-      payoutAmount <= 0
-    ) {
+  if (payoutAmount <= 0) {
+    throw new Error("Payout amount must be greater than zero.");
+  }
 
-      throw new Error(
-        "Payout amount must be greater than zero."
-      );
-    }
-
-
-    /* ======================================================
+  /* ======================================================
        9. GENERATE UNIQUE REFERENCE
     ====================================================== */
 
-    const reference =
-      generatePayoutReference(
-        courierID
-      );
+  const reference = generatePayoutReference(courierID);
 
+  console.log("PAYOUT REFERENCE:", reference);
 
-    console.log(
-      "PAYOUT REFERENCE:",
-      reference
-    );
-
-
-    /* ======================================================
+  /* ======================================================
        10. CREATE PAYOUT RECORD
     ====================================================== */
 
-    const payout =
-      await createPayout({
+  const payout = await createPayout({
+    courierID,
 
-        courierID,
+    walletID: wallet.id,
 
-        walletID:
-          wallet.id,
+    amount: payoutAmount,
 
-        amount:
-          payoutAmount,
+    courier,
 
-        courier,
+    reference,
 
-        reference,
+    payoutMethod,
+  });
 
-        payoutMethod,
+  if (!payout?.id) {
+    throw new Error("Payout record could not be created.");
+  }
 
-      });
+  console.log("PAYOUT CREATED:", {
+    payoutID: payout.id,
 
+    reference: payout.reference,
 
-    if (!payout?.id) {
+    amount: payout.amount,
 
-      throw new Error(
-        "Payout record could not be created."
-      );
-    }
+    status: payout.status,
+  });
 
-
-    console.log(
-      "PAYOUT CREATED:",
-      {
-        payoutID:
-          payout.id,
-
-        reference:
-          payout.reference,
-
-        amount:
-          payout.amount,
-
-        status:
-          payout.status,
-
-      }
-    );
-
-
-    /* ======================================================
+  /* ======================================================
        11. RESERVE WALLET BALANCE
     ======================================================
 
@@ -1999,244 +1385,143 @@ const processCourierPayout =
 
     ====================================================== */
 
-    let reservedWallet;
+  let reservedWallet;
 
-    try {
+  try {
+    reservedWallet = await reserveWalletBalance({
+      wallet,
 
-      reservedWallet =
-        await reserveWalletBalance({
+      amount: payoutAmount,
+    });
+  } catch (error) {
+    await markPayoutFailed({
+      payout,
 
-          wallet,
+      reason: `Wallet reservation failed: ${error.message}`,
+    });
 
-          amount:
-            payoutAmount,
+    throw error;
+  }
 
-        });
+  console.log("WALLET BALANCE RESERVED:", {
+    walletID: reservedWallet.id,
 
-    } catch (error) {
+    availableBalance: reservedWallet.availableBalance,
+  });
 
-      await markPayoutFailed({
-
-        payout,
-
-        reason:
-          `Wallet reservation failed: ${error.message}`,
-
-      });
-
-      throw error;
-    }
-
-
-    console.log(
-      "WALLET BALANCE RESERVED:",
-      {
-        walletID:
-          reservedWallet.id,
-
-        availableBalance:
-          reservedWallet.availableBalance,
-
-      }
-    );
-
-
-    /* ======================================================
+  /* ======================================================
        12. CREATE DEBIT TRANSACTION
     ====================================================== */
 
-    let transaction;
+  let transaction;
+
+  try {
+    transaction = await createDebitTransaction({
+      walletID: wallet.id,
+
+      amount: payoutAmount,
+
+      reference,
+    });
+  } catch (error) {
+    console.error("DEBIT TRANSACTION CREATION FAILED:", error);
+
+    /*
+     * Because Paystack has not been called yet, the wallet
+     * can safely be restored.
+     */
 
     try {
+      await restoreWalletBalance({
+        courierID,
 
-      transaction =
-        await createDebitTransaction({
-
-          walletID:
-            wallet.id,
-
-          amount:
-            payoutAmount,
-
-          reference,
-
-        });
-
-    } catch (error) {
-
-      console.error(
-        "DEBIT TRANSACTION CREATION FAILED:",
-        error
-      );
-
-      /*
-       * Because Paystack has not been called yet, the wallet
-       * can safely be restored.
-       */
-
-      try {
-
-        await restoreWalletBalance({
-
-          courierID,
-
-          amount:
-            payoutAmount,
-
-        });
-
-      } catch (restoreError) {
-
-        console.error(
-          "CRITICAL: WALLET RESTORE FAILED:",
-          restoreError
-        );
-
-      }
-
-      await markPayoutFailed({
-
-        payout,
-
-        reason:
-          `Unable to create payout transaction: ${error.message}`,
-
+        amount: payoutAmount,
       });
-
-      throw error;
+    } catch (restoreError) {
+      console.error("CRITICAL: WALLET RESTORE FAILED:", restoreError);
     }
 
+    await markPayoutFailed({
+      payout,
 
-    if (!transaction?.id) {
+      reason: `Unable to create payout transaction: ${error.message}`,
+    });
 
-      try {
+    throw error;
+  }
 
-        await restoreWalletBalance({
+  if (!transaction?.id) {
+    try {
+      await restoreWalletBalance({
+        courierID,
 
-          courierID,
-
-          amount:
-            payoutAmount,
-
-        });
-
-      } catch (restoreError) {
-
-        console.error(
-          "CRITICAL: WALLET RESTORE FAILED:",
-          restoreError
-        );
-
-      }
-
-      await markPayoutFailed({
-
-        payout,
-
-        reason:
-          "Unable to create payout transaction.",
-
+        amount: payoutAmount,
       });
-
-      throw new Error(
-        "Unable to create payout transaction."
-      );
+    } catch (restoreError) {
+      console.error("CRITICAL: WALLET RESTORE FAILED:", restoreError);
     }
 
+    await markPayoutFailed({
+      payout,
 
-    console.log(
-      "PAYOUT DEBIT TRANSACTION CREATED:",
-      {
-        transactionID:
-          transaction.id,
+      reason: "Unable to create payout transaction.",
+    });
 
-        reference:
-          transaction.reference,
+    throw new Error("Unable to create payout transaction.");
+  }
 
-        status:
-          transaction.status,
+  console.log("PAYOUT DEBIT TRANSACTION CREATED:", {
+    transactionID: transaction.id,
 
-      }
-    );
+    reference: transaction.reference,
 
+    status: transaction.status,
+  });
 
-    /* ======================================================
+  /* ======================================================
        13. CREATE / GET PAYSTACK RECIPIENT
     ====================================================== */
 
-    let recipient;
+  let recipient;
+
+  try {
+    recipient = await createTransferRecipient({
+      courier,
+
+      secretKey,
+    });
+  } catch (error) {
+    console.error("TRANSFER RECIPIENT ERROR:", error);
+
+    /*
+     * No transfer has been attempted yet, so restoring the
+     * reserved balance is safe.
+     */
 
     try {
+      await restoreWalletBalance({
+        courierID,
 
-      recipient =
-        await createTransferRecipient({
-
-          courier,
-
-          secretKey,
-
-        });
-
-    } catch (error) {
-
-      console.error(
-        "TRANSFER RECIPIENT ERROR:",
-        error
-      );
-
-
-      /*
-       * No transfer has been attempted yet, so restoring the
-       * reserved balance is safe.
-       */
-
-      try {
-
-        await restoreWalletBalance({
-
-          courierID,
-
-          amount:
-            payoutAmount,
-
-        });
-
-      } catch (restoreError) {
-
-        console.error(
-          "CRITICAL: WALLET RESTORE FAILED:",
-          restoreError
-        );
-
-      }
-
-
-      await markTransactionFailed(
-        reference
-      );
-
-
-      await markPayoutFailed({
-
-        payout,
-
-        reason:
-          error.message,
-
+        amount: payoutAmount,
       });
-
-
-      throw error;
+    } catch (restoreError) {
+      console.error("CRITICAL: WALLET RESTORE FAILED:", restoreError);
     }
 
+    await markTransactionFailed(reference);
 
-    console.log(
-      "PAYSTACK RECIPIENT:",
-      recipient.recipient_code
-    );
+    await markPayoutFailed({
+      payout,
 
+      reason: error.message,
+    });
 
-    /* ======================================================
+    throw error;
+  }
+
+  console.log("PAYSTACK RECIPIENT:", recipient.recipient_code);
+
+  /* ======================================================
        14. MARK PAYOUT PROCESSING BEFORE TRANSFER
     ======================================================
 
@@ -2248,427 +1533,257 @@ const processCourierPayout =
 
     ====================================================== */
 
-    let processingPayout;
+  let processingPayout;
+
+  try {
+    processingPayout = await updatePayout({
+      payout,
+
+      fields: {
+        status: "PROCESSING",
+
+        processedAt: new Date().toISOString(),
+      },
+    });
+  } catch (error) {
+    console.error("COULD NOT MARK PAYOUT PROCESSING:", error);
+
+    /*
+     * Transfer has NOT been sent yet.
+     * Restore the reserved balance.
+     */
 
     try {
+      await restoreWalletBalance({
+        courierID,
 
-      processingPayout =
-        await updatePayout({
+        amount: payoutAmount,
+      });
+    } catch (restoreError) {
+      console.error("CRITICAL: WALLET RESTORE FAILED:", restoreError);
+    }
 
-          payout,
+    await markTransactionFailed(reference);
 
-          fields: {
+    await markPayoutFailed({
+      payout,
 
-            status:
-              "PROCESSING",
+      reason: `Could not mark payout PROCESSING: ${error.message}`,
+    });
 
-            processedAt:
-              new Date().toISOString(),
+    throw error;
+  }
 
-          },
+  if (!processingPayout) {
+    throw new Error("Payout could not be moved to PROCESSING.");
+  }
 
-        });
+  /* ======================================================
+       15. INITIATE PAYSTACK TRANSFER
+    ====================================================== */
 
-    } catch (error) {
+  let transfer;
 
-      console.error(
-        "COULD NOT MARK PAYOUT PROCESSING:",
-        error
-      );
+  try {
+    transfer = await initiateTransfer({
+      amount: payoutAmount,
 
+      recipientCode: recipient.recipient_code,
+
+      reference,
+
+      secretKey,
+
+      courierID,
+    });
+  } catch (error) {
+    console.error("PAYSTACK TRANSFER ERROR:", error);
+
+    /* ====================================================
+         DETERMINE WHETHER THE TRANSFER EXISTS
+      ==================================================== */
+
+    let verification = null;
+
+    try {
+      verification = await verifyPaystackTransfer(reference, secretKey);
+    } catch (verifyError) {
+      console.error("TRANSFER VERIFICATION ALSO FAILED:", verifyError);
 
       /*
-       * Transfer has NOT been sent yet.
-       * Restore the reserved balance.
+       * We cannot safely know whether Paystack received the
+       * original request.
+       *
+       * DO NOT restore the wallet.
+       * DO NOT create another transfer.
+       *
+       * Keep Payout PROCESSING.
        */
 
+      return {
+        success: false,
+
+        status: "PROCESSING",
+
+        reconciliationRequired: true,
+
+        courierID,
+
+        payoutID: payout.id,
+
+        reference,
+
+        amount: payoutAmount,
+
+        message:
+          "Transfer outcome is uncertain. Payout remains PROCESSING and requires reconciliation.",
+      };
+    }
+
+    /* ====================================================
+         TRANSFER DOES NOT EXIST
+      ==================================================== */
+
+    if (verification.exists === false) {
       try {
-
         await restoreWalletBalance({
-
           courierID,
 
-          amount:
-            payoutAmount,
-
+          amount: payoutAmount,
         });
-
       } catch (restoreError) {
-
-        console.error(
-          "CRITICAL: WALLET RESTORE FAILED:",
-          restoreError
-        );
-
+        console.error("CRITICAL: WALLET RESTORE FAILED:", restoreError);
       }
 
-
-      await markTransactionFailed(
-        reference
-      );
-
+      await markTransactionFailed(reference);
 
       await markPayoutFailed({
-
-        payout,
+        payout: processingPayout,
 
         reason:
-          `Could not mark payout PROCESSING: ${error.message}`,
-
+          error.message || "Paystack transfer was rejected before creation.",
       });
-
 
       throw error;
     }
 
-
-    if (!processingPayout) {
-
-      throw new Error(
-        "Payout could not be moved to PROCESSING."
-      );
-    }
-
-
-    /* ======================================================
-       15. INITIATE PAYSTACK TRANSFER
-    ====================================================== */
-
-    let transfer;
-
-
-    try {
-
-      transfer =
-        await initiateTransfer({
-
-          amount:
-            payoutAmount,
-
-          recipientCode:
-            recipient.recipient_code,
-
-          reference,
-
-          secretKey,
-
-          courierID,
-
-        });
-
-    } catch (error) {
-
-      console.error(
-        "PAYSTACK TRANSFER ERROR:",
-        error
-      );
-
-
-      /* ====================================================
-         DETERMINE WHETHER THE TRANSFER EXISTS
-      ==================================================== */
-
-      let verification = null;
-
-      try {
-
-        verification =
-          await verifyPaystackTransfer(
-            reference,
-            secretKey
-          );
-
-      } catch (verifyError) {
-
-        console.error(
-          "TRANSFER VERIFICATION ALSO FAILED:",
-          verifyError
-        );
-
-        /*
-         * We cannot safely know whether Paystack received the
-         * original request.
-         *
-         * DO NOT restore the wallet.
-         * DO NOT create another transfer.
-         *
-         * Keep Payout PROCESSING.
-         */
-
-        return {
-
-          success:
-            false,
-
-          status:
-            "PROCESSING",
-
-          reconciliationRequired:
-            true,
-
-          courierID,
-
-          payoutID:
-            payout.id,
-
-          reference,
-
-          amount:
-            payoutAmount,
-
-          message:
-            "Transfer outcome is uncertain. Payout remains PROCESSING and requires reconciliation.",
-
-        };
-      }
-
-
-      /* ====================================================
-         TRANSFER DOES NOT EXIST
-      ==================================================== */
-
-      if (
-        verification.exists ===
-        false
-      ) {
-
-        try {
-
-          await restoreWalletBalance({
-
-            courierID,
-
-            amount:
-              payoutAmount,
-
-          });
-
-        } catch (restoreError) {
-
-          console.error(
-            "CRITICAL: WALLET RESTORE FAILED:",
-            restoreError
-          );
-
-        }
-
-
-        await markTransactionFailed(
-          reference
-        );
-
-
-        await markPayoutFailed({
-
-          payout:
-            processingPayout,
-
-          reason:
-            error.message ||
-            "Paystack transfer was rejected before creation.",
-
-        });
-
-
-        throw error;
-      }
-
-
-      /* ====================================================
+    /* ====================================================
          TRANSFER EXISTS
       ==================================================== */
 
-      const transferStatus =
-        String(
-          verification.status ||
-          ""
-        ).toLowerCase();
+    const transferStatus = String(verification.status || "").toLowerCase();
 
-
-      if (
-        transferStatus ===
-          "success" ||
-        transferStatus ===
-          "pending"
-      ) {
-
-        /*
-         * Money remains reserved.
-         * Webhook will finalize the payout.
-         */
-
-        await updatePayout({
-
-          payout:
-            processingPayout,
-
-          fields: {
-
-            transferCode:
-              verification.transfer
-                ?.transfer_code ||
-              null,
-
-            transferID:
-              verification.transfer?.id != null
-                ? String(
-                    verification.transfer.id
-                  )
-                : null,
-
-          },
-
-        });
-
-
-        return {
-
-          success:
-            false,
-
-          status:
-            "PROCESSING",
-
-          reconciliationRequired:
-            false,
-
-          courierID,
-
-          payoutID:
-            payout.id,
-
-          reference,
-
-          amount:
-            payoutAmount,
-
-          message:
-            "Paystack transfer exists and remains PROCESSING. Awaiting transfer webhook.",
-
-        };
-      }
-
-
-      /* ====================================================
-         TRANSFER ALREADY FAILED / REVERSED
-      ==================================================== */
-
-      if (
-        transferStatus ===
-          "failed" ||
-        transferStatus ===
-          "reversed"
-      ) {
-
-        const failureReason =
-          verification
-            .transfer
-            ?.failures
-            ? JSON.stringify(
-                verification.transfer.failures
-              )
-            : `Paystack transfer status: ${transferStatus}`;
-
-
-        try {
-
-          await restoreWalletBalance({
-
-            courierID,
-
-            amount:
-              payoutAmount,
-
-          });
-
-        } catch (restoreError) {
-
-          console.error(
-            "CRITICAL: WALLET RESTORE FAILED:",
-            restoreError
-          );
-
-        }
-
-
-        await markTransactionFailed(
-          reference
-        );
-
-
-        await markPayoutFailed({
-
-          payout:
-            processingPayout,
-
-          reason:
-            failureReason,
-
-          transfer:
-            verification.transfer,
-
-        });
-
-
-        return {
-
-          success:
-            false,
-
-          status:
-            "FAILED",
-
-          courierID,
-
-          payoutID:
-            payout.id,
-
-          reference,
-
-          amount:
-            payoutAmount,
-
-          message:
-            "Paystack transfer failed and the wallet balance was restored.",
-
-        };
-      }
-
-
+    if (transferStatus === "success" || transferStatus === "pending") {
       /*
-       * Unknown Paystack status:
-       * keep processing rather than risking a duplicate payout.
+       * Money remains reserved.
+       * Webhook will finalize the payout.
        */
 
+      await updatePayout({
+        payout: processingPayout,
+
+        fields: {
+          transferCode: verification.transfer?.transfer_code || null,
+
+          transferID:
+            verification.transfer?.id != null
+              ? String(verification.transfer.id)
+              : null,
+        },
+      });
+
       return {
+        success: false,
 
-        success:
-          false,
+        status: "PROCESSING",
 
-        status:
-          "PROCESSING",
-
-        reconciliationRequired:
-          true,
+        reconciliationRequired: false,
 
         courierID,
 
-        payoutID:
-          payout.id,
+        payoutID: payout.id,
 
         reference,
 
-        amount:
-          payoutAmount,
+        amount: payoutAmount,
 
         message:
-          `Unknown Paystack transfer status: ${verification.status}. Payout remains PROCESSING.`,
-
+          "Paystack transfer exists and remains PROCESSING. Awaiting transfer webhook.",
       };
     }
 
+    /* ====================================================
+         TRANSFER ALREADY FAILED / REVERSED
+      ==================================================== */
 
-    /* ======================================================
+    if (transferStatus === "failed" || transferStatus === "reversed") {
+      const failureReason = verification.transfer?.failures
+        ? JSON.stringify(verification.transfer.failures)
+        : `Paystack transfer status: ${transferStatus}`;
+
+      try {
+        await restoreWalletBalance({
+          courierID,
+
+          amount: payoutAmount,
+        });
+      } catch (restoreError) {
+        console.error("CRITICAL: WALLET RESTORE FAILED:", restoreError);
+      }
+
+      await markTransactionFailed(reference);
+
+      await markPayoutFailed({
+        payout: processingPayout,
+
+        reason: failureReason,
+
+        transfer: verification.transfer,
+      });
+
+      return {
+        success: false,
+
+        status: "FAILED",
+
+        courierID,
+
+        payoutID: payout.id,
+
+        reference,
+
+        amount: payoutAmount,
+
+        message:
+          "Paystack transfer failed and the wallet balance was restored.",
+      };
+    }
+
+    /*
+     * Unknown Paystack status:
+     * keep processing rather than risking a duplicate payout.
+     */
+
+    return {
+      success: false,
+
+      status: "PROCESSING",
+
+      reconciliationRequired: true,
+
+      courierID,
+
+      payoutID: payout.id,
+
+      reference,
+
+      amount: payoutAmount,
+
+      message: `Unknown Paystack transfer status: ${verification.status}. Payout remains PROCESSING.`,
+    };
+  }
+
+  /* ======================================================
        16. PAYSTACK ACCEPTED THE TRANSFER
     ======================================================
 
@@ -2680,578 +1795,313 @@ const processCourierPayout =
 
     ====================================================== */
 
-    console.log(
-      "PAYSTACK TRANSFER INITIATED:",
-      {
-        reference,
+  console.log("PAYSTACK TRANSFER INITIATED:", {
+    reference,
 
-        transferID:
-          transfer?.id,
+    transferID: transfer?.id,
 
-        transferCode:
-          transfer?.transfer_code,
+    transferCode: transfer?.transfer_code,
 
-        status:
-          transfer?.status,
+    status: transfer?.status,
+  });
 
-      }
-    );
+  const finalProcessingPayout = await updatePayout({
+    payout: processingPayout,
 
+    fields: {
+      status: "PROCESSING",
 
-    const finalProcessingPayout =
-      await updatePayout({
+      transferCode: transfer?.transfer_code || null,
 
-        payout:
-          processingPayout,
+      transferID: transfer?.id != null ? String(transfer.id) : null,
 
-        fields: {
+      processedAt: processingPayout.processedAt || new Date().toISOString(),
+    },
+  });
 
-          status:
-            "PROCESSING",
-
-          transferCode:
-            transfer?.transfer_code ||
-            null,
-
-          transferID:
-            transfer?.id != null
-              ? String(
-                  transfer.id
-                )
-              : null,
-
-          processedAt:
-            processingPayout.processedAt ||
-            new Date().toISOString(),
-
-        },
-
-      });
-
-
-    if (!finalProcessingPayout) {
-
-      /*
-       * Paystack has accepted the transfer, therefore we must
-       * NOT restore the wallet or send another transfer.
-       *
-       * Payout remains recoverable using the reference.
-       */
-
-      return {
-
-        success:
-          false,
-
-        status:
-          "PROCESSING",
-
-        reconciliationRequired:
-          true,
-
-        courierID,
-
-        payoutID:
-          payout.id,
-
-        reference,
-
-        transferCode:
-          transfer?.transfer_code ||
-          null,
-
-        transferID:
-          transfer?.id != null
-            ? String(
-                transfer.id
-              )
-            : null,
-
-        amount:
-          payoutAmount,
-
-        message:
-          "Paystack transfer was initiated, but payout metadata could not be fully updated. Reconciliation required.",
-
-      };
-    }
-
-
-    /* ======================================================
-       17. SUCCESSFULLY INITIATED
-    ====================================================== */
+  if (!finalProcessingPayout) {
+    /*
+     * Paystack has accepted the transfer, therefore we must
+     * NOT restore the wallet or send another transfer.
+     *
+     * Payout remains recoverable using the reference.
+     */
 
     return {
+      success: false,
 
-      success:
-        true,
+      status: "PROCESSING",
 
-      status:
-        "PROCESSING",
+      reconciliationRequired: true,
 
       courierID,
 
-      payoutID:
-        payout.id,
+      payoutID: payout.id,
 
       reference,
 
-      amount:
-        payoutAmount,
+      transferCode: transfer?.transfer_code || null,
 
-      transferCode:
-        transfer?.transfer_code ||
-        null,
+      transferID: transfer?.id != null ? String(transfer.id) : null,
 
-      transferID:
-        transfer?.id != null
-          ? String(
-              transfer.id
-            )
-          : null,
+      amount: payoutAmount,
 
       message:
-        "Payout successfully initiated. Awaiting Paystack transfer confirmation.",
-
+        "Paystack transfer was initiated, but payout metadata could not be fully updated. Reconciliation required.",
     };
-  };
+  }
 
+  /* ======================================================
+       17. SUCCESSFULLY INITIATED
+    ====================================================== */
+
+  return {
+    success: true,
+
+    status: "PROCESSING",
+
+    courierID,
+
+    payoutID: payout.id,
+
+    reference,
+
+    amount: payoutAmount,
+
+    transferCode: transfer?.transfer_code || null,
+
+    transferID: transfer?.id != null ? String(transfer.id) : null,
+
+    message:
+      "Payout successfully initiated. Awaiting Paystack transfer confirmation.",
+  };
+};
 
 /* ==========================================================
    MAIN HANDLER
 ========================================================== */
 
-exports.handler = async (
-  event
-) => {
+exports.handler = async (event) => {
+  console.log("==========================================");
 
-  console.log(
-    "=========================================="
-  );
+  console.log("ATUA PROCESS PAYOUTS STARTED");
 
-  console.log(
-    "ATUA PROCESS PAYOUTS STARTED"
-  );
+  console.log("EVENT:", JSON.stringify(event));
 
-  console.log(
-    "EVENT:",
-    JSON.stringify(
-      event
-    )
-  );
-
-  console.log(
-    "=========================================="
-  );
-
+  console.log("==========================================");
 
   try {
-
     /* ======================================================
        1. GET PAYSTACK SECRET
     ====================================================== */
 
-    const secretKey =
-      await getPaystackSecretKey();
-
+    const secretKey = await getPaystackSecretKey();
 
     /* ======================================================
        2. GET INPUT
     ====================================================== */
 
-    const argumentsData =
-      event?.arguments ||
-      event?.detail ||
-      event ||
-      {};
-
+    const argumentsData = event?.arguments || event?.detail || event || {};
 
     let payoutMethod =
-      argumentsData?.payoutMethod ||
-      argumentsData?.method ||
-      null;
-
+      argumentsData?.payoutMethod || argumentsData?.method || null;
 
     const courierID =
-      argumentsData?.courierID ||
-      argumentsData?.courierId ||
-      null;
-
+      argumentsData?.courierID || argumentsData?.courierId || null;
 
     const requestedAmount =
       argumentsData?.amount !== undefined &&
       argumentsData?.amount !== null &&
       argumentsData?.amount !== ""
-        ? Number(
-            argumentsData.amount
-          )
+        ? Number(argumentsData.amount)
         : null;
-
 
     /* ======================================================
        3. DEFAULT SINGLE MODE
     ====================================================== */
 
-    if (
-      !payoutMethod &&
-      courierID
-    ) {
-
-      payoutMethod =
-        "MANUAL_SINGLE";
+    if (!payoutMethod && courierID) {
+      payoutMethod = "MANUAL_SINGLE";
     }
 
-
-    if (
-      !payoutMethod
-    ) {
-
-      throw new Error(
-        "payoutMethod is required."
-      );
+    if (!payoutMethod) {
+      throw new Error("payoutMethod is required.");
     }
 
-
-    payoutMethod =
-      String(
-        payoutMethod
-      )
-        .trim()
-        .toUpperCase();
-
+    payoutMethod = String(payoutMethod).trim().toUpperCase();
 
     /* ======================================================
        4. MANUAL SINGLE
     ====================================================== */
 
-    if (
-      payoutMethod ===
-      "MANUAL_SINGLE"
-    ) {
-
+    if (payoutMethod === "MANUAL_SINGLE") {
       if (!courierID) {
-
-        throw new Error(
-          "courierID is required for MANUAL_SINGLE."
-        );
+        throw new Error("courierID is required for MANUAL_SINGLE.");
       }
 
+      const result = await processCourierPayout({
+        courierID,
 
-      const result =
-        await processCourierPayout({
+        requestedAmount,
 
-          courierID,
+        payoutMethod: "MANUAL_SINGLE",
 
-          requestedAmount,
-
-          payoutMethod:
-            "MANUAL_SINGLE",
-
-          secretKey,
-
-        });
-
+        secretKey,
+      });
 
       return {
+        statusCode: 200,
 
-        statusCode:
-          200,
-
-        body:
-          JSON.stringify(
-            result
-          ),
-
+        body: JSON.stringify(result),
       };
     }
-
 
     /* ======================================================
        5. MANUAL ALL
     ====================================================== */
 
-    if (
-      payoutMethod ===
-      "MANUAL_ALL"
-    ) {
-
-      const wallets =
-        await getEligibleWallets();
-
+    if (payoutMethod === "MANUAL_ALL") {
+      const wallets = await getEligibleWallets();
 
       const results = [];
 
-
-      for (
-        const wallet
-        of wallets
-      ) {
-
+      for (const wallet of wallets) {
         try {
+          const result = await processCourierPayout({
+            courierID: wallet.ownerID,
 
-          const result =
-            await processCourierPayout({
+            requestedAmount: null,
 
-              courierID:
-                wallet.ownerID,
+            payoutMethod: "MANUAL_ALL",
 
-              requestedAmount:
-                null,
+            secretKey,
+          });
 
-              payoutMethod:
-                "MANUAL_ALL",
-
-              secretKey,
-
-            });
-
-
-          results.push(
-            result
-          );
-
+          results.push(result);
         } catch (error) {
+          console.error("MANUAL_ALL PAYOUT ERROR:", {
+            courierID: wallet.ownerID,
 
-          console.error(
-            "MANUAL_ALL PAYOUT ERROR:",
-            {
-              courierID:
-                wallet.ownerID,
-
-              error:
-                error.message,
-            }
-          );
-
+            error: error.message,
+          });
 
           results.push({
+            success: false,
 
-            success:
-              false,
+            courierID: wallet.ownerID,
 
-            courierID:
-              wallet.ownerID,
+            status: "FAILED",
 
-            status:
-              "FAILED",
-
-            message:
-              error.message,
-
+            message: error.message,
           });
         }
       }
 
-
       return {
+        statusCode: 200,
 
-        statusCode:
-          200,
+        body: JSON.stringify({
+          success: true,
 
-        body:
-          JSON.stringify({
+          payoutMethod: "MANUAL_ALL",
 
-            success:
-              true,
+          processed: results.length,
 
-            payoutMethod:
-              "MANUAL_ALL",
+          successful: results.filter((item) => item.success === true).length,
 
-            processed:
-              results.length,
+          failed: results.filter((item) => item.success === false).length,
 
-            successful:
-              results.filter(
-                (item) =>
-                  item.success ===
-                  true
-              ).length,
-
-            failed:
-              results.filter(
-                (item) =>
-                  item.success ===
-                  false
-              ).length,
-
-            results,
-
-          }),
-
+          results,
+        }),
       };
     }
-
 
     /* ======================================================
        6. AUTOMATIC
     ====================================================== */
 
-    if (
-      payoutMethod ===
-      "AUTOMATIC"
-    ) {
-
-      const wallets =
-        await getEligibleWallets();
-
+    if (payoutMethod === "AUTOMATIC") {
+      const wallets = await getEligibleWallets();
 
       const results = [];
 
-
-      for (
-        const wallet
-        of wallets
-      ) {
-
+      for (const wallet of wallets) {
         try {
+          const result = await processCourierPayout({
+            courierID: wallet.ownerID,
 
-          const result =
-            await processCourierPayout({
+            requestedAmount: null,
 
-              courierID:
-                wallet.ownerID,
+            payoutMethod: "AUTOMATIC",
 
-              requestedAmount:
-                null,
+            secretKey,
+          });
 
-              payoutMethod:
-                "AUTOMATIC",
-
-              secretKey,
-
-            });
-
-
-          results.push(
-            result
-          );
-
+          results.push(result);
         } catch (error) {
+          console.error("AUTOMATIC PAYOUT ERROR:", {
+            courierID: wallet.ownerID,
 
-          console.error(
-            "AUTOMATIC PAYOUT ERROR:",
-            {
-              courierID:
-                wallet.ownerID,
-
-              error:
-                error.message,
-            }
-          );
-
+            error: error.message,
+          });
 
           results.push({
+            success: false,
 
-            success:
-              false,
+            courierID: wallet.ownerID,
 
-            courierID:
-              wallet.ownerID,
+            status: "FAILED",
 
-            status:
-              "FAILED",
-
-            message:
-              error.message,
-
+            message: error.message,
           });
         }
       }
 
-
       return {
+        statusCode: 200,
 
-        statusCode:
-          200,
+        body: JSON.stringify({
+          success: true,
 
-        body:
-          JSON.stringify({
+          payoutMethod: "AUTOMATIC",
 
-            success:
-              true,
+          processed: results.length,
 
-            payoutMethod:
-              "AUTOMATIC",
+          successful: results.filter((item) => item.success === true).length,
 
-            processed:
-              results.length,
+          failed: results.filter((item) => item.success === false).length,
 
-            successful:
-              results.filter(
-                (item) =>
-                  item.success ===
-                  true
-              ).length,
-
-            failed:
-              results.filter(
-                (item) =>
-                  item.success ===
-                  false
-              ).length,
-
-            results,
-
-          }),
-
+          results,
+        }),
       };
     }
-
 
     /* ======================================================
        7. INVALID PAYOUT METHOD
     ====================================================== */
 
-    throw new Error(
-      `Unsupported payoutMethod: ${payoutMethod}`
-    );
-
-
+    throw new Error(`Unsupported payoutMethod: ${payoutMethod}`);
   } catch (error) {
+    console.error("==========================================");
 
-    console.error(
-      "=========================================="
-    );
+    console.error("ATUA PROCESS PAYOUTS ERROR");
 
-    console.error(
-      "ATUA PROCESS PAYOUTS ERROR"
-    );
+    console.error("MESSAGE:", error?.message);
 
-    console.error(
-      "MESSAGE:",
-      error?.message
-    );
+    console.error("STACK:", error?.stack);
 
-    console.error(
-      "STACK:",
-      error?.stack
-    );
-
-    console.error(
-      "=========================================="
-    );
-
+    console.error("==========================================");
 
     return {
+      statusCode: 500,
 
-      statusCode:
-        500,
+      body: JSON.stringify({
+        success: false,
 
-      body:
-        JSON.stringify({
+        status: "FAILED",
 
-          success:
-            false,
-
-          status:
-            "FAILED",
-
-          message:
-            error?.message ||
-            "Payout processing failed.",
-
-        }),
-
+        message: error?.message || "Payout processing failed.",
+      }),
     };
   }
 };

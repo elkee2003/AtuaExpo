@@ -912,6 +912,9 @@ export const getPayment = /* GraphQL */ `
         assignmentStatus
         trackingStartedAt
         trackingEndedAt
+        recipientTrackingToken
+        recipientTrackingEnabled
+        recipientTrackingRevokedAt
         userID
         createdAt
         updatedAt
@@ -1246,6 +1249,9 @@ export const getOffer = /* GraphQL */ `
         assignmentStatus
         trackingStartedAt
         trackingEndedAt
+        recipientTrackingToken
+        recipientTrackingEnabled
+        recipientTrackingRevokedAt
         userID
         createdAt
         updatedAt
@@ -1568,6 +1574,9 @@ export const getOrder = /* GraphQL */ `
       assignmentStatus
       trackingStartedAt
       trackingEndedAt
+      recipientTrackingToken
+      recipientTrackingEnabled
+      recipientTrackingRevokedAt
       userID
       reviews {
         nextToken
@@ -1774,6 +1783,9 @@ export const listOrders = /* GraphQL */ `
         assignmentStatus
         trackingStartedAt
         trackingEndedAt
+        recipientTrackingToken
+        recipientTrackingEnabled
+        recipientTrackingRevokedAt
         userID
         createdAt
         updatedAt
@@ -1912,6 +1924,9 @@ export const syncOrders = /* GraphQL */ `
         assignmentStatus
         trackingStartedAt
         trackingEndedAt
+        recipientTrackingToken
+        recipientTrackingEnabled
+        recipientTrackingRevokedAt
         userID
         createdAt
         updatedAt
@@ -2052,6 +2067,9 @@ export const ordersByAssignedCourierId = /* GraphQL */ `
         assignmentStatus
         trackingStartedAt
         trackingEndedAt
+        recipientTrackingToken
+        recipientTrackingEnabled
+        recipientTrackingRevokedAt
         userID
         createdAt
         updatedAt
@@ -2194,6 +2212,152 @@ export const ordersByAssignmentStatusAndAssignmentExpiresAt = /* GraphQL */ `
         assignmentStatus
         trackingStartedAt
         trackingEndedAt
+        recipientTrackingToken
+        recipientTrackingEnabled
+        recipientTrackingRevokedAt
+        userID
+        createdAt
+        updatedAt
+        _version
+        _deleted
+        _lastChangedAt
+        __typename
+      }
+      nextToken
+      startedAt
+      __typename
+    }
+  }
+`;
+export const ordersByRecipientTrackingToken = /* GraphQL */ `
+  query OrdersByRecipientTrackingToken(
+    $recipientTrackingToken: String!
+    $sortDirection: ModelSortDirection
+    $filter: ModelOrderFilterInput
+    $limit: Int
+    $nextToken: String
+  ) {
+    ordersByRecipientTrackingToken(
+      recipientTrackingToken: $recipientTrackingToken
+      sortDirection: $sortDirection
+      filter: $filter
+      limit: $limit
+      nextToken: $nextToken
+    ) {
+      items {
+        id
+        recipientName
+        recipientNumber
+        recipientNumber2
+        orderDetails
+        originAddress
+        originState
+        originLat
+        originLng
+        destinationAddress
+        destinationState
+        destinationLat
+        destinationLng
+        tripType
+        distance
+        transportationType
+        vehicleClass
+        status
+        hasNewOffer
+        lastOfferAt
+        lastOfferSenderType
+        loadCategory
+        isInterState
+        estimatedMinPrice
+        estimatedMaxPrice
+        initialOfferPrice
+        loadingFee
+        unloadingFee
+        floorSurcharge
+        fragileSurcharge
+        extrasTotal
+        totalPrice
+        operationalFare
+        courierEarnings
+        commissionAmount
+        platformFee
+        platformServiceRevenue
+        vatAmount
+        platformNetRevenue
+        deliveryVerificationCode
+        declaredWeightBracket
+        senderPreTransferPhotos
+        senderPreTransferVideo
+        senderPreTransferRecordedAt
+        senderPreTransferLocalPhotos
+        senderPreTransferLocalVideo
+        mediaUploadStatus
+        courierPreTransferUploadStatus
+        courierPostLoadingUploadStatus
+        dropoffUploadStatus
+        courierPreTransferPhotos
+        courierPreTransferVideo
+        courierPreTransferRecordedAt
+        courierPreTransferLocalPhotos
+        courierPreTransferLocalVideo
+        courierPostLoadingPhotos
+        courierPostLoadingVideo
+        courierPostLoadingLocalPhotos
+        courierPostLoadingLocalVideo
+        dropoffArrivalPhotos
+        dropoffArrivalVideo
+        dropoffArrivalLocalPhotos
+        dropoffArrivalLocalVideo
+        postDeliveryPhotos
+        postDeliveryVideo
+        pickupLoadingResponsibility
+        pickupFloorLevel
+        pickupFloorLevelPrice
+        pickupHasElevator
+        dropoffUnloadingResponsibility
+        dropoffFloorLevel
+        dropoffFloorLevelPrice
+        dropoffHasElevator
+        acceptedAt
+        arrivedPickupAt
+        loadingStartedAt
+        tripStartedAt
+        arrivedDropoffAt
+        unloadingCompletedAt
+        logisticsCompanyId
+        waybillNumber
+        waybillPhoto
+        logisticsTrackingCode
+        logisticsTrackingStatus
+        handedOverToLogisticsAt
+        logisticsIntakeConfirmedAt
+        acceptedOfferID
+        paymentStatus
+        paymentID
+        paymentReference
+        payoutStatus
+        fundsStatus
+        earningsAllocationStatus
+        earningsAllocatedAt
+        fundsReleaseBlocked
+        fundsHoldReason
+        fundsHeldBy
+        fundsHeldAt
+        fundsReleasedAmount
+        pickupFundsReleasedAt
+        fundsReleasedAt
+        fundsReleaseType
+        assignedCourierId
+        assignmentExpiresAt
+        assignmentAttempts
+        lastAssignedAt
+        rejectedCourierIds
+        assignmentStatus
+        trackingStartedAt
+        trackingEndedAt
+        recipientTrackingToken
+        recipientTrackingEnabled
+        recipientTrackingRevokedAt
         userID
         createdAt
         updatedAt
@@ -2334,6 +2498,9 @@ export const ordersByUserID = /* GraphQL */ `
         assignmentStatus
         trackingStartedAt
         trackingEndedAt
+        recipientTrackingToken
+        recipientTrackingEnabled
+        recipientTrackingRevokedAt
         userID
         createdAt
         updatedAt
@@ -2545,6 +2712,9 @@ export const getCourierReport = /* GraphQL */ `
         assignmentStatus
         trackingStartedAt
         trackingEndedAt
+        recipientTrackingToken
+        recipientTrackingEnabled
+        recipientTrackingRevokedAt
         userID
         createdAt
         updatedAt
@@ -2950,6 +3120,9 @@ export const getCourierReview = /* GraphQL */ `
         assignmentStatus
         trackingStartedAt
         trackingEndedAt
+        recipientTrackingToken
+        recipientTrackingEnabled
+        recipientTrackingRevokedAt
         userID
         createdAt
         updatedAt

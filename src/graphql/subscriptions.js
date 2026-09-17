@@ -508,6 +508,9 @@ export const onCreatePayment = /* GraphQL */ `
         assignmentStatus
         trackingStartedAt
         trackingEndedAt
+        recipientTrackingToken
+        recipientTrackingEnabled
+        recipientTrackingRevokedAt
         userID
         createdAt
         updatedAt
@@ -669,6 +672,9 @@ export const onUpdatePayment = /* GraphQL */ `
         assignmentStatus
         trackingStartedAt
         trackingEndedAt
+        recipientTrackingToken
+        recipientTrackingEnabled
+        recipientTrackingRevokedAt
         userID
         createdAt
         updatedAt
@@ -830,6 +836,9 @@ export const onDeletePayment = /* GraphQL */ `
         assignmentStatus
         trackingStartedAt
         trackingEndedAt
+        recipientTrackingToken
+        recipientTrackingEnabled
+        recipientTrackingRevokedAt
         userID
         createdAt
         updatedAt
@@ -984,6 +993,9 @@ export const onCreateOffer = /* GraphQL */ `
         assignmentStatus
         trackingStartedAt
         trackingEndedAt
+        recipientTrackingToken
+        recipientTrackingEnabled
+        recipientTrackingRevokedAt
         userID
         createdAt
         updatedAt
@@ -1179,6 +1191,9 @@ export const onUpdateOffer = /* GraphQL */ `
         assignmentStatus
         trackingStartedAt
         trackingEndedAt
+        recipientTrackingToken
+        recipientTrackingEnabled
+        recipientTrackingRevokedAt
         userID
         createdAt
         updatedAt
@@ -1374,6 +1389,9 @@ export const onDeleteOffer = /* GraphQL */ `
         assignmentStatus
         trackingStartedAt
         trackingEndedAt
+        recipientTrackingToken
+        recipientTrackingEnabled
+        recipientTrackingRevokedAt
         userID
         createdAt
         updatedAt
@@ -1566,6 +1584,9 @@ export const onCreateOrder = /* GraphQL */ `
       assignmentStatus
       trackingStartedAt
       trackingEndedAt
+      recipientTrackingToken
+      recipientTrackingEnabled
+      recipientTrackingRevokedAt
       userID
       reviews {
         nextToken
@@ -1767,6 +1788,9 @@ export const onUpdateOrder = /* GraphQL */ `
       assignmentStatus
       trackingStartedAt
       trackingEndedAt
+      recipientTrackingToken
+      recipientTrackingEnabled
+      recipientTrackingRevokedAt
       userID
       reviews {
         nextToken
@@ -1968,6 +1992,9 @@ export const onDeleteOrder = /* GraphQL */ `
       assignmentStatus
       trackingStartedAt
       trackingEndedAt
+      recipientTrackingToken
+      recipientTrackingEnabled
+      recipientTrackingRevokedAt
       userID
       reviews {
         nextToken
@@ -2255,6 +2282,9 @@ export const onCreateCourierReport = /* GraphQL */ `
         assignmentStatus
         trackingStartedAt
         trackingEndedAt
+        recipientTrackingToken
+        recipientTrackingEnabled
+        recipientTrackingRevokedAt
         userID
         createdAt
         updatedAt
@@ -2477,6 +2507,9 @@ export const onUpdateCourierReport = /* GraphQL */ `
         assignmentStatus
         trackingStartedAt
         trackingEndedAt
+        recipientTrackingToken
+        recipientTrackingEnabled
+        recipientTrackingRevokedAt
         userID
         createdAt
         updatedAt
@@ -2699,6 +2732,9 @@ export const onDeleteCourierReport = /* GraphQL */ `
         assignmentStatus
         trackingStartedAt
         trackingEndedAt
+        recipientTrackingToken
+        recipientTrackingEnabled
+        recipientTrackingRevokedAt
         userID
         createdAt
         updatedAt
@@ -2921,6 +2957,9 @@ export const onCreateCourierReview = /* GraphQL */ `
         assignmentStatus
         trackingStartedAt
         trackingEndedAt
+        recipientTrackingToken
+        recipientTrackingEnabled
+        recipientTrackingRevokedAt
         userID
         createdAt
         updatedAt
@@ -3139,6 +3178,9 @@ export const onUpdateCourierReview = /* GraphQL */ `
         assignmentStatus
         trackingStartedAt
         trackingEndedAt
+        recipientTrackingToken
+        recipientTrackingEnabled
+        recipientTrackingRevokedAt
         userID
         createdAt
         updatedAt
@@ -3357,6 +3399,9 @@ export const onDeleteCourierReview = /* GraphQL */ `
         assignmentStatus
         trackingStartedAt
         trackingEndedAt
+        recipientTrackingToken
+        recipientTrackingEnabled
+        recipientTrackingRevokedAt
         userID
         createdAt
         updatedAt

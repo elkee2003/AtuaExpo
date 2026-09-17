@@ -6,7 +6,7 @@ import { ActivityIndicator, View } from "react-native";
 import OrderLiveUpdateCom from "../../../components/OrderLiveUpdate";
 
 const OrderLiveUpdate = () => {
-  const [courier, setCourier] = useState([]);
+  const [courier, setCourier] = useState(null);
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -42,9 +42,7 @@ const OrderLiveUpdate = () => {
 
   // useEffect to update Order
   useEffect(() => {
-    if (!order) {
-      return;
-    }
+    if (!order?.id) return;
 
     const subscription = DataStore.observe(Order, order.id).subscribe(
       ({ opType, element }) => {
@@ -54,14 +52,14 @@ const OrderLiveUpdate = () => {
       },
     );
 
-    return () => subscription.unsubscribe;
-  }, [order]);
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [order?.id]);
 
   // useEffect to update Courier
   useEffect(() => {
-    if (!courier) {
-      return;
-    }
+    if (!courier?.id) return;
 
     const subscription = DataStore.observe(Courier, courier.id).subscribe(
       ({ opType, element }) => {
@@ -71,8 +69,10 @@ const OrderLiveUpdate = () => {
       },
     );
 
-    return () => subscription.unsubscribe;
-  }, [courier.id]);
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [courier?.id]);
 
   if (!order || !courier) {
     return (

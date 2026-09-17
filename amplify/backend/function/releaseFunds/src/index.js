@@ -60,33 +60,24 @@ If releaseType is not supplied:
 ============================================================
 */
 
-
 /* ==========================================================
    ENVIRONMENT VARIABLES
 ========================================================== */
 
-const GRAPHQL_ENDPOINT =
-  process.env.API_ATUA_GRAPHQLAPIENDPOINTOUTPUT;
+const GRAPHQL_ENDPOINT = process.env.API_ATUA_GRAPHQLAPIENDPOINTOUTPUT;
 
-const API_KEY =
-  process.env.API_ATUA_GRAPHQLAPIKEYOUTPUT;
-
+const API_KEY = process.env.API_ATUA_GRAPHQLAPIKEYOUTPUT;
 
 /* ==========================================================
    MAIN HANDLER
 ========================================================== */
 
 exports.handler = async (event) => {
-
-  console.log(
-    "RELEASE FUNDS EVENT:",
-    JSON.stringify(event)
-  );
+  console.log("RELEASE FUNDS EVENT:", JSON.stringify(event));
 
   let orderID = null;
 
   try {
-
     /*
     ----------------------------------------------------------
     1. GET ORDER ID
@@ -94,25 +85,13 @@ exports.handler = async (event) => {
     */
 
     orderID =
-      event?.orderID ||
-      event?.arguments?.orderID ||
-      event?.detail?.orderID;
-
+      event?.orderID || event?.arguments?.orderID || event?.detail?.orderID;
 
     if (!orderID) {
-
-      throw new Error(
-        "orderID is required"
-      );
-
+      throw new Error("orderID is required");
     }
 
-
-    console.log(
-      "Releasing funds for order:",
-      orderID
-    );
-
+    console.log("Releasing funds for order:", orderID);
 
     /*
     ----------------------------------------------------------
@@ -162,47 +141,23 @@ exports.handler = async (event) => {
       }
     `;
 
+    const orderResponse = await graphqlRequest(getOrderQuery, {
+      id: orderID,
+    });
 
-    const orderResponse =
-      await graphqlRequest(
-        getOrderQuery,
-        {
-          id: orderID,
-        }
-      );
-
-
-    if (
-      orderResponse.errors
-    ) {
-
+    if (orderResponse.errors) {
       throw new Error(
-        `Failed to fetch order: ${JSON.stringify(
-          orderResponse.errors
-        )}`
+        `Failed to fetch order: ${JSON.stringify(orderResponse.errors)}`,
       );
-
     }
 
-
-    const order =
-      orderResponse?.data?.getOrder;
-
+    const order = orderResponse?.data?.getOrder;
 
     if (!order) {
-
-      throw new Error(
-        `Order not found: ${orderID}`
-      );
-
+      throw new Error(`Order not found: ${orderID}`);
     }
 
-
-    console.log(
-      "ORDER:",
-      JSON.stringify(order)
-    );
-
+    console.log("ORDER:", JSON.stringify(order));
 
     /*
     ----------------------------------------------------------
@@ -220,32 +175,19 @@ exports.handler = async (event) => {
     ----------------------------------------------------------
     */
 
-    if (
-      order.fundsStatus === "RELEASED"
-    ) {
-
-      console.log(
-        `Funds already released for order ${orderID}`
-      );
-
+    if (order.fundsStatus === "RELEASED") {
+      console.log(`Funds already released for order ${orderID}`);
 
       return successResponse({
-
-        message:
-          "Funds already released",
+        message: "Funds already released",
 
         orderID,
 
-        status:
-          "RELEASED",
+        status: "RELEASED",
 
-        alreadyReleased:
-          true,
-
+        alreadyReleased: true,
       });
-
     }
-
 
     /*
     ----------------------------------------------------------
@@ -261,16 +203,11 @@ exports.handler = async (event) => {
     ----------------------------------------------------------
     */
 
-    if (
-      order.status !== "DELIVERED"
-    ) {
-
+    if (order.status !== "DELIVERED") {
       throw new Error(
-        `Order ${orderID} is not DELIVERED. Current status: ${order.status}`
+        `Order ${orderID} is not DELIVERED. Current status: ${order.status}`,
       );
-
     }
-
 
     /*
     ----------------------------------------------------------
@@ -278,17 +215,11 @@ exports.handler = async (event) => {
     ----------------------------------------------------------
     */
 
-    if (
-      order.earningsAllocationStatus !==
-      "ALLOCATED"
-    ) {
-
+    if (order.earningsAllocationStatus !== "ALLOCATED") {
       throw new Error(
-        `Courier earnings have not been allocated for order ${orderID}. Current allocation status: ${order.earningsAllocationStatus}`
+        `Courier earnings have not been allocated for order ${orderID}. Current allocation status: ${order.earningsAllocationStatus}`,
       );
-
     }
-
 
     /*
     ----------------------------------------------------------
@@ -296,18 +227,11 @@ exports.handler = async (event) => {
     ----------------------------------------------------------
     */
 
-    const courierID =
-      order.assignedCourierId;
-
+    const courierID = order.assignedCourierId;
 
     if (!courierID) {
-
-      throw new Error(
-        `Order ${orderID} has no assigned courier`
-      );
-
+      throw new Error(`Order ${orderID} has no assigned courier`);
     }
-
 
     /*
     ----------------------------------------------------------
@@ -315,34 +239,17 @@ exports.handler = async (event) => {
     ----------------------------------------------------------
     */
 
-    const earnings =
-      Number(
-        order.courierEarnings || 0
-      );
+    const earnings = Number(order.courierEarnings || 0);
 
-
-    if (
-      !Number.isFinite(earnings) ||
-      earnings <= 0
-    ) {
-
+    if (!Number.isFinite(earnings) || earnings <= 0) {
       throw new Error(
-        `Invalid courier earnings for order ${orderID}: ${order.courierEarnings}`
+        `Invalid courier earnings for order ${orderID}: ${order.courierEarnings}`,
       );
-
     }
 
+    console.log("Courier:", courierID);
 
-    console.log(
-      "Courier:",
-      courierID
-    );
-
-    console.log(
-      "Courier earnings:",
-      earnings
-    );
-
+    console.log("Courier earnings:", earnings);
 
     /*
     ----------------------------------------------------------
@@ -365,49 +272,31 @@ exports.handler = async (event) => {
     ----------------------------------------------------------
     */
 
-    if (
-      order.fundsReleaseBlocked === true
-    ) {
-
-      console.log(
-        `Funds release blocked by admin for order ${orderID}`
-      );
-
+    if (order.fundsReleaseBlocked === true) {
+      console.log(`Funds release blocked by admin for order ${orderID}`);
 
       return successResponse({
-
-        message:
-          "Funds release is blocked by admin",
+        message: "Funds release is blocked by admin",
 
         orderID,
 
         courierID,
 
-        amount:
-          earnings,
+        amount: earnings,
 
-        status:
-          "HELD",
+        status: "HELD",
 
-        fundsStatus:
-          order.fundsStatus,
+        fundsStatus: order.fundsStatus,
 
-        holdReason:
-          order.fundsHoldReason || null,
+        holdReason: order.fundsHoldReason || null,
 
-        heldBy:
-          order.fundsHeldBy || null,
+        heldBy: order.fundsHeldBy || null,
 
-        heldAt:
-          order.fundsHeldAt || null,
+        heldAt: order.fundsHeldAt || null,
 
-        releaseBlocked:
-          true,
-
+        releaseBlocked: true,
       });
-
     }
-
 
     /*
     ----------------------------------------------------------
@@ -415,16 +304,11 @@ exports.handler = async (event) => {
     ----------------------------------------------------------
     */
 
-    if (
-      order.fundsStatus !== "HELD"
-    ) {
-
+    if (order.fundsStatus !== "HELD") {
       throw new Error(
-        `Order ${orderID} has unexpected fundsStatus: ${order.fundsStatus}`
+        `Order ${orderID} has unexpected fundsStatus: ${order.fundsStatus}`,
       );
-
     }
-
 
     /*
     ----------------------------------------------------------
@@ -447,42 +331,21 @@ exports.handler = async (event) => {
       }
     `;
 
+    const courierResponse = await graphqlRequest(getCourierQuery, {
+      id: courierID,
+    });
 
-    const courierResponse =
-      await graphqlRequest(
-        getCourierQuery,
-        {
-          id:
-            courierID,
-        }
-      );
-
-
-    if (
-      courierResponse.errors
-    ) {
-
+    if (courierResponse.errors) {
       throw new Error(
-        `Failed to fetch courier: ${JSON.stringify(
-          courierResponse.errors
-        )}`
+        `Failed to fetch courier: ${JSON.stringify(courierResponse.errors)}`,
       );
-
     }
 
-
-    const courier =
-      courierResponse?.data?.getCourier;
-
+    const courier = courierResponse?.data?.getCourier;
 
     if (!courier) {
-
-      throw new Error(
-        `Courier not found: ${courierID}`
-      );
-
+      throw new Error(`Courier not found: ${courierID}`);
     }
-
 
     /*
     ----------------------------------------------------------
@@ -503,11 +366,7 @@ exports.handler = async (event) => {
 
     let wallet = null;
 
-
-    if (
-      courier.walletID
-    ) {
-
+    if (courier.walletID) {
       const getWalletQuery = `
         query GetWallet($id: ID!) {
 
@@ -525,35 +384,18 @@ exports.handler = async (event) => {
         }
       `;
 
+      const walletResponse = await graphqlRequest(getWalletQuery, {
+        id: courier.walletID,
+      });
 
-      const walletResponse =
-        await graphqlRequest(
-          getWalletQuery,
-          {
-            id:
-              courier.walletID,
-          }
-        );
-
-
-      if (
-        walletResponse.errors
-      ) {
-
+      if (walletResponse.errors) {
         throw new Error(
-          `Failed to fetch wallet: ${JSON.stringify(
-            walletResponse.errors
-          )}`
+          `Failed to fetch wallet: ${JSON.stringify(walletResponse.errors)}`,
         );
-
       }
 
-
-      wallet =
-        walletResponse?.data?.getWallet;
-
+      wallet = walletResponse?.data?.getWallet;
     }
-
 
     /*
     ----------------------------------------------------------
@@ -562,7 +404,6 @@ exports.handler = async (event) => {
     */
 
     if (!wallet) {
-
       const listWalletsQuery = `
         query ListWallets(
           $filter: ModelWalletFilterInput
@@ -587,52 +428,28 @@ exports.handler = async (event) => {
         }
       `;
 
+      const walletResponse = await graphqlRequest(listWalletsQuery, {
+        filter: {
+          ownerID: {
+            eq: courierID,
+          },
 
-      const walletResponse =
-        await graphqlRequest(
-          listWalletsQuery,
-          {
+          ownerType: {
+            eq: "COURIER",
+          },
+        },
+      });
 
-            filter: {
-
-              ownerID: {
-                eq:
-                  courierID,
-              },
-
-              ownerType: {
-                eq:
-                  "COURIER",
-              },
-
-            },
-
-          }
-        );
-
-
-      if (
-        walletResponse.errors
-      ) {
-
+      if (walletResponse.errors) {
         throw new Error(
           `Failed to search courier wallet: ${JSON.stringify(
-            walletResponse.errors
-          )}`
+            walletResponse.errors,
+          )}`,
         );
-
       }
 
-
-      wallet =
-        walletResponse
-          ?.data
-          ?.listWallets
-          ?.items
-          ?.[0];
-
+      wallet = walletResponse?.data?.listWallets?.items?.[0];
     }
-
 
     /*
     ----------------------------------------------------------
@@ -641,13 +458,8 @@ exports.handler = async (event) => {
     */
 
     if (!wallet) {
-
-      throw new Error(
-        `Wallet not found for courier ${courierID}`
-      );
-
+      throw new Error(`Wallet not found for courier ${courierID}`);
     }
-
 
     /*
     ----------------------------------------------------------
@@ -655,33 +467,17 @@ exports.handler = async (event) => {
     ----------------------------------------------------------
     */
 
-    if (
-      wallet.ownerID !== courierID
-    ) {
-
+    if (wallet.ownerID !== courierID) {
       throw new Error(
-        `Wallet ${wallet.id} does not belong to courier ${courierID}`
+        `Wallet ${wallet.id} does not belong to courier ${courierID}`,
       );
-
     }
 
-
-    if (
-      wallet.ownerType !== "COURIER"
-    ) {
-
-      throw new Error(
-        `Wallet ${wallet.id} is not a courier wallet`
-      );
-
+    if (wallet.ownerType !== "COURIER") {
+      throw new Error(`Wallet ${wallet.id} is not a courier wallet`);
     }
 
-
-    console.log(
-      "WALLET:",
-      JSON.stringify(wallet)
-    );
-
+    console.log("WALLET:", JSON.stringify(wallet));
 
     /*
     ----------------------------------------------------------
@@ -689,23 +485,11 @@ exports.handler = async (event) => {
     ----------------------------------------------------------
     */
 
-    const currentPendingBalance =
-      Number(
-        wallet.pendingBalance || 0
-      );
+    const currentPendingBalance = Number(wallet.pendingBalance || 0);
 
+    const currentAvailableBalance = Number(wallet.availableBalance || 0);
 
-    const currentAvailableBalance =
-      Number(
-        wallet.availableBalance || 0
-      );
-
-
-    const currentLifetimeEarnings =
-      Number(
-        wallet.lifetimeEarnings || 0
-      );
-
+    const currentLifetimeEarnings = Number(wallet.lifetimeEarnings || 0);
 
     /*
     ----------------------------------------------------------
@@ -718,18 +502,13 @@ exports.handler = async (event) => {
     ----------------------------------------------------------
     */
 
-    if (
-      currentPendingBalance < earnings
-    ) {
-
+    if (currentPendingBalance < earnings) {
       throw new Error(
         `Insufficient pending balance for courier ${courierID}. ` +
-        `Pending: ${currentPendingBalance}, ` +
-        `Required: ${earnings}`
+          `Pending: ${currentPendingBalance}, ` +
+          `Required: ${earnings}`,
       );
-
     }
-
 
     /*
     ----------------------------------------------------------
@@ -748,15 +527,9 @@ exports.handler = async (event) => {
     ----------------------------------------------------------
     */
 
-    const newPendingBalance =
-      currentPendingBalance -
-      earnings;
+    const newPendingBalance = currentPendingBalance - earnings;
 
-
-    const newAvailableBalance =
-      currentAvailableBalance +
-      earnings;
-
+    const newAvailableBalance = currentAvailableBalance + earnings;
 
     /*
     Floating point protection.
@@ -764,17 +537,9 @@ exports.handler = async (event) => {
     Money should be stored consistently to two decimal places.
     */
 
-    const roundedPendingBalance =
-      Number(
-        newPendingBalance.toFixed(2)
-      );
+    const roundedPendingBalance = Number(newPendingBalance.toFixed(2));
 
-
-    const roundedAvailableBalance =
-      Number(
-        newAvailableBalance.toFixed(2)
-      );
-
+    const roundedAvailableBalance = Number(newAvailableBalance.toFixed(2));
 
     /*
     ----------------------------------------------------------
@@ -802,57 +567,34 @@ exports.handler = async (event) => {
       }
     `;
 
+    const walletUpdateResponse = await graphqlRequest(updateWalletMutation, {
+      input: {
+        id: wallet.id,
 
-    const walletUpdateResponse =
-      await graphqlRequest(
-        updateWalletMutation,
-        {
+        availableBalance: roundedAvailableBalance,
 
-          input: {
+        pendingBalance: roundedPendingBalance,
 
-            id:
-              wallet.id,
-
-            availableBalance:
-              roundedAvailableBalance,
-
-            pendingBalance:
-              roundedPendingBalance,
-
-            /*
+        /*
             IMPORTANT:
 
             lifetimeEarnings is intentionally NOT changed.
             */
+      },
+    });
 
-          },
-
-        }
-      );
-
-
-    if (
-      walletUpdateResponse.errors
-    ) {
-
+    if (walletUpdateResponse.errors) {
       throw new Error(
         `Failed to release wallet funds: ${JSON.stringify(
-          walletUpdateResponse.errors
-        )}`
+          walletUpdateResponse.errors,
+        )}`,
       );
-
     }
-
 
     console.log(
       "WALLET AFTER RELEASE:",
-      JSON.stringify(
-        walletUpdateResponse
-          ?.data
-          ?.updateWallet
-      )
+      JSON.stringify(walletUpdateResponse?.data?.updateWallet),
     );
-
 
     /*
     ----------------------------------------------------------
@@ -872,9 +614,7 @@ exports.handler = async (event) => {
     ----------------------------------------------------------
     */
 
-    const transactionReference =
-      `EARNINGS-${orderID}`;
-
+    const transactionReference = `EARNINGS-${orderID}`;
 
     const findTransactionQuery = `
       query ListTransactions(
@@ -909,45 +649,23 @@ exports.handler = async (event) => {
       }
     `;
 
+    const transactionResponse = await graphqlRequest(findTransactionQuery, {
+      filter: {
+        reference: {
+          eq: transactionReference,
+        },
+      },
+    });
 
-    const transactionResponse =
-      await graphqlRequest(
-        findTransactionQuery,
-        {
-
-          filter: {
-
-            reference: {
-              eq:
-                transactionReference,
-            },
-
-          },
-
-        }
-      );
-
-
-    if (
-      transactionResponse.errors
-    ) {
-
+    if (transactionResponse.errors) {
       throw new Error(
         `Failed to find earnings transaction: ${JSON.stringify(
-          transactionResponse.errors
-        )}`
+          transactionResponse.errors,
+        )}`,
       );
-
     }
 
-
-    const transaction =
-      transactionResponse
-        ?.data
-        ?.listTransactions
-        ?.items
-        ?.[0];
-
+    const transaction = transactionResponse?.data?.listTransactions?.items?.[0];
 
     /*
     ----------------------------------------------------------
@@ -956,7 +674,6 @@ exports.handler = async (event) => {
     */
 
     if (transaction) {
-
       /*
       Only change the transaction to COMPLETED if it is
       currently pending.
@@ -964,10 +681,7 @@ exports.handler = async (event) => {
       If it is already completed, leave it alone.
       */
 
-      if (
-        transaction.status === "PENDING"
-      ) {
-
+      if (transaction.status === "PENDING") {
         const updateTransactionMutation = `
           mutation UpdateTransaction(
             $input: UpdateTransactionInput!
@@ -998,69 +712,40 @@ exports.handler = async (event) => {
           }
         `;
 
+        const updateTransactionResponse = await graphqlRequest(
+          updateTransactionMutation,
+          {
+            input: {
+              id: transaction.id,
 
-        const updateTransactionResponse =
-          await graphqlRequest(
-            updateTransactionMutation,
-            {
+              status: "COMPLETED",
 
-              input: {
+              description:
+                "Courier earnings released and made available for payout",
+            },
+          },
+        );
 
-                id:
-                  transaction.id,
-
-                status:
-                  "COMPLETED",
-
-                description:
-                  "Courier earnings released and made available for payout",
-
-              },
-
-            }
-          );
-
-
-        if (
-          updateTransactionResponse.errors
-        ) {
-
+        if (updateTransactionResponse.errors) {
           throw new Error(
             `Wallet was updated but transaction could not be completed: ${JSON.stringify(
-              updateTransactionResponse.errors
-            )}`
+              updateTransactionResponse.errors,
+            )}`,
           );
-
         }
-
 
         console.log(
           "TRANSACTION COMPLETED:",
-          JSON.stringify(
-            updateTransactionResponse
-              ?.data
-              ?.updateTransaction
-          )
+          JSON.stringify(updateTransactionResponse?.data?.updateTransaction),
         );
-
-      } else if (
-        transaction.status === "COMPLETED"
-      ) {
-
-        console.log(
-          "Transaction already completed"
-        );
-
+      } else if (transaction.status === "COMPLETED") {
+        console.log("Transaction already completed");
       } else {
-
         throw new Error(
-          `Earnings transaction has unexpected status: ${transaction.status}`
+          `Earnings transaction has unexpected status: ${transaction.status}`,
         );
-
       }
-
     } else {
-
       /*
       This is unusual.
 
@@ -1075,11 +760,9 @@ exports.handler = async (event) => {
       */
 
       throw new Error(
-        `Earnings transaction ${transactionReference} was not found`
+        `Earnings transaction ${transactionReference} was not found`,
       );
-
     }
-
 
     /*
     ----------------------------------------------------------
@@ -1099,10 +782,7 @@ exports.handler = async (event) => {
     */
 
     const releaseType =
-      event?.releaseType ||
-      event?.arguments?.releaseType ||
-      "AUTOMATIC";
-
+      event?.releaseType || event?.arguments?.releaseType || "AUTOMATIC";
 
     /*
     ----------------------------------------------------------
@@ -1118,9 +798,7 @@ exports.handler = async (event) => {
     ----------------------------------------------------------
     */
 
-    const releaseTimestamp =
-      new Date().toISOString();
-
+    const releaseTimestamp = new Date().toISOString();
 
     const updateOrderMutation = `
       mutation UpdateOrder(
@@ -1148,27 +826,17 @@ exports.handler = async (event) => {
       }
     `;
 
+    const orderUpdateResponse = await graphqlRequest(updateOrderMutation, {
+      input: {
+        id: orderID,
 
-    const orderUpdateResponse =
-      await graphqlRequest(
-        updateOrderMutation,
-        {
+        fundsStatus: "RELEASED",
 
-          input: {
+        fundsReleasedAt: releaseTimestamp,
 
-            id:
-              orderID,
+        fundsReleaseType: releaseType,
 
-            fundsStatus:
-              "RELEASED",
-
-            fundsReleasedAt:
-              releaseTimestamp,
-
-            fundsReleaseType:
-              releaseType,
-
-            /*
+        /*
             We are NOT changing:
 
                 fundsReleaseBlocked
@@ -1177,35 +845,21 @@ exports.handler = async (event) => {
 
             In normal operation it should already be false.
             */
+      },
+    });
 
-          },
-
-        }
-      );
-
-
-    if (
-      orderUpdateResponse.errors
-    ) {
-
+    if (orderUpdateResponse.errors) {
       throw new Error(
         `Wallet and transaction were updated but order could not be marked RELEASED: ${JSON.stringify(
-          orderUpdateResponse.errors
-        )}`
+          orderUpdateResponse.errors,
+        )}`,
       );
-
     }
-
 
     console.log(
       "ORDER FUNDS RELEASED:",
-      JSON.stringify(
-        orderUpdateResponse
-          ?.data
-          ?.updateOrder
-      )
+      JSON.stringify(orderUpdateResponse?.data?.updateOrder),
     );
-
 
     /*
     ----------------------------------------------------------
@@ -1214,54 +868,34 @@ exports.handler = async (event) => {
     */
 
     return successResponse({
-
-      message:
-        "Courier funds released successfully",
+      message: "Courier funds released successfully",
 
       orderID,
 
       courierID,
 
-      amount:
-        earnings,
+      amount: earnings,
 
-      walletID:
-        wallet.id,
+      walletID: wallet.id,
 
-      previousPendingBalance:
-        currentPendingBalance,
+      previousPendingBalance: currentPendingBalance,
 
-      newPendingBalance:
-        roundedPendingBalance,
+      newPendingBalance: roundedPendingBalance,
 
-      previousAvailableBalance:
-        currentAvailableBalance,
+      previousAvailableBalance: currentAvailableBalance,
 
-      newAvailableBalance:
-        roundedAvailableBalance,
+      newAvailableBalance: roundedAvailableBalance,
 
-      lifetimeEarnings:
-        currentLifetimeEarnings,
+      lifetimeEarnings: currentLifetimeEarnings,
 
-      releaseType:
-        releaseType,
+      releaseType: releaseType,
 
-      fundsStatus:
-        "RELEASED",
+      fundsStatus: "RELEASED",
 
-      transactionStatus:
-        "COMPLETED",
-
+      transactionStatus: "COMPLETED",
     });
-
-
   } catch (error) {
-
-    console.error(
-      "RELEASE FUNDS ERROR:",
-      error
-    );
-
+    console.error("RELEASE FUNDS ERROR:", error);
 
     /*
     ----------------------------------------------------------
@@ -1270,158 +904,81 @@ exports.handler = async (event) => {
     */
 
     return {
+      statusCode: 500,
 
-      statusCode:
-        500,
+      body: JSON.stringify({
+        success: false,
 
-      body:
-        JSON.stringify({
+        message: error.message || "Funds release failed",
 
-          success:
-            false,
-
-          message:
-            error.message ||
-            "Funds release failed",
-
-          orderID,
-
-        }),
-
+        orderID,
+      }),
     };
-
   }
 };
-
 
 /* ==========================================================
    GRAPHQL REQUEST HELPER
 ========================================================== */
 
-async function graphqlRequest(
-  query,
-  variables = {}
-) {
-
-  if (
-    !GRAPHQL_ENDPOINT
-  ) {
-
-    throw new Error(
-      "Missing API_ATUA_GRAPHQLAPIENDPOINTOUTPUT"
-    );
-
+async function graphqlRequest(query, variables = {}) {
+  if (!GRAPHQL_ENDPOINT) {
+    throw new Error("Missing API_ATUA_GRAPHQLAPIENDPOINTOUTPUT");
   }
 
-
-  if (
-    !API_KEY
-  ) {
-
-    throw new Error(
-      "Missing API_ATUA_GRAPHQLAPIKEYOUTPUT"
-    );
-
+  if (!API_KEY) {
+    throw new Error("Missing API_ATUA_GRAPHQLAPIKEYOUTPUT");
   }
 
+  const response = await fetch(GRAPHQL_ENDPOINT, {
+    method: "POST",
 
-  const response =
-    await fetch(
-      GRAPHQL_ENDPOINT,
-      {
+    headers: {
+      "Content-Type": "application/json",
 
-        method:
-          "POST",
+      "x-api-key": API_KEY,
+    },
 
-        headers: {
+    body: JSON.stringify({
+      query,
 
-          "Content-Type":
-            "application/json",
+      variables,
+    }),
+  });
 
-          "x-api-key":
-            API_KEY,
-
-        },
-
-        body:
-          JSON.stringify({
-
-            query,
-
-            variables,
-
-          }),
-
-      }
-    );
-
-
-  const responseText =
-    await response.text();
-
+  const responseText = await response.text();
 
   let responseData;
 
-
   try {
-
-    responseData =
-      JSON.parse(
-        responseText
-      );
-
-  } catch (
-    parseError
-  ) {
-
-    throw new Error(
-      `GraphQL returned invalid JSON: ${responseText}`
-    );
-
+    responseData = JSON.parse(responseText);
+  } catch (parseError) {
+    throw new Error(`GraphQL returned invalid JSON: ${responseText}`);
   }
 
-
-  if (
-    !response.ok
-  ) {
-
-    throw new Error(
-      `GraphQL HTTP ${response.status}: ${responseText}`
-    );
-
+  if (!response.ok) {
+    throw new Error(`GraphQL HTTP ${response.status}: ${responseText}`);
   }
-
 
   return responseData;
 }
-
 
 /* ==========================================================
    SUCCESS RESPONSE HELPER
 ========================================================== */
 
-function successResponse(
-  data
-) {
-
+function successResponse(data) {
   return {
+    statusCode: 200,
 
-    statusCode:
-      200,
+    body: JSON.stringify({
+      success: true,
 
-    body:
-      JSON.stringify({
-
-        success:
-          true,
-
-        ...data,
-
-      }),
-
+      ...data,
+    }),
   };
-
-}const fetch = require("node-fetch");
+}
+const fetch = require("node-fetch");
 
 /*
 ============================================================
@@ -1484,71 +1041,42 @@ OPTIONAL:
 ============================================================
 */
 
-
 /* ==========================================================
    ENVIRONMENT VARIABLES
 ========================================================== */
 
-const GRAPHQL_ENDPOINT =
-  process.env.API_ATUA_GRAPHQLAPIENDPOINTOUTPUT;
+const GRAPHQL_ENDPOINT = process.env.API_ATUA_GRAPHQLAPIENDPOINTOUTPUT;
 
-const API_KEY =
-  process.env.API_ATUA_GRAPHQLAPIKEYOUTPUT;
-
+const API_KEY = process.env.API_ATUA_GRAPHQLAPIKEYOUTPUT;
 
 /* ==========================================================
    MAIN HANDLER
 ========================================================== */
 
 exports.handler = async (event) => {
+  console.log("==========================================");
 
-  console.log(
-    "=========================================="
-  );
+  console.log("ATUA RELEASE FUNDS STARTED");
 
-  console.log(
-    "ATUA RELEASE FUNDS STARTED"
-  );
+  console.log("EVENT:", JSON.stringify(event));
 
-  console.log(
-    "EVENT:",
-    JSON.stringify(event)
-  );
-
-  console.log(
-    "=========================================="
-  );
-
+  console.log("==========================================");
 
   let orderID = null;
 
-
   try {
-
     /* ======================================================
        1. GET ORDER ID
     ====================================================== */
 
     orderID =
-      event?.orderID ||
-      event?.arguments?.orderID ||
-      event?.detail?.orderID;
-
+      event?.orderID || event?.arguments?.orderID || event?.detail?.orderID;
 
     if (!orderID) {
-
-      throw new Error(
-        "orderID is required."
-      );
-
+      throw new Error("orderID is required.");
     }
 
-
-    console.log(
-      "Releasing funds for order:",
-      orderID
-    );
-
+    console.log("Releasing funds for order:", orderID);
 
     /* ======================================================
        2. GET ORDER
@@ -1595,304 +1123,166 @@ exports.handler = async (event) => {
       }
     `;
 
+    const orderResponse = await graphqlRequest(getOrderQuery, {
+      id: orderID,
+    });
 
-    const orderResponse =
-      await graphqlRequest(
-        getOrderQuery,
-        {
-          id:
-            orderID,
-        }
-      );
-
-
-    if (
-      orderResponse.errors
-    ) {
-
+    if (orderResponse.errors) {
       throw new Error(
-        `Failed to fetch order: ${JSON.stringify(
-          orderResponse.errors
-        )}`
+        `Failed to fetch order: ${JSON.stringify(orderResponse.errors)}`,
       );
-
     }
 
-
-    const order =
-      orderResponse?.data?.getOrder;
-
+    const order = orderResponse?.data?.getOrder;
 
     if (!order) {
-
-      throw new Error(
-        `Order not found: ${orderID}`
-      );
-
+      throw new Error(`Order not found: ${orderID}`);
     }
 
-
-    console.log(
-      "ORDER:",
-      JSON.stringify(order)
-    );
-
+    console.log("ORDER:", JSON.stringify(order));
 
     /* ======================================================
        3. IDEMPOTENCY
     ====================================================== */
 
-    if (
-      order.fundsStatus ===
-      "RELEASED"
-    ) {
-
-      console.log(
-        `Funds already fully released for order ${orderID}`
-      );
-
+    if (order.fundsStatus === "RELEASED") {
+      console.log(`Funds already fully released for order ${orderID}`);
 
       return successResponse({
-
-        message:
-          "Funds already released.",
+        message: "Funds already released.",
 
         orderID,
 
-        courierID:
-          order.assignedCourierId,
+        courierID: order.assignedCourierId,
 
-        amount:
-          Number(
-            order.courierEarnings || 0
-          ),
+        amount: Number(order.courierEarnings || 0),
 
-        fundsStatus:
-          "RELEASED",
+        fundsStatus: "RELEASED",
 
-        fundsReleasedAmount:
-          Number(
-            order.fundsReleasedAmount || 0
-          ),
+        fundsReleasedAmount: Number(order.fundsReleasedAmount || 0),
 
-        alreadyReleased:
-          true,
-
+        alreadyReleased: true,
       });
-
     }
-
 
     /* ======================================================
        4. VERIFY PAYMENT
     ====================================================== */
 
-    if (
-      order.paymentStatus !==
-      "PAID"
-    ) {
-
+    if (order.paymentStatus !== "PAID") {
       throw new Error(
-        `Order ${orderID} is not PAID. Current paymentStatus: ${order.paymentStatus}`
+        `Order ${orderID} is not PAID. Current paymentStatus: ${order.paymentStatus}`,
       );
-
     }
-
 
     /* ======================================================
        5. VERIFY ORDER WAS ALLOCATED
     ====================================================== */
 
-    if (
-      order.earningsAllocationStatus !==
-      "ALLOCATED"
-    ) {
-
+    if (order.earningsAllocationStatus !== "ALLOCATED") {
       throw new Error(
-        `Courier earnings have not been allocated for order ${orderID}. Current status: ${order.earningsAllocationStatus}`
+        `Courier earnings have not been allocated for order ${orderID}. Current status: ${order.earningsAllocationStatus}`,
       );
-
     }
-
 
     /* ======================================================
        6. VERIFY ORDER IS DELIVERED
     ====================================================== */
 
-    if (
-      order.status !==
-      "DELIVERED"
-    ) {
-
+    if (order.status !== "DELIVERED") {
       throw new Error(
-        `Order ${orderID} is not DELIVERED. Current status: ${order.status}`
+        `Order ${orderID} is not DELIVERED. Current status: ${order.status}`,
       );
-
     }
-
 
     /* ======================================================
        7. DO NOT USE NORMAL RELEASE FOR MAXI
     ====================================================== */
 
-    const transportationType =
-      String(
-        order.transportationType ||
-        ""
-      ).toUpperCase();
+    const transportationType = String(
+      order.transportationType || "",
+    ).toUpperCase();
 
+    const vehicleClass = String(order.vehicleClass || "").toUpperCase();
 
-    const vehicleClass =
-      String(
-        order.vehicleClass ||
-        ""
-      ).toUpperCase();
+    const isMaxi = transportationType === "MAXI" || vehicleClass === "MAXI";
 
-
-    const isMaxi =
-      transportationType ===
-        "MAXI" ||
-      vehicleClass ===
-        "MAXI";
-
-
-    if (
-      isMaxi
-    ) {
-
+    if (isMaxi) {
       throw new Error(
-        `Order ${orderID} is a MAXI order. Use releaseCourierMilestoneFunds instead.`
+        `Order ${orderID} is a MAXI order. Use releaseCourierMilestoneFunds instead.`,
       );
-
     }
-
 
     /* ======================================================
        8. VERIFY COURIER
     ====================================================== */
 
-    const courierID =
-      order.assignedCourierId;
-
+    const courierID = order.assignedCourierId;
 
     if (!courierID) {
-
-      throw new Error(
-        `Order ${orderID} has no assigned courier.`
-      );
-
+      throw new Error(`Order ${orderID} has no assigned courier.`);
     }
-
 
     /* ======================================================
        9. VERIFY EARNINGS
     ====================================================== */
 
-    const earnings =
-      Number(
-        order.courierEarnings || 0
-      );
+    const earnings = Number(order.courierEarnings || 0);
 
-
-    if (
-      !Number.isFinite(
-        earnings
-      ) ||
-      earnings <= 0
-    ) {
-
+    if (!Number.isFinite(earnings) || earnings <= 0) {
       throw new Error(
-        `Invalid courier earnings for order ${orderID}: ${order.courierEarnings}`
+        `Invalid courier earnings for order ${orderID}: ${order.courierEarnings}`,
       );
-
     }
 
+    console.log("COURIER:", courierID);
 
-    console.log(
-      "COURIER:",
-      courierID
-    );
-
-    console.log(
-      "EARNINGS:",
-      earnings
-    );
-
+    console.log("EARNINGS:", earnings);
 
     /* ======================================================
        10. CHECK ADMIN HOLD
     ====================================================== */
 
-    if (
-      order.fundsReleaseBlocked ===
-      true
-    ) {
-
-      console.log(
-        `Funds release blocked by admin for order ${orderID}`
-      );
-
+    if (order.fundsReleaseBlocked === true) {
+      console.log(`Funds release blocked by admin for order ${orderID}`);
 
       return successResponse({
-
-        message:
-          "Funds release is blocked by admin.",
+        message: "Funds release is blocked by admin.",
 
         orderID,
 
         courierID,
 
-        amount:
-          earnings,
+        amount: earnings,
 
-        fundsStatus:
-          order.fundsStatus,
+        fundsStatus: order.fundsStatus,
 
-        fundsReleasedAmount:
-          Number(
-            order.fundsReleasedAmount || 0
-          ),
+        fundsReleasedAmount: Number(order.fundsReleasedAmount || 0),
 
-        holdReason:
-          order.fundsHoldReason ||
-          null,
+        holdReason: order.fundsHoldReason || null,
 
-        heldBy:
-          order.fundsHeldBy ||
-          null,
+        heldBy: order.fundsHeldBy || null,
 
-        heldAt:
-          order.fundsHeldAt ||
-          null,
+        heldAt: order.fundsHeldAt || null,
 
-        releaseBlocked:
-          true,
-
+        releaseBlocked: true,
       });
-
     }
-
 
     /* ======================================================
        11. NORMAL ORDER MUST BE HELD
     ====================================================== */
 
-    if (
-      order.fundsStatus !==
-      "HELD"
-    ) {
-
+    if (order.fundsStatus !== "HELD") {
       /*
        * PARTIALLY_RELEASED belongs to the Maxi milestone
        * system. It should not be processed by this Lambda.
        */
 
       throw new Error(
-        `Order ${orderID} has fundsStatus ${order.fundsStatus}. Normal release requires HELD.`
+        `Order ${orderID} has fundsStatus ${order.fundsStatus}. Normal release requires HELD.`,
       );
-
     }
-
 
     /* ======================================================
        12. GET COURIER
@@ -1915,42 +1305,21 @@ exports.handler = async (event) => {
       }
     `;
 
+    const courierResponse = await graphqlRequest(getCourierQuery, {
+      id: courierID,
+    });
 
-    const courierResponse =
-      await graphqlRequest(
-        getCourierQuery,
-        {
-          id:
-            courierID,
-        }
-      );
-
-
-    if (
-      courierResponse.errors
-    ) {
-
+    if (courierResponse.errors) {
       throw new Error(
-        `Failed to fetch courier: ${JSON.stringify(
-          courierResponse.errors
-        )}`
+        `Failed to fetch courier: ${JSON.stringify(courierResponse.errors)}`,
       );
-
     }
 
-
-    const courier =
-      courierResponse?.data?.getCourier;
-
+    const courier = courierResponse?.data?.getCourier;
 
     if (!courier) {
-
-      throw new Error(
-        `Courier not found: ${courierID}`
-      );
-
+      throw new Error(`Courier not found: ${courierID}`);
     }
-
 
     /* ======================================================
        13. GET COURIER WALLET
@@ -1958,17 +1327,13 @@ exports.handler = async (event) => {
 
     let wallet = null;
 
-
     /*
     ----------------------------------------------------------
     PREFERRED: Courier.walletID
     ----------------------------------------------------------
     */
 
-    if (
-      courier.walletID
-    ) {
-
+    if (courier.walletID) {
       const getWalletQuery = `
         query GetWallet($id: ID!) {
 
@@ -1988,35 +1353,18 @@ exports.handler = async (event) => {
         }
       `;
 
+      const walletResponse = await graphqlRequest(getWalletQuery, {
+        id: courier.walletID,
+      });
 
-      const walletResponse =
-        await graphqlRequest(
-          getWalletQuery,
-          {
-            id:
-              courier.walletID,
-          }
-        );
-
-
-      if (
-        walletResponse.errors
-      ) {
-
+      if (walletResponse.errors) {
         throw new Error(
-          `Failed to fetch wallet: ${JSON.stringify(
-            walletResponse.errors
-          )}`
+          `Failed to fetch wallet: ${JSON.stringify(walletResponse.errors)}`,
         );
-
       }
 
-
-      wallet =
-        walletResponse?.data?.getWallet;
-
+      wallet = walletResponse?.data?.getWallet;
     }
-
 
     /*
     ----------------------------------------------------------
@@ -2025,7 +1373,6 @@ exports.handler = async (event) => {
     */
 
     if (!wallet) {
-
       const listWalletsQuery = `
         query ListWallets(
           $filter: ModelWalletFilterInput
@@ -2054,153 +1401,82 @@ exports.handler = async (event) => {
         }
       `;
 
+      const walletResponse = await graphqlRequest(listWalletsQuery, {
+        filter: {
+          ownerID: {
+            eq: courierID,
+          },
 
-      const walletResponse =
-        await graphqlRequest(
-          listWalletsQuery,
-          {
+          ownerType: {
+            eq: "COURIER",
+          },
+        },
+      });
 
-            filter: {
-
-              ownerID: {
-                eq:
-                  courierID,
-              },
-
-              ownerType: {
-                eq:
-                  "COURIER",
-              },
-
-            },
-
-          }
-        );
-
-
-      if (
-        walletResponse.errors
-      ) {
-
+      if (walletResponse.errors) {
         throw new Error(
           `Failed to search courier wallet: ${JSON.stringify(
-            walletResponse.errors
-          )}`
+            walletResponse.errors,
+          )}`,
         );
-
       }
 
-
-      wallet =
-        walletResponse
-          ?.data
-          ?.listWallets
-          ?.items
-          ?.[0];
-
+      wallet = walletResponse?.data?.listWallets?.items?.[0];
     }
-
 
     /* ======================================================
        14. WALLET MUST EXIST
     ====================================================== */
 
     if (!wallet) {
-
-      throw new Error(
-        `Wallet not found for courier ${courierID}`
-      );
-
+      throw new Error(`Wallet not found for courier ${courierID}`);
     }
-
 
     /* ======================================================
        15. VERIFY WALLET OWNER
     ====================================================== */
 
-    if (
-      wallet.ownerID !==
-      courierID
-    ) {
-
+    if (wallet.ownerID !== courierID) {
       throw new Error(
-        `Wallet ${wallet.id} does not belong to courier ${courierID}`
+        `Wallet ${wallet.id} does not belong to courier ${courierID}`,
       );
-
     }
 
-
-    if (
-      wallet.ownerType !==
-      "COURIER"
-    ) {
-
-      throw new Error(
-        `Wallet ${wallet.id} is not a courier wallet.`
-      );
-
+    if (wallet.ownerType !== "COURIER") {
+      throw new Error(`Wallet ${wallet.id} is not a courier wallet.`);
     }
-
 
     /* ======================================================
        16. READ BALANCES
     ====================================================== */
 
-    const currentPendingBalance =
-      Number(
-        wallet.pendingBalance || 0
-      );
+    const currentPendingBalance = Number(wallet.pendingBalance || 0);
 
+    const currentAvailableBalance = Number(wallet.availableBalance || 0);
 
-    const currentAvailableBalance =
-      Number(
-        wallet.availableBalance || 0
-      );
-
-
-    const currentLifetimeEarnings =
-      Number(
-        wallet.lifetimeEarnings || 0
-      );
-
+    const currentLifetimeEarnings = Number(wallet.lifetimeEarnings || 0);
 
     /* ======================================================
        17. VERIFY PENDING BALANCE
     ====================================================== */
 
-    if (
-      currentPendingBalance <
-      earnings
-    ) {
-
+    if (currentPendingBalance < earnings) {
       throw new Error(
-        `Insufficient pending balance. Pending: ${currentPendingBalance}, required: ${earnings}.`
+        `Insufficient pending balance. Pending: ${currentPendingBalance}, required: ${earnings}.`,
       );
-
     }
-
 
     /* ======================================================
        18. CALCULATE BALANCES
     ====================================================== */
 
-    const newPendingBalance =
-      Number(
-        (
-          currentPendingBalance -
-          earnings
-        ).toFixed(2)
-      );
+    const newPendingBalance = Number(
+      (currentPendingBalance - earnings).toFixed(2),
+    );
 
-
-    const newAvailableBalance =
-      Number(
-        (
-          currentAvailableBalance +
-          earnings
-        ).toFixed(2)
-      );
-
+    const newAvailableBalance = Number(
+      (currentAvailableBalance + earnings).toFixed(2),
+    );
 
     /* ======================================================
        19. UPDATE WALLET
@@ -2226,92 +1502,53 @@ exports.handler = async (event) => {
       }
     `;
 
+    const walletUpdateResponse = await graphqlRequest(updateWalletMutation, {
+      input: {
+        id: wallet.id,
 
-    const walletUpdateResponse =
-      await graphqlRequest(
-        updateWalletMutation,
-        {
+        availableBalance: newAvailableBalance,
 
-          input: {
+        pendingBalance: newPendingBalance,
 
-            id:
-              wallet.id,
+        /*
+         * lifetimeEarnings DOES NOT CHANGE.
+         */
+      },
+    });
 
-            availableBalance:
-              newAvailableBalance,
-
-            pendingBalance:
-              newPendingBalance,
-
-            /*
-             * lifetimeEarnings DOES NOT CHANGE.
-             */
-
-          },
-
-        }
-      );
-
-
-    if (
-      walletUpdateResponse.errors
-    ) {
-
+    if (walletUpdateResponse.errors) {
       throw new Error(
         `Failed to update wallet: ${JSON.stringify(
-          walletUpdateResponse.errors
-        )}`
+          walletUpdateResponse.errors,
+        )}`,
       );
-
     }
 
-
-    const updatedWallet =
-      walletUpdateResponse
-        ?.data
-        ?.updateWallet;
-
+    const updatedWallet = walletUpdateResponse?.data?.updateWallet;
 
     if (!updatedWallet) {
-
-      throw new Error(
-        "Wallet update returned no wallet."
-      );
-
+      throw new Error("Wallet update returned no wallet.");
     }
 
+    console.log("WALLET UPDATED:", {
+      walletID: wallet.id,
 
-    console.log(
-      "WALLET UPDATED:",
-      {
-        walletID:
-          wallet.id,
+      previousPendingBalance: currentPendingBalance,
 
-        previousPendingBalance:
-          currentPendingBalance,
+      newPendingBalance: newPendingBalance,
 
-        newPendingBalance:
-          newPendingBalance,
+      previousAvailableBalance: currentAvailableBalance,
 
-        previousAvailableBalance:
-          currentAvailableBalance,
+      newAvailableBalance: newAvailableBalance,
 
-        newAvailableBalance:
-          newAvailableBalance,
-
-        lifetimeEarnings:
-          currentLifetimeEarnings,
-      }
-    );
-
+      lifetimeEarnings: currentLifetimeEarnings,
+    });
 
     /* ======================================================
        20. FIND EARNINGS TRANSACTION
     ====================================================== */
 
-    const transactionReference =
-      `EARNINGS-${orderID}`;
-
+    const transactionReference = `EARNINGS-${orderID}`;
 
     const findTransactionQuery = `
       query ListTransactions(
@@ -2349,48 +1586,25 @@ exports.handler = async (event) => {
       }
     `;
 
+    const transactionResponse = await graphqlRequest(findTransactionQuery, {
+      filter: {
+        reference: {
+          eq: transactionReference,
+        },
+      },
+    });
 
-    const transactionResponse =
-      await graphqlRequest(
-        findTransactionQuery,
-        {
-
-          filter: {
-
-            reference: {
-              eq:
-                transactionReference,
-            },
-
-          },
-
-        }
-      );
-
-
-    if (
-      transactionResponse.errors
-    ) {
-
+    if (transactionResponse.errors) {
       throw new Error(
         `Failed to find earnings transaction: ${JSON.stringify(
-          transactionResponse.errors
-        )}`
+          transactionResponse.errors,
+        )}`,
       );
-
     }
 
-
-    const transaction =
-      transactionResponse
-        ?.data
-        ?.listTransactions
-        ?.items
-        ?.[0];
-
+    const transaction = transactionResponse?.data?.listTransactions?.items?.[0];
 
     if (!transaction) {
-
       /*
        * The wallet has already been changed, therefore we
        * deliberately do NOT create a replacement transaction
@@ -2398,69 +1612,39 @@ exports.handler = async (event) => {
        */
 
       throw new Error(
-        `Earnings transaction ${transactionReference} was not found. Wallet update requires reconciliation.`
+        `Earnings transaction ${transactionReference} was not found. Wallet update requires reconciliation.`,
       );
-
     }
-
 
     /* ======================================================
        21. VERIFY TRANSACTION
     ====================================================== */
 
-    if (
-      transaction.walletID !==
-      wallet.id
-    ) {
-
+    if (transaction.walletID !== wallet.id) {
       throw new Error(
-        `Earnings transaction ${transaction.id} does not belong to wallet ${wallet.id}`
+        `Earnings transaction ${transaction.id} does not belong to wallet ${wallet.id}`,
       );
-
     }
 
-
-    if (
-      transaction.type !==
-      "CREDIT"
-    ) {
-
+    if (transaction.type !== "CREDIT") {
       throw new Error(
-        `Earnings transaction ${transaction.id} is not a CREDIT transaction.`
+        `Earnings transaction ${transaction.id} is not a CREDIT transaction.`,
       );
-
     }
 
+    const transactionAmount = Number(transaction.amount || 0);
 
-    const transactionAmount =
-      Number(
-        transaction.amount || 0
-      );
-
-
-    if (
-      Math.abs(
-        transactionAmount -
-        earnings
-      ) > 0.01
-    ) {
-
+    if (Math.abs(transactionAmount - earnings) > 0.01) {
       throw new Error(
-        `Earnings transaction amount ${transactionAmount} does not match courier earnings ${earnings}.`
+        `Earnings transaction amount ${transactionAmount} does not match courier earnings ${earnings}.`,
       );
-
     }
-
 
     /* ======================================================
        22. COMPLETE EARNINGS TRANSACTION
     ====================================================== */
 
-    if (
-      transaction.status ===
-      "PENDING"
-    ) {
-
+    if (transaction.status === "PENDING") {
       const updateTransactionMutation = `
         mutation UpdateTransaction(
           $input: UpdateTransactionInput!
@@ -2491,88 +1675,53 @@ exports.handler = async (event) => {
         }
       `;
 
+      const transactionUpdateResponse = await graphqlRequest(
+        updateTransactionMutation,
+        {
+          input: {
+            id: transaction.id,
 
-      const transactionUpdateResponse =
-        await graphqlRequest(
-          updateTransactionMutation,
-          {
+            status: "COMPLETED",
 
-            input: {
+            description:
+              "Courier earnings released and made available for payout.",
+          },
+        },
+      );
 
-              id:
-                transaction.id,
-
-              status:
-                "COMPLETED",
-
-              description:
-                "Courier earnings released and made available for payout.",
-
-            },
-
-          }
-        );
-
-
-      if (
-        transactionUpdateResponse.errors
-      ) {
-
+      if (transactionUpdateResponse.errors) {
         throw new Error(
           `Wallet was updated but transaction could not be completed: ${JSON.stringify(
-            transactionUpdateResponse.errors
-          )}`
+            transactionUpdateResponse.errors,
+          )}`,
         );
-
       }
-
 
       console.log(
         "EARNINGS TRANSACTION COMPLETED:",
-        JSON.stringify(
-          transactionUpdateResponse
-            ?.data
-            ?.updateTransaction
-        )
+        JSON.stringify(transactionUpdateResponse?.data?.updateTransaction),
       );
-
-    } else if (
-      transaction.status ===
-      "COMPLETED"
-    ) {
-
-      console.log(
-        "Earnings transaction already completed."
-      );
-
+    } else if (transaction.status === "COMPLETED") {
+      console.log("Earnings transaction already completed.");
     } else {
-
       throw new Error(
-        `Unexpected earnings transaction status: ${transaction.status}`
+        `Unexpected earnings transaction status: ${transaction.status}`,
       );
-
     }
-
 
     /* ======================================================
        23. DETERMINE RELEASE TYPE
     ====================================================== */
 
-    const releaseType =
-      String(
-        event?.releaseType ||
-        event?.arguments?.releaseType ||
-        "AUTOMATIC"
-      ).toUpperCase();
-
+    const releaseType = String(
+      event?.releaseType || event?.arguments?.releaseType || "AUTOMATIC",
+    ).toUpperCase();
 
     /* ======================================================
        24. UPDATE ORDER
     ====================================================== */
 
-    const releaseTimestamp =
-      new Date().toISOString();
-
+    const releaseTimestamp = new Date().toISOString();
 
     const updateOrderMutation = `
       mutation UpdateOrder(
@@ -2606,360 +1755,192 @@ exports.handler = async (event) => {
       }
     `;
 
+    const orderUpdateResponse = await graphqlRequest(updateOrderMutation, {
+      input: {
+        id: orderID,
 
-    const orderUpdateResponse =
-      await graphqlRequest(
-        updateOrderMutation,
-        {
+        fundsStatus: "RELEASED",
 
-          input: {
+        /*
+         * For a normal courier, 100% is released.
+         */
 
-            id:
-              orderID,
+        fundsReleasedAmount: earnings,
 
-            fundsStatus:
-              "RELEASED",
+        /*
+         * pickupFundsReleasedAt is intentionally NOT
+         * set here. It is only for Maxi pickup release.
+         */
 
-            /*
-             * For a normal courier, 100% is released.
-             */
+        fundsReleasedAt: releaseTimestamp,
 
-            fundsReleasedAmount:
-              earnings,
+        fundsReleaseType: releaseType,
+      },
+    });
 
-            /*
-             * pickupFundsReleasedAt is intentionally NOT
-             * set here. It is only for Maxi pickup release.
-             */
-
-            fundsReleasedAt:
-              releaseTimestamp,
-
-            fundsReleaseType:
-              releaseType,
-
-          },
-
-        }
-      );
-
-
-    if (
-      orderUpdateResponse.errors
-    ) {
-
+    if (orderUpdateResponse.errors) {
       throw new Error(
         `Wallet and transaction were updated but order could not be marked RELEASED: ${JSON.stringify(
-          orderUpdateResponse.errors
-        )}`
+          orderUpdateResponse.errors,
+        )}`,
       );
-
     }
 
-
-    const updatedOrder =
-      orderUpdateResponse
-        ?.data
-        ?.updateOrder;
-
+    const updatedOrder = orderUpdateResponse?.data?.updateOrder;
 
     if (!updatedOrder) {
-
-      throw new Error(
-        "Order update returned no order."
-      );
-
+      throw new Error("Order update returned no order.");
     }
-
 
     /* ======================================================
        25. VERIFY FINAL ORDER STATE
     ====================================================== */
 
-    if (
-      updatedOrder.fundsStatus !==
-      "RELEASED"
-    ) {
-
+    if (updatedOrder.fundsStatus !== "RELEASED") {
       throw new Error(
-        `Order fundsStatus was not updated to RELEASED. Current value: ${updatedOrder.fundsStatus}`
+        `Order fundsStatus was not updated to RELEASED. Current value: ${updatedOrder.fundsStatus}`,
       );
-
     }
 
+    const releasedAmount = Number(updatedOrder.fundsReleasedAmount || 0);
 
-    const releasedAmount =
-      Number(
-        updatedOrder.fundsReleasedAmount ||
-        0
-      );
-
-
-    if (
-      Math.abs(
-        releasedAmount -
-        earnings
-      ) > 0.01
-    ) {
-
+    if (Math.abs(releasedAmount - earnings) > 0.01) {
       throw new Error(
-        `Order fundsReleasedAmount ${releasedAmount} does not match courier earnings ${earnings}.`
+        `Order fundsReleasedAmount ${releasedAmount} does not match courier earnings ${earnings}.`,
       );
-
     }
-
 
     /* ======================================================
        26. SUCCESS
     ====================================================== */
 
-    console.log(
-      "=========================================="
-    );
+    console.log("==========================================");
 
-    console.log(
-      "FUNDS RELEASED SUCCESSFULLY"
-    );
+    console.log("FUNDS RELEASED SUCCESSFULLY");
 
-    console.log(
-      "=========================================="
-    );
-
+    console.log("==========================================");
 
     return successResponse({
-
-      message:
-        "Courier funds released successfully.",
+      message: "Courier funds released successfully.",
 
       orderID,
 
       courierID,
 
-      amount:
-        earnings,
+      amount: earnings,
 
-      walletID:
-        wallet.id,
+      walletID: wallet.id,
 
-      previousPendingBalance:
-        currentPendingBalance,
+      previousPendingBalance: currentPendingBalance,
 
-      newPendingBalance:
-        newPendingBalance,
+      newPendingBalance: newPendingBalance,
 
-      previousAvailableBalance:
-        currentAvailableBalance,
+      previousAvailableBalance: currentAvailableBalance,
 
-      newAvailableBalance:
-        newAvailableBalance,
+      newAvailableBalance: newAvailableBalance,
 
-      lifetimeEarnings:
-        currentLifetimeEarnings,
+      lifetimeEarnings: currentLifetimeEarnings,
 
-      fundsReleasedAmount:
-        earnings,
+      fundsReleasedAmount: earnings,
 
-      fundsStatus:
-        "RELEASED",
+      fundsStatus: "RELEASED",
 
       releaseType,
 
-      transactionStatus:
-        "COMPLETED",
-
+      transactionStatus: "COMPLETED",
     });
-
-
   } catch (error) {
+    console.error("==========================================");
 
-    console.error(
-      "=========================================="
-    );
+    console.error("ATUA RELEASE FUNDS ERROR");
 
-    console.error(
-      "ATUA RELEASE FUNDS ERROR"
-    );
+    console.error("MESSAGE:", error?.message);
 
-    console.error(
-      "MESSAGE:",
-      error?.message
-    );
+    console.error("STACK:", error?.stack);
 
-    console.error(
-      "STACK:",
-      error?.stack
-    );
-
-    console.error(
-      "=========================================="
-    );
-
+    console.error("==========================================");
 
     return {
+      statusCode: 500,
 
-      statusCode:
-        500,
+      body: JSON.stringify({
+        success: false,
 
-      body:
-        JSON.stringify({
+        message: error?.message || "Funds release failed.",
 
-          success:
-            false,
-
-          message:
-            error?.message ||
-            "Funds release failed.",
-
-          orderID,
-
-        }),
-
+        orderID,
+      }),
     };
-
   }
-
 };
-
 
 /* ==========================================================
    GRAPHQL REQUEST HELPER
 ========================================================== */
 
-async function graphqlRequest(
-  query,
-  variables = {}
-) {
-
+async function graphqlRequest(query, variables = {}) {
   if (!GRAPHQL_ENDPOINT) {
-
-    throw new Error(
-      "Missing API_ATUA_GRAPHQLAPIENDPOINTOUTPUT"
-    );
-
+    throw new Error("Missing API_ATUA_GRAPHQLAPIENDPOINTOUTPUT");
   }
-
 
   if (!API_KEY) {
-
-    throw new Error(
-      "Missing API_ATUA_GRAPHQLAPIKEYOUTPUT"
-    );
-
+    throw new Error("Missing API_ATUA_GRAPHQLAPIKEYOUTPUT");
   }
 
+  const response = await fetch(GRAPHQL_ENDPOINT, {
+    method: "POST",
 
-  const response =
-    await fetch(
-      GRAPHQL_ENDPOINT,
-      {
+    headers: {
+      "Content-Type": "application/json",
 
-        method:
-          "POST",
+      "x-api-key": API_KEY,
+    },
 
-        headers: {
+    body: JSON.stringify({
+      query,
 
-          "Content-Type":
-            "application/json",
+      variables,
+    }),
+  });
 
-          "x-api-key":
-            API_KEY,
-
-        },
-
-        body:
-          JSON.stringify({
-
-            query,
-
-            variables,
-
-          }),
-
-      }
-    );
-
-
-  const responseText =
-    await response.text();
-
+  const responseText = await response.text();
 
   let responseData;
 
-
   try {
-
-    responseData =
-      JSON.parse(
-        responseText
-      );
-
-  } catch (
-    parseError
-  ) {
-
-    throw new Error(
-      `GraphQL returned invalid JSON: ${responseText}`
-    );
-
+    responseData = JSON.parse(responseText);
+  } catch (parseError) {
+    throw new Error(`GraphQL returned invalid JSON: ${responseText}`);
   }
 
-
-  if (
-    !response.ok
-  ) {
-
-    throw new Error(
-      `GraphQL HTTP ${response.status}: ${responseText}`
-    );
-
+  if (!response.ok) {
+    throw new Error(`GraphQL HTTP ${response.status}: ${responseText}`);
   }
 
-
-  if (
-    responseData?.errors?.length
-  ) {
-
+  if (responseData?.errors?.length) {
     throw new Error(
       responseData.errors
-        .map(
-          (error) =>
-            error?.message
-        )
+        .map((error) => error?.message)
         .filter(Boolean)
-        .join(" | ")
+        .join(" | "),
     );
-
   }
 
-
   return responseData;
-
 }
-
 
 /* ==========================================================
    SUCCESS RESPONSE HELPER
 ========================================================== */
 
-function successResponse(
-  data
-) {
-
+function successResponse(data) {
   return {
+    statusCode: 200,
 
-    statusCode:
-      200,
+    body: JSON.stringify({
+      success: true,
 
-    body:
-      JSON.stringify({
-
-        success:
-          true,
-
-        ...data,
-
-      }),
-
+      ...data,
+    }),
   };
-
 }

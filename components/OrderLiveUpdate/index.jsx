@@ -59,7 +59,7 @@ const OrderLiveUpdate = ({ order, courier }) => {
     longitude: order.parcelDestinationLng,
   };
 
-  const courierLoc = { latitude: courier.lat, longitude: courier.lng };
+  const courierLoc = { latitude: courier?.lat, longitude: courier?.lng };
 
   const getDestination = () => {
     if (order.status === "ACCEPTED") {

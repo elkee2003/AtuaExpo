@@ -30,18 +30,6 @@ const OrderHistoryMain = () => {
     ).subscribe(
       async ({ items }) => {
         try {
-          console.log(
-            "[OrderHistory] observeQuery received:",
-            items.map((order) => ({
-              id: order.id,
-              userID: order.userID,
-              status: order.status,
-              paymentStatus: order.paymentStatus,
-              paymentID: order.paymentID,
-              _version: order._version,
-            })),
-          );
-
           const sortedOrders = items.sort(
             (a, b) =>
               new Date(b.createdAt ?? 0).getTime() -

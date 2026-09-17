@@ -1806,6 +1806,27 @@ export const schema = {
                     "isRequired": false,
                     "attributes": []
                 },
+                "recipientTrackingToken": {
+                    "name": "recipientTrackingToken",
+                    "isArray": false,
+                    "type": "String",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "recipientTrackingEnabled": {
+                    "name": "recipientTrackingEnabled",
+                    "isArray": false,
+                    "type": "Boolean",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "recipientTrackingRevokedAt": {
+                    "name": "recipientTrackingRevokedAt",
+                    "isArray": false,
+                    "type": "AWSDateTime",
+                    "isRequired": false,
+                    "attributes": []
+                },
                 "userID": {
                     "name": "userID",
                     "isArray": false,
@@ -1932,6 +1953,15 @@ export const schema = {
                         "fields": [
                             "assignmentStatus",
                             "assignmentExpiresAt"
+                        ]
+                    }
+                },
+                {
+                    "type": "key",
+                    "properties": {
+                        "name": "byRecipientTrackingToken",
+                        "fields": [
+                            "recipientTrackingToken"
                         ]
                     }
                 },
@@ -3417,5 +3447,5 @@ export const schema = {
         }
     },
     "codegenVersion": "3.4.4",
-    "version": "1acb68ed85c42a2b7c874c1ccf10a82c"
+    "version": "4d3d09e71077e9814f5379ad7d37df12"
 };
