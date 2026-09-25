@@ -19,8 +19,6 @@ import MediaPreviewModal from "./MediaPreviewModal/MediaPreviewModal";
 import styles from "./styles";
 import VideoThumbnail from "./VideoThumbnail";
 
-// I should note that I take platform fee and VAT, and all these are not calculated yet, when the user sends initialofferprice, so if the courier counters it, he is countering with what he expect to go home with, lets say 80% or 75%, if/when he counter, what should I show the courier to pay, because, i think it can't be the exact amount (the amount the courier countered with), because if the user accepts, then it shortening what is meant is meant to be calculated. I think I am not sure
-
 export default function MaxiReviewScreen() {
   const [showCamera, setShowCamera] = useState(false);
   const [cameraMode, setCameraMode] = useState(null);
@@ -88,12 +86,10 @@ export default function MaxiReviewScreen() {
 
   const floorSurcharge = pickupSurcharge + dropoffSurcharge;
 
-  // useEffect to set tripType
   useEffect(() => {
     setTripType(isInterState ? "INTERSTATE" : "INTRASTATE");
   }, [isInterState, setTripType]);
 
-  // useEffect for calculation
   useEffect(() => {
     if (!vehicleClass || !totalKm) return;
 
@@ -112,7 +108,6 @@ export default function MaxiReviewScreen() {
     setEstimatedMinPrice(result.minSuggested);
     setEstimatedMaxPrice(result.maxSuggested);
 
-    // Default offer = midpoint
     const midpoint = Math.round(
       (result.minSuggested + result.maxSuggested) / 2,
     );
@@ -132,115 +127,399 @@ export default function MaxiReviewScreen() {
     floorSurcharge,
   ]);
 
+  const origin =
+    originAddress?.data?.description ||
+    originAddress?.details?.formatted_address ||
+    "Not selected";
+
+  const destination =
+    destinationAddress?.data?.description ||
+    destinationAddress?.details?.formatted_address ||
+    "Not selected";
+
+  const isOfferInvalid =
+    initialOfferPrice < estimatedMinPrice ||
+    initialOfferPrice > estimatedMaxPrice;
+
+  const formatCurrency = (value) => `₦${Number(value || 0).toLocaleString()}`;
+
   return (
     <SafeAreaView style={styles.screen}>
-      <ScrollView showsVerticalScrollIndicator={false}>
-        <Text style={styles.title}>Review Freight Order</Text>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
+      >
+        {/* =========================================================
+            HEADER
+        ========================================================= */}
+        <View style={styles.header}>
+          <View style={styles.headerIcon}>
+            <Ionicons name="document-text-outline" size={20} color="#F97316" />
+          </View>
 
-        {/* TRIP DETAILS */}
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Trip Details</Text>
+          <View style={styles.headerText}>
+            <Text style={styles.eyebrow}>ORDER REVIEW</Text>
 
-          <Text style={styles.value}>Trip Type: {tripType}</Text>
+            <Text style={styles.title}>Review Freight Order</Text>
 
-          <Text style={styles.value}>Distance: {totalKm}km</Text>
-
-          <Text style={styles.value}>
-            Origin:{" "}
-            {originAddress?.data?.description ||
-              originAddress?.details?.formatted_address ||
-              "Not selected"}
-          </Text>
-
-          <Text style={styles.value}>Origin State: {originState}</Text>
-
-          <Text style={styles.value}>
-            Destination:{" "}
-            {destinationAddress?.data?.description ||
-              destinationAddress?.details?.formatted_address ||
-              "Not selected"}
-          </Text>
-
-          <Text style={styles.value}>
-            Destination State: {destinationState}
-          </Text>
+            <Text style={styles.subtitle}>
+              Confirm the details of your shipment before continuing.
+            </Text>
+          </View>
         </View>
 
-        {/* TRANSPORTATION */}
+        {/* =========================================================
+            TRIP OVERVIEW
+        ========================================================= */}
         <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Transportation</Text>
+          <View style={styles.cardHeader}>
+            <View style={styles.sectionIcon}>
+              <Ionicons name="navigate-outline" size={17} color="#F97316" />
+            </View>
 
-          <Text style={styles.value}>Type: {transportationType}</Text>
+            <View>
+              <Text style={styles.sectionTitle}>Trip Overview</Text>
+              <Text style={styles.sectionSubtitle}>
+                Route and journey information
+              </Text>
+            </View>
+          </View>
 
-          <Text style={styles.value}>
-            Vehicle: {getTransportLabel(vehicleClass)}
-          </Text>
+          <View style={styles.routeContainer}>
+            {/* Origin */}
+            <View style={styles.locationRow}>
+              <View style={styles.locationIndicator}>
+                <View style={styles.originDot} />
+              </View>
+
+              <View style={styles.locationContent}>
+                <Text style={styles.fieldLabel}>PICKUP</Text>
+
+                <Text style={styles.fieldValue}>{origin}</Text>
+
+                <Text style={styles.fieldMeta}>
+                  {originState || "State not selected"}
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.routeLine} />
+
+            {/* Destination */}
+            <View style={styles.locationRow}>
+              <View style={styles.locationIndicator}>
+                <View style={styles.destinationDot} />
+              </View>
+
+              <View style={styles.locationContent}>
+                <Text style={styles.fieldLabel}>DELIVERY</Text>
+
+                <Text style={styles.fieldValue}>{destination}</Text>
+
+                <Text style={styles.fieldMeta}>
+                  {destinationState || "State not selected"}
+                </Text>
+              </View>
+            </View>
+          </View>
+
+          <View style={styles.infoGrid}>
+            <View style={styles.infoItem}>
+              <Text style={styles.fieldLabel}>TRIP TYPE</Text>
+              <Text style={styles.infoValue}>{tripType || "—"}</Text>
+            </View>
+
+            <View style={styles.infoItem}>
+              <Text style={styles.fieldLabel}>DISTANCE</Text>
+              <Text style={styles.infoValue}>
+                {totalKm ? `${totalKm} km` : "—"}
+              </Text>
+            </View>
+          </View>
         </View>
 
-        {/* CARGO */}
+        {/* =========================================================
+            TRANSPORTATION
+        ========================================================= */}
         <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Cargo</Text>
-          <Text style={styles.value}>Category: {loadCategory}</Text>
-          <Text style={styles.value}>Weight: {declaredWeightBracket}</Text>
-          <Text style={styles.value}>Description: {orderDetails}</Text>
+          <View style={styles.cardHeader}>
+            <View style={styles.sectionIcon}>
+              <Ionicons name="car-outline" size={17} color="#F97316" />
+            </View>
+
+            <View>
+              <Text style={styles.sectionTitle}>Transportation</Text>
+
+              <Text style={styles.sectionSubtitle}>
+                Vehicle assigned to this shipment
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.detailRows}>
+            <View style={styles.detailRow}>
+              <Text style={styles.fieldLabel}>TRANSPORT TYPE</Text>
+
+              <Text style={styles.fieldValue}>{transportationType || "—"}</Text>
+            </View>
+
+            <View style={styles.rowDivider} />
+
+            <View style={styles.detailRow}>
+              <Text style={styles.fieldLabel}>VEHICLE CLASS</Text>
+
+              <Text style={styles.fieldValue}>
+                {getTransportLabel(vehicleClass) || "—"}
+              </Text>
+            </View>
+          </View>
         </View>
 
-        {/* LOADING */}
+        {/* =========================================================
+            CARGO
+        ========================================================= */}
         <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Loading & Floors</Text>
+          <View style={styles.cardHeader}>
+            <View style={styles.sectionIcon}>
+              <Ionicons name="cube-outline" size={17} color="#F97316" />
+            </View>
 
-          <Text style={styles.value}>
-            Pickup Loading Responsibility:{" "}
-            {pickupLoadingResponsibility || "Not selected"}
-          </Text>
-          <Text style={styles.value}>
-            Pickup Loading Fee: ₦{loadingFee?.toLocaleString()}
-          </Text>
+            <View>
+              <Text style={styles.sectionTitle}>Cargo Details</Text>
 
-          <Text style={styles.value}>
-            Dropoff Unloading Responsibility:{" "}
-            {dropoffUnloadingResponsibility || "Not selected"}
-          </Text>
+              <Text style={styles.sectionSubtitle}>
+                Information about your shipment
+              </Text>
+            </View>
+          </View>
 
-          <Text style={styles.value}>
-            Dropoff Unloading Fee: ₦{unloadingFee?.toLocaleString()}
-          </Text>
+          <View style={styles.infoGrid}>
+            <View style={styles.infoItem}>
+              <Text style={styles.fieldLabel}>CATEGORY</Text>
 
-          <Text style={styles.value}>
-            Pickup Floor: {pickupFloorLevel} (₦
-            {pickupFloorLevelPrice?.toLocaleString()}) | Elevator:{" "}
-            {pickupHasElevator ? "Yes" : "No"}
-          </Text>
-          <Text style={styles.value}>
-            Dropoff Floor: {dropoffFloorLevel} (₦
-            {dropoffFloorLevelPrice?.toLocaleString()}) | Elevator:{" "}
-            {dropoffHasElevator ? "Yes" : "No"}
-          </Text>
+              <Text style={styles.infoValue}>{loadCategory || "—"}</Text>
+            </View>
+
+            <View style={styles.infoItem}>
+              <Text style={styles.fieldLabel}>WEIGHT</Text>
+
+              <Text style={styles.infoValue}>
+                {declaredWeightBracket || "—"}
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.descriptionBox}>
+            <Text style={styles.fieldLabel}>DESCRIPTION</Text>
+
+            <Text style={styles.descriptionText}>
+              {orderDetails || "No description provided"}
+            </Text>
+          </View>
         </View>
 
-        {/* RECIPIENT */}
+        {/* =========================================================
+            LOADING & HANDLING
+        ========================================================= */}
         <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Recipient</Text>
-          <Text style={styles.value}>{recipientName}</Text>
-          <Text style={styles.value}>{recipientNumber}</Text>
-          <Text style={styles.value}>{recipientNumber2}</Text>
+          <View style={styles.cardHeader}>
+            <View style={styles.sectionIcon}>
+              <Ionicons name="layers-outline" size={17} color="#F97316" />
+            </View>
+
+            <View>
+              <Text style={styles.sectionTitle}>Loading & Handling</Text>
+
+              <Text style={styles.sectionSubtitle}>
+                Pickup, delivery and floor requirements
+              </Text>
+            </View>
+          </View>
+
+          {/* Pickup */}
+          <View style={styles.handlingBlock}>
+            <View style={styles.handlingHeader}>
+              <View style={styles.handlingIcon}>
+                <Ionicons name="arrow-up-outline" size={15} color="#F97316" />
+              </View>
+
+              <Text style={styles.handlingTitle}>Pickup</Text>
+            </View>
+
+            <View style={styles.detailRows}>
+              <View style={styles.detailRow}>
+                <Text style={styles.fieldLabel}>RESPONSIBILITY</Text>
+
+                <Text style={styles.fieldValue}>
+                  {pickupLoadingResponsibility || "Not selected"}
+                </Text>
+              </View>
+
+              <View style={styles.rowDivider} />
+
+              <View style={styles.detailRow}>
+                <Text style={styles.fieldLabel}>LOADING FEE</Text>
+
+                <Text style={styles.moneyValue}>
+                  {formatCurrency(loadingFee)}
+                </Text>
+              </View>
+
+              <View style={styles.rowDivider} />
+
+              <View style={styles.detailRow}>
+                <Text style={styles.fieldLabel}>FLOOR</Text>
+
+                <Text style={styles.fieldValue}>{pickupFloorLevel || "—"}</Text>
+              </View>
+
+              <View style={styles.rowDivider} />
+
+              <View style={styles.detailRow}>
+                <Text style={styles.fieldLabel}>ELEVATOR</Text>
+
+                <Text style={styles.fieldValue}>
+                  {pickupHasElevator ? "Available" : "None"}
+                </Text>
+              </View>
+            </View>
+          </View>
+
+          {/* Dropoff */}
+          <View style={styles.handlingBlock}>
+            <View style={styles.handlingHeader}>
+              <View style={styles.handlingIcon}>
+                <Ionicons name="arrow-down-outline" size={15} color="#F97316" />
+              </View>
+
+              <Text style={styles.handlingTitle}>Drop-off</Text>
+            </View>
+
+            <View style={styles.detailRows}>
+              <View style={styles.detailRow}>
+                <Text style={styles.fieldLabel}>RESPONSIBILITY</Text>
+
+                <Text style={styles.fieldValue}>
+                  {dropoffUnloadingResponsibility || "Not selected"}
+                </Text>
+              </View>
+
+              <View style={styles.rowDivider} />
+
+              <View style={styles.detailRow}>
+                <Text style={styles.fieldLabel}>UNLOADING FEE</Text>
+
+                <Text style={styles.moneyValue}>
+                  {formatCurrency(unloadingFee)}
+                </Text>
+              </View>
+
+              <View style={styles.rowDivider} />
+
+              <View style={styles.detailRow}>
+                <Text style={styles.fieldLabel}>FLOOR</Text>
+
+                <Text style={styles.fieldValue}>
+                  {dropoffFloorLevel || "—"}
+                </Text>
+              </View>
+
+              <View style={styles.rowDivider} />
+
+              <View style={styles.detailRow}>
+                <Text style={styles.fieldLabel}>ELEVATOR</Text>
+
+                <Text style={styles.fieldValue}>
+                  {dropoffHasElevator ? "Available" : "None"}
+                </Text>
+              </View>
+            </View>
+          </View>
         </View>
 
-        {/* PRICE SUMMARY */}
+        {/* =========================================================
+            RECIPIENT
+        ========================================================= */}
+        <View style={styles.card}>
+          <View style={styles.cardHeader}>
+            <View style={styles.sectionIcon}>
+              <Ionicons name="person-outline" size={17} color="#F97316" />
+            </View>
+
+            <View>
+              <Text style={styles.sectionTitle}>Recipient</Text>
+
+              <Text style={styles.sectionSubtitle}>
+                Delivery contact information
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.recipientCard}>
+            <View style={styles.avatar}>
+              <Text style={styles.avatarText}>
+                {recipientName?.charAt(0)?.toUpperCase() || "R"}
+              </Text>
+            </View>
+
+            <View style={styles.recipientInfo}>
+              <Text style={styles.recipientName}>
+                {recipientName || "Recipient"}
+              </Text>
+
+              <View style={styles.phoneRow}>
+                <Ionicons name="call-outline" size={13} color="#64748B" />
+
+                <Text style={styles.phoneText}>
+                  {recipientNumber || "No phone number"}
+                </Text>
+              </View>
+
+              {recipientNumber2 ? (
+                <View style={styles.phoneRow}>
+                  <Ionicons name="call-outline" size={13} color="#64748B" />
+
+                  <Text style={styles.phoneText}>{recipientNumber2}</Text>
+                </View>
+              ) : null}
+            </View>
+          </View>
+        </View>
+
+        {/* =========================================================
+            PRICE / OFFER
+        ========================================================= */}
         <View style={styles.priceCard}>
-          <Text style={styles.priceLabel}>Suggested Price Range</Text>
+          <View style={styles.priceHeader}>
+            <View>
+              <Text style={styles.priceEyebrow}>YOUR OFFER</Text>
 
-          <Text style={styles.priceRange}>
-            ₦{estimatedMinPrice?.toLocaleString()} - ₦
-            {estimatedMaxPrice?.toLocaleString()}
-          </Text>
+              <Text style={styles.priceTitle}>Set your freight price</Text>
+            </View>
 
-          <Text style={styles.subLabel}>
-            Set your initial offer within this range
+            <View style={styles.priceIcon}>
+              <Ionicons name="cash-outline" size={20} color="#F97316" />
+            </View>
+          </View>
+
+          <View style={styles.rangeContainer}>
+            <Text style={styles.rangeLabel}>SUGGESTED MARKET RANGE</Text>
+
+            <Text style={styles.priceRange}>
+              {formatCurrency(estimatedMinPrice)}
+              {" — "}
+              {formatCurrency(estimatedMaxPrice)}
+            </Text>
+          </View>
+
+          <Text style={styles.offerDescription}>
+            Choose the amount you want to offer. Couriers can review your offer
+            and respond with their bids.
           </Text>
 
           <View style={styles.offerControl}>
             <TouchableOpacity
+              activeOpacity={0.8}
               style={styles.adjustBtn}
               onPress={() =>
                 setInitialOfferPrice((prev) =>
@@ -248,17 +527,27 @@ export default function MaxiReviewScreen() {
                 )
               }
             >
-              <Text style={styles.adjustText}>-</Text>
+              <Ionicons name="remove" size={21} color="#FFFFFF" />
             </TouchableOpacity>
 
-            <TextInput
-              style={styles.offerInput}
-              keyboardType="numeric"
-              value={initialOfferPrice?.toString()}
-              onChangeText={(value) => setInitialOfferPrice(Number(value))}
-            />
+            <View
+              style={[
+                styles.offerInputContainer,
+                isOfferInvalid && styles.offerInputContainerError,
+              ]}
+            >
+              <Text style={styles.currencyPrefix}>₦</Text>
+
+              <TextInput
+                style={styles.offerInput}
+                keyboardType="numeric"
+                value={initialOfferPrice?.toString()}
+                onChangeText={(value) => setInitialOfferPrice(Number(value))}
+              />
+            </View>
 
             <TouchableOpacity
+              activeOpacity={0.8}
               style={styles.adjustBtn}
               onPress={() =>
                 setInitialOfferPrice((prev) =>
@@ -266,71 +555,168 @@ export default function MaxiReviewScreen() {
                 )
               }
             >
-              <Text style={styles.adjustText}>+</Text>
+              <Ionicons name="add" size={21} color="#FFFFFF" />
             </TouchableOpacity>
           </View>
-          {initialOfferPrice < estimatedMinPrice ||
-          initialOfferPrice > estimatedMaxPrice ? (
-            <Text style={{ color: "#EF4444", marginTop: 6 }}>
-              Offer must be within suggested range
-            </Text>
+
+          {isOfferInvalid ? (
+            <View style={styles.validationContainer}>
+              <Ionicons name="alert-circle-outline" size={15} color="#F87171" />
+
+              <Text style={styles.validationText}>
+                Offer must be within the suggested range
+              </Text>
+            </View>
           ) : null}
 
-          <Text style={styles.helperText}>
-            Couriers will bid around your offer
-          </Text>
+          <View style={styles.helperContainer}>
+            <Ionicons
+              name="information-circle-outline"
+              size={14}
+              color="#94A3B8"
+            />
+
+            <Text style={styles.helperText}>
+              Couriers will bid around your offer.
+            </Text>
+          </View>
         </View>
 
-        {/* PHOTO UPLOAD */}
+        {/* =========================================================
+            PHOTO CAPTURE
+        ========================================================= */}
         <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Capture Cargo Photos</Text>
+          <View style={styles.cardHeader}>
+            <View style={styles.sectionIcon}>
+              <Ionicons name="camera-outline" size={17} color="#F97316" />
+            </View>
+
+            <View style={styles.headerFlex}>
+              <Text style={styles.sectionTitle}>Cargo Photos</Text>
+
+              <Text style={styles.sectionSubtitle}>
+                Capture the condition of the shipment
+              </Text>
+            </View>
+
+            {senderPreTransferPhotos?.length > 0 && (
+              <View style={styles.countBadge}>
+                <Text style={styles.countBadgeText}>
+                  {senderPreTransferPhotos.length}
+                </Text>
+              </View>
+            )}
+          </View>
 
           <TouchableOpacity
+            activeOpacity={0.85}
             style={styles.uploadBtn}
             onPress={() => {
               setCameraMode("photo");
               setShowCamera(true);
             }}
           >
-            <Text style={styles.uploadText}>Capture Photo</Text>
+            <View style={styles.uploadIcon}>
+              <Ionicons name="camera-outline" size={18} color="#FFFFFF" />
+            </View>
+
+            <View style={styles.uploadContent}>
+              <Text style={styles.uploadText}>Capture Photo</Text>
+
+              <Text style={styles.uploadSubtext}>
+                Add clear photos of the cargo
+              </Text>
+            </View>
+
+            <Ionicons name="chevron-forward" size={17} color="#94A3B8" />
           </TouchableOpacity>
 
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            {senderPreTransferPhotos?.map((p, index) => (
-              <TouchableOpacity
-                key={index}
-                onPress={() => {
-                  setSelectedIndex(index);
-                  setPreviewVisible(true);
-                }}
-              >
-                <Image source={{ uri: p.uri }} style={styles.previewImage} />
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
+          {senderPreTransferPhotos?.length > 0 && (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.mediaRow}
+            >
+              {senderPreTransferPhotos.map((p, index) => (
+                <TouchableOpacity
+                  key={index}
+                  activeOpacity={0.85}
+                  onPress={() => {
+                    setSelectedIndex(index);
+                    setPreviewVisible(true);
+                  }}
+                  style={styles.photoWrapper}
+                >
+                  <Image source={{ uri: p.uri }} style={styles.previewImage} />
+
+                  <View style={styles.photoIndex}>
+                    <Text style={styles.photoIndexText}>{index + 1}</Text>
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          )}
         </View>
 
-        {/* VIDEO UPLOAD */}
+        {/* =========================================================
+            VIDEO CAPTURE
+        ========================================================= */}
         <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Capture Cargo Video</Text>
+          <View style={styles.cardHeader}>
+            <View style={styles.sectionIcon}>
+              <Ionicons name="videocam-outline" size={17} color="#F97316" />
+            </View>
+
+            <View style={styles.headerFlex}>
+              <Text style={styles.sectionTitle}>Cargo Video</Text>
+
+              <Text style={styles.sectionSubtitle}>
+                Record a short video of the shipment
+              </Text>
+            </View>
+
+            {senderPreTransferVideo && (
+              <View style={styles.statusBadge}>
+                <View style={styles.statusDot} />
+                <Text style={styles.statusText}>Added</Text>
+              </View>
+            )}
+          </View>
 
           <TouchableOpacity
+            activeOpacity={0.85}
             style={styles.uploadBtn}
             onPress={() => {
               setCameraMode("video");
               setShowCamera(true);
             }}
           >
-            <Text style={styles.uploadText}>
-              {senderPreTransferVideo ? "Re-record Video" : "Record Video"}
-            </Text>
+            <View style={styles.uploadIcon}>
+              <Ionicons name="videocam-outline" size={18} color="#FFFFFF" />
+            </View>
+
+            <View style={styles.uploadContent}>
+              <Text style={styles.uploadText}>
+                {senderPreTransferVideo ? "Re-record Video" : "Record Video"}
+              </Text>
+
+              <Text style={styles.uploadSubtext}>
+                {senderPreTransferVideo
+                  ? "Replace the existing cargo video"
+                  : "Show the condition and size of the cargo"}
+              </Text>
+            </View>
+
+            <Ionicons name="chevron-forward" size={17} color="#94A3B8" />
           </TouchableOpacity>
 
           {senderPreTransferVideo?.uri && (
             <TouchableOpacity
+              activeOpacity={0.9}
               style={styles.videoPreview}
               onPress={() => {
                 const videoIndex = senderPreTransferPhotos?.length || 0;
+
                 setSelectedIndex(videoIndex);
                 setPreviewVisible(true);
               }}
@@ -339,15 +725,24 @@ export default function MaxiReviewScreen() {
                 uri={senderPreTransferVideo.uri}
                 style={styles.videoThumbnail}
               />
+
               <View style={styles.playOverlay}>
-                <Ionicons name="play" size={28} color="#FFF" />
+                <View style={styles.playButton}>
+                  <Ionicons name="play" size={20} color="#FFFFFF" />
+                </View>
+
+                <Text style={styles.videoPreviewLabel}>Tap to preview</Text>
               </View>
             </TouchableOpacity>
           )}
         </View>
+
+        <View style={styles.bottomSpacer} />
       </ScrollView>
 
-      {/* CAMERA MODAL */}
+      {/* =========================================================
+          CAMERA MODAL
+      ========================================================= */}
       <Modal
         visible={showCamera}
         animationType="slide"
@@ -358,16 +753,20 @@ export default function MaxiReviewScreen() {
           onClose={() => setShowCamera(false)}
           onPhotoCaptured={(photo) => {
             setSenderPreTransferPhotos((prev) => [...(prev || []), photo]);
+
             setSenderPreTransferRecordedAt(photo.recordedAt);
           }}
           onVideoCaptured={(video) => {
             setSenderPreTransferVideo(video);
+
             setSenderPreTransferRecordedAt(video.recordedAt);
           }}
         />
       </Modal>
 
-      {/* Preview Modal */}
+      {/* =========================================================
+          MEDIA PREVIEW
+      ========================================================= */}
       <MediaPreviewModal
         visible={previewVisible}
         mediaList={[
@@ -375,8 +774,14 @@ export default function MaxiReviewScreen() {
             ...p,
             type: "photo",
           })),
+
           ...(senderPreTransferVideo
-            ? [{ ...senderPreTransferVideo, type: "video" }]
+            ? [
+                {
+                  ...senderPreTransferVideo,
+                  type: "video",
+                },
+              ]
             : []),
         ]}
         initialIndex={selectedIndex}

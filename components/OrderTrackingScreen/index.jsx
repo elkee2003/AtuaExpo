@@ -278,6 +278,8 @@ const OrderTrackingScreen = ({ orderId }) => {
 
   const [offers, setOffers] = useState([]);
 
+  const courierAcceptanceHandledRef = useRef(false);
+
   // =================================================
   // ANIMATIONS
   // =================================================
@@ -471,6 +473,192 @@ const OrderTrackingScreen = ({ orderId }) => {
       orderSubscriptionRef.current = null;
     };
   }, [orderId, refreshOrder]);
+
+  // ============================================================
+  // MAXI COURIER ACCEPTANCE
+  // ============================================================
+  //
+  // Detects when the COURIER accepts the user's Maxi offer.
+  //
+  // Flow:
+  //
+  // BIDDING
+  //   ↓
+  // Courier accepts user's offer
+  //   ↓
+  // Order.status = ACCEPTED
+  // Order.acceptedOfferID = user's Offer ID
+  // Order.assignedCourierId = courier ID
+  // Order.totalPrice = agreed price
+  //   ↓
+  // User receives realtime DataStore update
+  //   ↓
+  // Show courier name + agreed price
+  //   ↓
+  // Navigate to existing Payment screen
+  // ============================================================
+
+  useEffect(() => {
+    if (!order) {
+      return;
+    }
+
+    // ----------------------------------------------------------
+    // Only Maxi orders use this flow.
+    // ----------------------------------------------------------
+
+    if (order.transportationType !== "MAXI") {
+      return;
+    }
+
+    // ----------------------------------------------------------
+    // We only care about accepted orders.
+    // ----------------------------------------------------------
+
+    if (order.status !== "ACCEPTED") {
+      return;
+    }
+
+    // ----------------------------------------------------------
+    // A courier must be assigned.
+    // ----------------------------------------------------------
+
+    if (!order.assignedCourierId) {
+      return;
+    }
+
+    // ----------------------------------------------------------
+    // We need the accepted Offer ID.
+    // ----------------------------------------------------------
+
+    if (!order.acceptedOfferID) {
+      return;
+    }
+
+    // ----------------------------------------------------------
+    // Prevent duplicate handling.
+    // ----------------------------------------------------------
+
+    if (courierAcceptanceHandledRef.current) {
+      return;
+    }
+
+    // ----------------------------------------------------------
+    // Check the accepted Offer.
+    //
+    // If the accepted Offer was created by the USER, then this
+    // was the courier accepting the user's offer.
+    //
+    // If it was created by the COURIER, then the user accepted
+    // the courier's offer and this effect must do nothing.
+    // ----------------------------------------------------------
+
+    const checkAcceptedOffer = async () => {
+      try {
+        const acceptedOffer = await DataStore.query(
+          Offer,
+          order.acceptedOfferID,
+        );
+
+        if (!acceptedOffer) {
+          console.log("MAXI ACCEPTANCE: accepted Offer not found yet.");
+
+          return;
+        }
+
+        // ------------------------------------------------------
+        // USER accepted courier offer.
+        //
+        // Do NOT show the courier-accepted alert here.
+        // The existing handleAcceptOffer already handles payment
+        // navigation for this path.
+        // ------------------------------------------------------
+
+        if (acceptedOffer.senderType !== "USER") {
+          return;
+        }
+
+        // ------------------------------------------------------
+        // At this point:
+        //
+        // Order = ACCEPTED
+        // acceptedOffer = USER offer
+        // assignedCourierId = courier
+        //
+        // Therefore the COURIER accepted the user's offer.
+        // ------------------------------------------------------
+
+        courierAcceptanceHandledRef.current = true;
+
+        // ------------------------------------------------------
+        // Get the courier.
+        // ------------------------------------------------------
+
+        let acceptedCourier = courier;
+
+        if (
+          !acceptedCourier ||
+          acceptedCourier.id !== order.assignedCourierId
+        ) {
+          acceptedCourier = await DataStore.query(
+            Courier,
+            order.assignedCourierId,
+          );
+        }
+
+        // ------------------------------------------------------
+        // Courier first name.
+        // ------------------------------------------------------
+
+        const courierFirstName = acceptedCourier?.firstName || "Your courier";
+
+        // ------------------------------------------------------
+        // Agreed price.
+        // ------------------------------------------------------
+
+        const agreedPrice = Number(order.totalPrice || 0);
+
+        const formattedPrice = agreedPrice.toLocaleString("en-NG");
+
+        // ------------------------------------------------------
+        // Notify the user.
+        // ------------------------------------------------------
+
+        Alert.alert(
+          "Courier Accepted Your Offer",
+          `${courierFirstName} has accepted your Maxi delivery offer for ₦${formattedPrice}. Please complete payment to continue.`,
+          [
+            {
+              text: "Continue to Payment",
+              onPress: () => {
+                router.replace({
+                  pathname: "/screens/payment",
+                  params: {
+                    orderId: order.id,
+                  },
+                });
+              },
+            },
+          ],
+          {
+            cancelable: false,
+          },
+        );
+      } catch (error) {
+        console.log("MAXI COURIER ACCEPTANCE CHECK ERROR:", error);
+      }
+    };
+
+    checkAcceptedOffer();
+  }, [
+    order?.id,
+    order?.status,
+    order?.transportationType,
+    order?.assignedCourierId,
+    order?.acceptedOfferID,
+    order?.totalPrice,
+    courier,
+  ]);
 
   // =================================================
   // REFRESH WHEN APP RETURNS TO FOREGROUND
@@ -1452,6 +1640,21 @@ const OrderTrackingScreen = ({ orderId }) => {
           }),
         );
       }
+
+      //---------------------------------
+      // Go to Payment
+      //---------------------------------
+      // The accepted offer amount has already
+      // been saved into Order.totalPrice.
+      // The existing Payment screen will use
+      // this totalPrice when loading the order.
+
+      router.replace({
+        pathname: "/screens/payment",
+        params: {
+          orderId: updatedOrder.id,
+        },
+      });
     } catch (error) {
       console.log("ACCEPT OFFER ERROR:", error);
     }

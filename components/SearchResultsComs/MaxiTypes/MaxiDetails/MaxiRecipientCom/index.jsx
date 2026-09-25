@@ -39,23 +39,29 @@ export default function MaxiRecipientScreen() {
       <ScrollView>
         <Text style={styles.title}>Recipient Details</Text>
 
+        {/* Recipient Name */}
         <TextInput
           placeholder="Recipient Name *"
+          placeholderTextColor="#8B93A1"
           style={styles.input}
           value={recipientName}
           onChangeText={setRecipientName}
         />
 
+        {/* Recipient Phone Number */}
         <TextInput
           placeholder="Recipient Phone Number *"
+          placeholderTextColor="#8B93A1"
           keyboardType="phone-pad"
           style={styles.input}
           value={recipientNumber}
           onChangeText={setRecipientNumber}
         />
 
+        {/* Backup Phone Number */}
         <TextInput
           placeholder="Backup Phone Number"
+          placeholderTextColor="#8B93A1"
           keyboardType="phone-pad"
           style={styles.input}
           value={recipientNumber2}

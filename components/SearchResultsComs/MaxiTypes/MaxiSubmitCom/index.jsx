@@ -5,7 +5,6 @@ import { useOrderContext } from "@/providers/OrderProvider";
 import { MediaUploadStatus, Offer, Order } from "@/src/models";
 import { uploadEvidence } from "@/utils/uploadEvidence";
 import { DataStore } from "aws-amplify/datastore";
-import * as Crypto from "expo-crypto";
 import { router } from "expo-router";
 import { useState } from "react";
 import { Alert, Text, TouchableOpacity, View } from "react-native";
@@ -50,8 +49,6 @@ const MaxiSubmit = () => {
     fragileSurcharge,
     extrasTotal,
     platformFee,
-    deliveryVerificationCode,
-    setDeliveryVerificationCode,
     loadCategory,
     declaredWeightBracket,
     senderPreTransferPhotos,
@@ -69,21 +66,6 @@ const MaxiSubmit = () => {
     createOrder,
     resetAllOrderFields,
   } = useOrderContext();
-
-  // Generate 6 digit verification code
-  const generateVerificationCode = async () => {
-    const randomBytes = await Crypto.getRandomBytesAsync(4);
-
-    const number =
-      (randomBytes[0] << 24) |
-      (randomBytes[1] << 16) |
-      (randomBytes[2] << 8) |
-      randomBytes[3];
-
-    return Math.abs(number % 1000000)
-      .toString()
-      .padStart(6, "0");
-  };
 
   // Function to submit bid
   const handleSubmit = async () => {
@@ -125,10 +107,6 @@ const MaxiSubmit = () => {
 
         return;
       }
-
-      const verificationCode = await generateVerificationCode();
-
-      setDeliveryVerificationCode(verificationCode);
 
       // ✅ NEW — capture media before reset
       const mediaPhotos = [...(senderPreTransferPhotos || [])];
@@ -185,9 +163,6 @@ const MaxiSubmit = () => {
 
           platformFee: parseFloat(platformFee),
 
-          // VERIFICATION
-          deliveryVerificationCode: verificationCode,
-
           // WEIGHT
           declaredWeightBracket,
 
@@ -230,10 +205,7 @@ const MaxiSubmit = () => {
       // ✅ Save order in context
       setOrders(newOrder);
 
-      Alert.alert(
-        "Success",
-        `Order created. Verification Code: ${verificationCode}`,
-      );
+      Alert.alert("Success", "Order created successfully.");
 
       // Navigate
       router.replace(`/screens/orderTrackingScreen/${newOrder.id}`);

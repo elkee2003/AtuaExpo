@@ -27,11 +27,11 @@
         },
         "assignOrder": {
           "deploymentBucketName": "amplify-atua-staging-19d66-deployment",
-          "s3Key": "amplify-builds/assignOrder-716f48626452514b6443-build.zip"
+          "s3Key": "amplify-builds/assignOrder-31475143712f524d6f47-build.zip"
         },
         "reassignOrder": {
           "deploymentBucketName": "amplify-atua-staging-19d66-deployment",
-          "s3Key": "amplify-builds/reassignOrder-58534777635076475670-build.zip"
+          "s3Key": "amplify-builds/reassignOrder-414f684f45355332796a-build.zip"
         },
         "forceDispatch": {
           "deploymentBucketName": "amplify-atua-staging-19d66-deployment",
@@ -39,7 +39,7 @@
         },
         "resetCourierIfIdle": {
           "deploymentBucketName": "amplify-atua-staging-19d66-deployment",
-          "s3Key": "amplify-builds/resetCourierIfIdle-61414f7a61712f67586b-build.zip"
+          "s3Key": "amplify-builds/resetCourierIfIdle-4754486f68346a776a63-build.zip"
         },
         "processPaymentAndWallet": {
           "deploymentBucketName": "amplify-atua-staging-19d66-deployment",
@@ -48,11 +48,11 @@
         },
         "releaseFunds": {
           "deploymentBucketName": "amplify-atua-staging-19d66-deployment",
-          "s3Key": "amplify-builds/releaseFunds-3651526365503847487a-build.zip"
+          "s3Key": "amplify-builds/releaseFunds-54496241672b7459664f-build.zip"
         },
         "processPayouts": {
           "deploymentBucketName": "amplify-atua-staging-19d66-deployment",
-          "s3Key": "amplify-builds/processPayouts-356b645a594d546c3270-build.zip",
+          "s3Key": "amplify-builds/processPayouts-463936782f44762f3258-build.zip",
           "paystackSecretKey": ""
         },
         "verifyAtuaPayment": {
@@ -67,11 +67,15 @@
         },
         "allocateCourierEarnings": {
           "deploymentBucketName": "amplify-atua-staging-19d66-deployment",
-          "s3Key": "amplify-builds/allocateCourierEarnings-6630446b6e4735457576-build.zip"
+          "s3Key": "amplify-builds/allocateCourierEarnings-765a3369616642536e4b-build.zip"
         },
         "releaseCourierMilestoneFunds": {
           "deploymentBucketName": "amplify-atua-staging-19d66-deployment",
-          "s3Key": "amplify-builds/releaseCourierMilestoneFunds-504a795a7437494e5067-build.zip"
+          "s3Key": "amplify-builds/releaseCourierMilestoneFunds-457331566d6454754b36-build.zip"
+        },
+        "financialOrderTrigger": {
+          "deploymentBucketName": "amplify-atua-staging-19d66-deployment",
+          "s3Key": "amplify-builds/financialOrderTrigger-6d7a596c323830557576-build.zip"
         }
       },
       "storage": {

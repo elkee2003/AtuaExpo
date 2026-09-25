@@ -102,6 +102,7 @@ export default function MaxiCargoDetailsScreen() {
           <TextInput
             style={styles.textArea}
             placeholder="Describe your cargo..."
+            placeholderTextColor="#8B93A1"
             multiline
             value={orderDetails}
             onChangeText={setOrderDetails}

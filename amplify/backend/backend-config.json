@@ -125,6 +125,12 @@
       "providerPlugin": "awscloudformation",
       "service": "Lambda"
     },
+    "financialOrderTrigger": {
+      "build": true,
+      "dependsOn": [],
+      "providerPlugin": "awscloudformation",
+      "service": "Lambda"
+    },
     "forceDispatch": {
       "build": true,
       "dependsOn": [
@@ -316,6 +322,22 @@
         {
           "category": "function",
           "resourceName": "checkUserGroup"
+        }
+      ]
+    },
+    "AMPLIFY_function_financialOrderTrigger_deploymentBucketName": {
+      "usedBy": [
+        {
+          "category": "function",
+          "resourceName": "financialOrderTrigger"
+        }
+      ]
+    },
+    "AMPLIFY_function_financialOrderTrigger_s3Key": {
+      "usedBy": [
+        {
+          "category": "function",
+          "resourceName": "financialOrderTrigger"
         }
       ]
     },

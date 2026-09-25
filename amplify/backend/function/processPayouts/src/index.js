@@ -22,10 +22,15 @@ const GRAPHQL_API_KEY = process.env.API_ATUA_GRAPHQLAPIKEYOUTPUT;
 const REGION = process.env.REGION || process.env.AWS_REGION;
 
 /* ==========================================================
-   GET PAYSTACK SECRET
+   GET PAYSTACK SECRET KEY FROM AWS SSM
 ========================================================== */
 
 const getPaystackSecretKey = async () => {
+  /*
+   * PAYSTACK_SECRET_KEY should contain the NAME/PATH of the
+   * SSM parameter, not the actual secret key.
+   */
+
   const parameterName = process.env.PAYSTACK_SECRET_KEY;
 
   if (!parameterName) {
@@ -53,7 +58,7 @@ const getPaystackSecretKey = async () => {
 };
 
 /* ==========================================================
-   GRAPHQL REQUEST
+   GRAPHQL REQUEST HELPER
 ========================================================== */
 
 const graphqlRequest = async (
@@ -79,7 +84,7 @@ const graphqlRequest = async (
   const options = {
     hostname: endpoint.hostname,
 
-    path: endpoint.pathname || "/graphql",
+    path: `${endpoint.pathname || "/graphql"}` + `${endpoint.search || ""}`,
 
     method: "POST",
 
@@ -151,7 +156,7 @@ const graphqlRequest = async (
 };
 
 /* ==========================================================
-   PAYSTACK REQUEST
+   PAYSTACK REQUEST HELPER
 ========================================================== */
 
 const paystackRequest = async ({ method, path, secretKey, body = null }) => {
@@ -223,9 +228,7 @@ const paystackRequest = async ({ method, path, secretKey, body = null }) => {
 const getCourier = async (courierID) => {
   const query = `
     query GetCourier($id: ID!) {
-
       getCourier(id: $id) {
-
         id
 
         firstName
@@ -239,17 +242,17 @@ const getCourier = async (courierID) => {
         isApproved
 
         walletID
-
       }
-
     }
   `;
 
   const data = await graphqlRequest(
     query,
+
     {
       id: courierID,
     },
+
     "GetCourier",
   );
 
@@ -264,15 +267,15 @@ const getCourierWallet = async (courierID) => {
   const query = `
     query ListWallets(
       $filter: ModelWalletFilterInput
+      $limit: Int
+      $nextToken: String
     ) {
-
       listWallets(
         filter: $filter
-        limit: 1
+        limit: $limit
+        nextToken: $nextToken
       ) {
-
         items {
-
           id
 
           ownerID
@@ -283,59 +286,81 @@ const getCourierWallet = async (courierID) => {
           lifetimeEarnings
 
           _version
-
         }
 
+        nextToken
       }
-
     }
   `;
 
-  const data = await graphqlRequest(
-    query,
-    {
-      filter: {
-        ownerID: {
-          eq: courierID,
+  let nextToken = null;
+
+  do {
+    const data = await graphqlRequest(
+      query,
+
+      {
+        filter: {
+          ownerID: {
+            eq: courierID,
+          },
+
+          ownerType: {
+            eq: "COURIER",
+          },
         },
 
-        ownerType: {
-          eq: "COURIER",
-        },
+        limit: 1000,
+
+        nextToken,
       },
-    },
-    "GetCourierWallet",
-  );
 
-  return data?.listWallets?.items?.[0] || null;
+      "GetCourierWallet",
+    );
+
+    const wallets = data?.listWallets?.items || [];
+
+    const wallet = wallets[0];
+
+    if (wallet) {
+      return wallet;
+    }
+
+    nextToken = data?.listWallets?.nextToken || null;
+  } while (nextToken);
+
+  return null;
 };
 
 /* ==========================================================
-   GET PAYOUTS FOR COURIER
+   GET ACTIVE PAYOUTS FOR COURIER
 ==========================================================
 
-Used to prevent:
+   We check ALL pages instead of assuming that the first
+   AppSync page contains every payout.
 
-    PENDING payout + another payout
+   An active payout is:
 
-or:
+      PENDING
+      PROCESSING
 
-    PROCESSING payout + another payout
-
+   This prevents a courier from accidentally receiving
+   multiple simultaneous payouts.
 ========================================================== */
 
 const getActiveCourierPayouts = async (courierID) => {
   const query = `
     query ListPayouts(
       $filter: ModelPayoutFilterInput
+      $limit: Int
+      $nextToken: String
     ) {
-
       listPayouts(
         filter: $filter
+        limit: $limit
+        nextToken: $nextToken
       ) {
-
         items {
-
           id
 
           courierID
@@ -362,31 +387,49 @@ const getActiveCourierPayouts = async (courierID) => {
           failedAt
 
           _version
-
         }
 
+        nextToken
       }
-
     }
   `;
 
-  const data = await graphqlRequest(
-    query,
-    {
-      filter: {
-        courierID: {
-          eq: courierID,
+  const activePayouts = [];
+
+  let nextToken = null;
+
+  do {
+    const data = await graphqlRequest(
+      query,
+
+      {
+        filter: {
+          courierID: {
+            eq: courierID,
+          },
         },
+
+        limit: 1000,
+
+        nextToken,
       },
-    },
-    "GetCourierPayouts",
-  );
 
-  const payouts = data?.listPayouts?.items || [];
+      "GetCourierPayouts",
+    );
 
-  return payouts.filter(
-    (payout) => payout.status === "PENDING" || payout.status === "PROCESSING",
-  );
+    const payouts = data?.listPayouts?.items || [];
+
+    activePayouts.push(
+      ...payouts.filter(
+        (payout) =>
+          payout.status === "PENDING" || payout.status === "PROCESSING",
+      ),
+    );
+
+    nextToken = data?.listPayouts?.nextToken || null;
+  } while (nextToken);
+
+  return activePayouts;
 };
 
 /* ==========================================================
@@ -397,15 +440,13 @@ const getPayoutByReference = async (reference) => {
   const query = `
     query ListPayouts(
       $filter: ModelPayoutFilterInput
+      $limit: Int
     ) {
-
       listPayouts(
         filter: $filter
-        limit: 1
+        limit: $limit
       ) {
-
         items {
-
           id
 
           courierID
@@ -432,23 +473,24 @@ const getPayoutByReference = async (reference) => {
           failedAt
 
           _version
-
         }
-
       }
-
     }
   `;
 
   const data = await graphqlRequest(
     query,
+
     {
       filter: {
         reference: {
           eq: reference,
         },
       },
+
+      limit: 1,
     },
+
     "GetPayoutByReference",
   );
 
@@ -463,15 +505,13 @@ const getTransactionByReference = async (reference) => {
   const query = `
     query ListTransactions(
       $filter: ModelTransactionFilterInput
+      $limit: Int
     ) {
-
       listTransactions(
         filter: $filter
-        limit: 1
+        limit: $limit
       ) {
-
         items {
-
           id
 
           walletID
@@ -490,23 +530,24 @@ const getTransactionByReference = async (reference) => {
           status
 
           _version
-
         }
-
       }
-
     }
   `;
 
   const data = await graphqlRequest(
     query,
+
     {
       filter: {
         reference: {
           eq: reference,
         },
       },
+
+      limit: 1,
     },
+
     "GetTransactionByReference",
   );
 
@@ -514,7 +555,7 @@ const getTransactionByReference = async (reference) => {
 };
 
 /* ==========================================================
-   CREATE TRANSFER RECIPIENT
+   CREATE PAYSTACK TRANSFER RECIPIENT
 ========================================================== */
 
 const createTransferRecipient = async ({ courier, secretKey }) => {
@@ -573,7 +614,7 @@ const createTransferRecipient = async ({ courier, secretKey }) => {
 };
 
 /* ==========================================================
-   INITIATE TRANSFER
+   INITIATE PAYSTACK TRANSFER
 ========================================================== */
 
 const initiateTransfer = async ({
@@ -583,6 +624,20 @@ const initiateTransfer = async ({
   secretKey,
   courierID,
 }) => {
+  /*
+   * Atua stores money in naira.
+   *
+   * Paystack expects transfer amounts in kobo.
+   *
+   * Example:
+   *
+   * ₦10,000
+   *
+   * becomes:
+   *
+   * 1,000,000 kobo
+   */
+
   const amountInKobo = Math.round(Number(amount) * 100);
 
   if (!Number.isFinite(amountInKobo) || amountInKobo <= 0) {
@@ -632,6 +687,14 @@ const initiateTransfer = async ({
   if (!transfer) {
     const error = new Error("Paystack did not return transfer data.");
 
+    /*
+     * We don't know whether Paystack received
+     * the request successfully.
+     *
+     * Therefore this is treated as an
+     * uncertain outcome.
+     */
+
     error.isPaystackUnknown = true;
 
     throw error;
@@ -644,8 +707,21 @@ const initiateTransfer = async ({
    VERIFY PAYSTACK TRANSFER
 ==========================================================
 
-Used when transfer initiation has an uncertain outcome.
+   This is extremely important.
 
+   If the initial transfer request times out or
+   produces an uncertain response, we verify the
+   reference with Paystack before deciding whether
+   to restore the courier's wallet.
+
+   This prevents:
+
+      1. Paystack receives transfer
+      2. Lambda thinks it failed
+      3. Wallet is restored
+      4. Another payout is sent
+
+   which could result in a double payment.
 ========================================================== */
 
 const verifyPaystackTransfer = async (reference, secretKey) => {
@@ -660,8 +736,11 @@ const verifyPaystackTransfer = async (reference, secretKey) => {
   });
 
   /*
-   * Paystack returns an error when the transfer doesn't
-   * exist yet. That is useful information for us.
+   * Paystack returns an error when the transfer
+   * does not exist.
+   *
+   * That is useful information because it means
+   * we can safely treat the transfer as not created.
    */
 
   if (
@@ -695,7 +774,6 @@ const verifyPaystackTransfer = async (reference, secretKey) => {
     transfer: response.body?.data || null,
   };
 };
-
 /* ==========================================================
    CREATE PAYOUT
 ========================================================== */
@@ -712,11 +790,9 @@ const createPayout = async ({
     mutation CreatePayout(
       $input: CreatePayoutInput!
     ) {
-
       createPayout(
         input: $input
       ) {
-
         id
 
         courierID
@@ -743,14 +819,13 @@ const createPayout = async ({
         failedAt
 
         _version
-
       }
-
     }
   `;
 
   const data = await graphqlRequest(
     mutation,
+
     {
       input: {
         courierID,
@@ -759,6 +834,16 @@ const createPayout = async ({
 
         amount,
 
+        /*
+         * A newly created payout always begins
+         * in PENDING state.
+         *
+         * It is only moved to PROCESSING after:
+         *
+         * 1. wallet reservation succeeds
+         * 2. debit transaction is created
+         * 3. Paystack recipient is available
+         */
         status: "PENDING",
 
         bankName: courier.bankName,
@@ -770,6 +855,7 @@ const createPayout = async ({
         payoutMethod,
       },
     },
+
     "CreatePayout",
   );
 
@@ -785,11 +871,9 @@ const updatePayout = async ({ payout, fields }) => {
     mutation UpdatePayout(
       $input: UpdatePayoutInput!
     ) {
-
       updatePayout(
         input: $input
       ) {
-
         id
 
         courierID
@@ -816,9 +900,7 @@ const updatePayout = async ({ payout, fields }) => {
         failedAt
 
         _version
-
       }
-
     }
   `;
 
@@ -828,15 +910,29 @@ const updatePayout = async ({ payout, fields }) => {
     ...fields,
   };
 
+  /*
+   * AppSync optimistic concurrency protection.
+   *
+   * If the payout was changed by another Lambda/process
+   * after we read it, the version supplied here will no
+   * longer match and AppSync will reject the update.
+   *
+   * This is important for payout processing because we
+   * don't want two processes updating the same payout
+   * blindly.
+   */
+
   if (Number.isInteger(payout._version)) {
     input._version = payout._version;
   }
 
   const data = await graphqlRequest(
     mutation,
+
     {
       input,
     },
+
     "UpdatePayout",
   );
 
@@ -844,39 +940,72 @@ const updatePayout = async ({ payout, fields }) => {
 };
 
 /* ==========================================================
-   UPDATE WALLET WITH VERSION LOCK
+   RESERVE WALLET BALANCE
+==========================================================
+
+   When a payout begins, the amount is moved out of
+   availableBalance.
+
+   Example:
+
+      availableBalance = ₦50,000
+
+      payout = ₦20,000
+
+   After reservation:
+
+      availableBalance = ₦30,000
+
+   We do NOT put the payout amount into pendingBalance.
+
+   The money is simply reserved from the spendable
+   available balance while the payout is processing.
+
+   If Paystack later fails/reverses the transfer,
+   the amount is restored to availableBalance.
 ========================================================== */
 
 const reserveWalletBalance = async ({ wallet, amount }) => {
   const currentAvailable = Number(wallet.availableBalance || 0);
 
-  const newAvailable = Number((currentAvailable - amount).toFixed(2));
+  if (!Number.isFinite(currentAvailable)) {
+    throw new Error("Wallet available balance is invalid.");
+  }
 
-  if (newAvailable < 0) {
+  if (!Number.isFinite(amount) || amount <= 0) {
+    throw new Error("Invalid wallet reservation amount.");
+  }
+
+  if (amount > currentAvailable) {
     throw new Error("Insufficient available balance.");
   }
 
+  const newAvailable = Number((currentAvailable - amount).toFixed(2));
+
+  if (newAvailable < 0) {
+    throw new Error("Wallet available balance cannot become negative.");
+  }
+
   const mutation = `
-      mutation UpdateWallet(
-        $input: UpdateWalletInput!
+    mutation UpdateWallet(
+      $input: UpdateWalletInput!
+    ) {
+      updateWallet(
+        input: $input
       ) {
+        id
 
-        updateWallet(
-          input: $input
-        ) {
+        ownerID
+        ownerType
 
-          id
+        availableBalance
+        pendingBalance
+        lifetimeEarnings
 
-          availableBalance
-          pendingBalance
-          lifetimeEarnings
-
-          _version
-
-        }
-
+        _version
       }
-    `;
+    }
+  `;
 
   const input = {
     id: wallet.id,
@@ -885,13 +1014,24 @@ const reserveWalletBalance = async ({ wallet, amount }) => {
   };
 
   /*
-     * This is extremely important.
-
-     * If another payout changes this wallet between the read
-     * and this update, AppSync conflict detection rejects this
-     * mutation rather than silently overwriting the other
-     * payout's balance.
-     */
+   * VERY IMPORTANT:
+   *
+   * The wallet version protects against two payout
+   * requests reading the same balance simultaneously.
+   *
+   * Example:
+   *
+   * Request A reads ₦50,000
+   * Request B reads ₦50,000
+   *
+   * Both attempt ₦30,000 payouts.
+   *
+   * Without _version protection both could potentially
+   * calculate from the same old balance.
+   *
+   * With AppSync conflict detection, the second stale
+   * update is rejected.
+   */
 
   if (Number.isInteger(wallet._version)) {
     input._version = wallet._version;
@@ -899,9 +1039,11 @@ const reserveWalletBalance = async ({ wallet, amount }) => {
 
   const data = await graphqlRequest(
     mutation,
+
     {
       input,
     },
+
     "ReserveWalletBalance",
   );
 
@@ -916,6 +1058,21 @@ const reserveWalletBalance = async ({ wallet, amount }) => {
 
 /* ==========================================================
    RESTORE WALLET BALANCE
+==========================================================
+
+   Used ONLY when we know the Paystack transfer was NOT
+   created or the payout failed before money could leave
+   Paystack.
+
+   Example:
+
+      availableBalance = ₦30,000
+
+      failed payout = ₦20,000
+
+   Restored:
+
+      availableBalance = ₦50,000
 ========================================================== */
 
 const restoreWalletBalance = async ({ courierID, amount }) => {
@@ -929,29 +1086,36 @@ const restoreWalletBalance = async ({ courierID, amount }) => {
 
   const currentAvailable = Number(wallet.availableBalance || 0);
 
+  if (!Number.isFinite(currentAvailable)) {
+    throw new Error("Current wallet available balance is invalid.");
+  }
+
+  if (!Number.isFinite(amount) || amount <= 0) {
+    throw new Error("Invalid wallet restoration amount.");
+  }
+
   const restored = Number((currentAvailable + amount).toFixed(2));
 
   const mutation = `
-      mutation UpdateWallet(
-        $input: UpdateWalletInput!
+    mutation UpdateWallet(
+      $input: UpdateWalletInput!
+    ) {
+      updateWallet(
+        input: $input
       ) {
+        id
 
-        updateWallet(
-          input: $input
-        ) {
+        ownerID
+        ownerType
 
-          id
+        availableBalance
+        pendingBalance
+        lifetimeEarnings
 
-          availableBalance
-          pendingBalance
-          lifetimeEarnings
-
-          _version
-
-        }
-
+        _version
       }
-    `;
+    }
+  `;
 
   const input = {
     id: wallet.id,
@@ -959,15 +1123,26 @@ const restoreWalletBalance = async ({ courierID, amount }) => {
     availableBalance: restored,
   };
 
+  /*
+   * Use the CURRENT wallet version.
+   *
+   * We deliberately fetch the wallet again above rather
+   * than using an old wallet object because other wallet
+   * activity may have happened since the original
+   * reservation.
+   */
+
   if (Number.isInteger(wallet._version)) {
     input._version = wallet._version;
   }
 
   const data = await graphqlRequest(
     mutation,
+
     {
       input,
     },
+
     "RestoreWalletBalance",
   );
 
@@ -984,44 +1159,58 @@ const restoreWalletBalance = async ({ courierID, amount }) => {
 
 /* ==========================================================
    CREATE DEBIT TRANSACTION
+==========================================================
+
+   The transaction represents the wallet debit associated
+   with this payout.
+
+   It begins as:
+
+      type   = DEBIT
+      status = PENDING
+
+   It should remain PENDING while the Paystack transfer is
+   processing.
+
+   The payout webhook/finalization process should later
+   change it to COMPLETED when Paystack confirms the payout.
+
+   If the payout definitively fails, it becomes FAILED.
 ========================================================== */
 
 const createDebitTransaction = async ({ walletID, amount, reference }) => {
   const mutation = `
-      mutation CreateTransaction(
-        $input: CreateTransactionInput!
+    mutation CreateTransaction(
+      $input: CreateTransactionInput!
+    ) {
+      createTransaction(
+        input: $input
       ) {
+        id
 
-        createTransaction(
-          input: $input
-        ) {
+        walletID
 
-          id
+        type
 
-          walletID
+        amount
 
-          type
+        description
 
-          amount
+        orderID
+        paymentID
 
-          description
+        reference
 
-          orderID
-          paymentID
+        status
 
-          reference
-
-          status
-
-          _version
-
-        }
-
+        _version
       }
-    `;
+    }
+  `;
 
   const data = await graphqlRequest(
     mutation,
+
     {
       input: {
         walletID,
@@ -1032,11 +1221,17 @@ const createDebitTransaction = async ({ walletID, amount, reference }) => {
 
         description: "Courier payout initiated.",
 
+        /*
+         * Payout transactions are not order transactions,
+         * so orderID and paymentID are intentionally omitted.
+         */
+
         reference,
 
         status: "PENDING",
       },
     },
+
     "CreatePayoutTransaction",
   );
 
@@ -1044,63 +1239,122 @@ const createDebitTransaction = async ({ walletID, amount, reference }) => {
 };
 
 /* ==========================================================
-   GET ELIGIBLE WALLETS
+   GET ELIGIBLE COURIER WALLETS
+==========================================================
+
+   Used by:
+
+      MANUAL_ALL
+      AUTOMATIC
+
+   We paginate through ALL wallets instead of relying on
+   AppSync's first page.
+
+   Only courier wallets with a positive available balance
+   are returned.
+
+   NOTE:
+   A wallet may still be skipped later if the courier has
+   an existing PENDING/PROCESSING payout.
 ========================================================== */
 
 const getEligibleWallets = async () => {
   const query = `
-      query ListCourierWallets {
+    query ListCourierWallets(
+      $filter: ModelWalletFilterInput
+      $limit: Int
+      $nextToken: String
+    ) {
+      listWallets(
+        filter: $filter
+        limit: $limit
+        nextToken: $nextToken
+      ) {
+        items {
+          id
 
-        listWallets(
-          filter: {
-            ownerType: {
-              eq: COURIER
-            }
-          }
-        ) {
+          ownerID
+          ownerType
 
-          items {
+          availableBalance
+          pendingBalance
+          lifetimeEarnings
 
-            id
-
-            ownerID
-            ownerType
-
-            availableBalance
-            pendingBalance
-            lifetimeEarnings
-
-            _version
-
-          }
-
+          _version
         }
 
+        nextToken
       }
-    `;
+    }
+  `;
 
-  const data = await graphqlRequest(query, {}, "GetEligibleWallets");
+  const eligibleWallets = [];
 
-  const wallets = data?.listWallets?.items || [];
+  let nextToken = null;
 
-  return wallets.filter((wallet) => Number(wallet.availableBalance || 0) > 0);
+  do {
+    const data = await graphqlRequest(
+      query,
+
+      {
+        filter: {
+          ownerType: {
+            eq: "COURIER",
+          },
+        },
+
+        limit: 1000,
+
+        nextToken,
+      },
+
+      "GetEligibleWallets",
+    );
+
+    const wallets = data?.listWallets?.items || [];
+
+    /*
+     * Only wallets with positive available money
+     * are eligible for a payout attempt.
+     */
+
+    for (const wallet of wallets) {
+      const available = Number(wallet.availableBalance || 0);
+
+      if (Number.isFinite(available) && available > 0 && wallet.ownerID) {
+        eligibleWallets.push(wallet);
+      }
+    }
+
+    nextToken = data?.listWallets?.nextToken || null;
+  } while (nextToken);
+
+  return eligibleWallets;
 };
 
 /* ==========================================================
-   GENERATE VALID PAYSTACK REFERENCE
+   GENERATE PAYSTACK PAYOUT REFERENCE
 ==========================================================
 
-Paystack requires:
+   The reference is used to connect:
 
-    16–50 characters
+      Atua Payout
+          ↓
+      Atua Transaction
+          ↓
+      Paystack Transfer
+          ↓
+      Paystack Webhook
 
-Allowed:
+   The reference must therefore be unique.
 
-    lowercase letters
-    digits
-    -
-    _
+   Format:
 
+      atua_<courier>_<timestamp>_<random>
+
+   Example:
+
+      atua_abc123_ly4k2x_9f8e7d...
 ========================================================== */
 
 const generatePayoutReference = (courierID) => {
@@ -1115,6 +1369,10 @@ const generatePayoutReference = (courierID) => {
 
   const reference = `atua_${courierPart}_${timestampPart}_${randomPart}`;
 
+  /*
+   * Keep the reference within the allowed length.
+   */
+
   return reference.slice(0, 50);
 };
 
@@ -1123,6 +1381,15 @@ const generatePayoutReference = (courierID) => {
 ========================================================== */
 
 const markPayoutFailed = async ({ payout, reason, transfer = null }) => {
+  /*
+   * If the payout is already FAILED, there is no need
+   * to issue another update.
+   */
+
+  if (payout.status === "FAILED") {
+    return payout;
+  }
+
   const updated = await updatePayout({
     payout,
 
@@ -1148,13 +1415,27 @@ const markPayoutFailed = async ({ payout, reason, transfer = null }) => {
 };
 
 /* ==========================================================
-   FINALIZE TRANSACTION AS FAILED
+   MARK DEBIT TRANSACTION FAILED
+==========================================================
+
+   This version includes _version so that we do not blindly
+   overwrite another transaction update.
+
+   If AppSync rejects the version because somebody already
+   changed the transaction, the error is allowed to surface
+   instead of silently overwriting the newer state.
 ========================================================== */
 
 const markTransactionFailed = async (reference) => {
   const transaction = await getTransactionByReference(reference);
 
   if (!transaction) {
+    /*
+     * There is no transaction to update.
+     *
+     * This can happen if transaction creation itself failed.
+     */
+
     return null;
   }
 
@@ -1162,44 +1443,73 @@ const markTransactionFailed = async (reference) => {
     return transaction;
   }
 
+  /*
+   * A COMPLETED transaction must NEVER be changed back
+   * to FAILED.
+   *
+   * That would corrupt the payout ledger.
+   */
+
+  if (transaction.status === "COMPLETED") {
+    throw new Error(
+      `Payout transaction ${transaction.id} is already COMPLETED and cannot be marked FAILED.`,
+    );
+  }
+
   const mutation = `
-      mutation UpdateTransaction(
-        $input: UpdateTransactionInput!
+    mutation UpdateTransaction(
+      $input: UpdateTransactionInput!
+    ) {
+      updateTransaction(
+        input: $input
       ) {
+        id
 
-        updateTransaction(
-          input: $input
-        ) {
+        walletID
 
-          id
+        type
 
-          walletID
+        amount
 
-          type
-          amount
+        description
 
-          description
+        reference
 
-          reference
+        status
 
-          status
-
-        }
-
+        _version
       }
-    `;
+    }
+  `;
+
+  const input = {
+    id: transaction.id,
+
+    status: "FAILED",
+
+    description: "Courier payout failed.",
+  };
+
+  /*
+   * IMPORTANT:
+   *
+   * Use the transaction's current _version.
+   *
+   * This prevents an older Lambda invocation from
+   * overwriting a newer transaction state.
+   */
+
+  if (Number.isInteger(transaction._version)) {
+    input._version = transaction._version;
+  }
 
   const data = await graphqlRequest(
     mutation,
+
     {
-      input: {
-        id: transaction.id,
-
-        status: "FAILED",
-
-        description: "Courier payout failed.",
-      },
+      input,
     },
+
     "MarkPayoutTransactionFailed",
   );
 
@@ -1228,9 +1538,9 @@ const processCourierPayout = async ({
 
   console.log("==========================================");
 
-  /* ======================================================
-       1. GET COURIER
-    ====================================================== */
+  /* ========================================================
+     1. GET COURIER
+  ======================================================== */
 
   const courier = await getCourier(courierID);
 
@@ -1238,25 +1548,33 @@ const processCourierPayout = async ({
     throw new Error(`Courier ${courierID} not found.`);
   }
 
-  /* ======================================================
-       2. APPROVAL
-    ====================================================== */
+  /* ========================================================
+     2. CHECK COURIER APPROVAL
+  ========================================================
+
+     Only approved couriers should be allowed to receive
+     payouts.
+
+     We specifically check for false rather than requiring
+     true because this preserves the behavior of your
+     existing Courier model if the field is nullable.
+  ======================================================== */
 
   if (courier.isApproved === false) {
     throw new Error("Courier is not approved for payouts.");
   }
 
-  /* ======================================================
-       3. BANK DETAILS
-    ====================================================== */
+  /* ========================================================
+     3. CHECK BANK DETAILS
+  ======================================================== */
 
   if (!courier.bankCode || !courier.accountNumber || !courier.accountName) {
     throw new Error("Courier does not have complete bank account details.");
   }
 
-  /* ======================================================
-       4. GET WALLET
-    ====================================================== */
+  /* ========================================================
+     4. GET COURIER WALLET
+  ======================================================== */
 
   const wallet = await getCourierWallet(courierID);
 
@@ -1264,31 +1582,72 @@ const processCourierPayout = async ({
     throw new Error("Courier wallet not found.");
   }
 
-  /* ======================================================
-       5. AVAILABLE BALANCE
-    ====================================================== */
+  /*
+   * Make sure the wallet actually belongs to this courier.
+   *
+   * This is an additional safety check before moving money.
+   */
+
+  if (wallet.ownerID !== courierID) {
+    throw new Error("Courier wallet ownership validation failed.");
+  }
+
+  if (wallet.ownerType !== "COURIER") {
+    throw new Error("Wallet is not a courier wallet.");
+  }
+
+  /* ========================================================
+     5. CHECK AVAILABLE BALANCE
+  ======================================================== */
 
   const availableBalance = Number(wallet.availableBalance || 0);
 
-  if (!Number.isFinite(availableBalance) || availableBalance <= 0) {
+  if (!Number.isFinite(availableBalance)) {
+    throw new Error("Courier wallet available balance is invalid.");
+  }
+
+  if (availableBalance <= 0) {
     throw new Error("Courier has no available balance for payout.");
   }
 
-  /* ======================================================
-       6. CHECK ACTIVE PAYOUT
-    ====================================================== */
+  /* ========================================================
+     6. CHECK FOR EXISTING ACTIVE PAYOUT
+  ========================================================
+
+     A courier must not have more than one payout
+     simultaneously in:
+
+         PENDING
+         PROCESSING
+
+     This is especially important because a payout that
+     has reached PROCESSING may already exist at Paystack.
+
+     Creating another payout could therefore result in
+     duplicate money being sent.
+  ======================================================== */
 
   const activePayouts = await getActiveCourierPayouts(courierID);
 
   if (activePayouts.length > 0) {
     const active = activePayouts[0];
 
+    console.log("ACTIVE PAYOUT ALREADY EXISTS:", {
+      payoutID: active.id,
+
+      reference: active.reference,
+
+      status: active.status,
+
+      amount: active.amount,
+    });
+
     return {
       success: true,
 
       skipped: true,
 
-      status: "PROCESSING",
+      status: active.status,
 
       courierID,
 
@@ -1302,9 +1661,18 @@ const processCourierPayout = async ({
     };
   }
 
-  /* ======================================================
-       7. DETERMINE PAYOUT AMOUNT
-    ====================================================== */
+  /* ========================================================
+     7. DETERMINE PAYOUT AMOUNT
+  ========================================================
+
+     If no amount is supplied:
+
+         pay the entire available balance.
+
+     If an amount is supplied:
+
+         pay only that requested amount.
+  ======================================================== */
 
   let payoutAmount = availableBalance;
 
@@ -1324,27 +1692,38 @@ const processCourierPayout = async ({
     }
   }
 
+  /*
+   * Keep all money values at two decimal places.
+   */
+
   payoutAmount = Number(payoutAmount.toFixed(2));
 
-  /* ======================================================
-       8. VALIDATE FINAL AMOUNT
-    ====================================================== */
+  /* ========================================================
+     8. FINAL AMOUNT VALIDATION
+  ======================================================== */
 
-  if (payoutAmount <= 0) {
+  if (!Number.isFinite(payoutAmount) || payoutAmount <= 0) {
     throw new Error("Payout amount must be greater than zero.");
   }
 
-  /* ======================================================
-       9. GENERATE UNIQUE REFERENCE
-    ====================================================== */
+  /* ========================================================
+     9. GENERATE UNIQUE PAYSTACK REFERENCE
+  ======================================================== */
 
   const reference = generatePayoutReference(courierID);
 
   console.log("PAYOUT REFERENCE:", reference);
 
-  /* ======================================================
-       10. CREATE PAYOUT RECORD
-    ====================================================== */
+  /* ========================================================
+     10. CREATE PAYOUT RECORD
+  ========================================================
+
+     At this point the payout exists in Atua as:
+
+         status = PENDING
+
+     No money has been sent to Paystack yet.
+  ======================================================== */
 
   const payout = await createPayout({
     courierID,
@@ -1374,16 +1753,30 @@ const processCourierPayout = async ({
     status: payout.status,
   });
 
-  /* ======================================================
-       11. RESERVE WALLET BALANCE
-    ======================================================
+  /* ========================================================
+     11. RESERVE WALLET BALANCE
+  ========================================================
 
-    Use the current wallet version.
+     The wallet reservation happens BEFORE Paystack is
+     called.
 
-    If another payout changed the wallet after our read,
-    AppSync should reject this update.
+     Example:
 
-    ====================================================== */
+         Wallet available = ₦50,000
+         Payout           = ₦20,000
+
+     Wallet becomes:
+
+         available = ₦30,000
+
+     This prevents another payout from using the same
+     money while this payout is being processed.
+
+     IMPORTANT:
+
+     We use the wallet's _version so that concurrent
+     requests cannot blindly overwrite the balance.
+  ======================================================== */
 
   let reservedWallet;
 
@@ -1394,11 +1787,26 @@ const processCourierPayout = async ({
       amount: payoutAmount,
     });
   } catch (error) {
-    await markPayoutFailed({
-      payout,
+    console.error("WALLET RESERVATION FAILED:", error);
 
-      reason: `Wallet reservation failed: ${error.message}`,
-    });
+    /*
+     * Paystack has NOT been called yet.
+     *
+     * Therefore there is no external transfer to
+     * reconcile.
+     *
+     * We can safely mark the payout as failed.
+     */
+
+    try {
+      await markPayoutFailed({
+        payout,
+
+        reason: `Wallet reservation failed: ${error.message}`,
+      });
+    } catch (payoutError) {
+      console.error("COULD NOT MARK PAYOUT FAILED:", payoutError);
+    }
 
     throw error;
   }
@@ -1409,9 +1817,23 @@ const processCourierPayout = async ({
     availableBalance: reservedWallet.availableBalance,
   });
 
-  /* ======================================================
-       12. CREATE DEBIT TRANSACTION
-    ====================================================== */
+  /* ========================================================
+     12. CREATE PAYOUT DEBIT TRANSACTION
+  ========================================================
+
+     The transaction starts as:
+
+         type   = DEBIT
+         status = PENDING
+
+     It represents the money reserved for the payout.
+
+     It will remain PENDING while Paystack is processing
+     the transfer.
+
+     The payout webhook/finalization process should later
+     change it to COMPLETED when the transfer is confirmed.
+  ======================================================== */
 
   let transaction;
 
@@ -1427,8 +1849,9 @@ const processCourierPayout = async ({
     console.error("DEBIT TRANSACTION CREATION FAILED:", error);
 
     /*
-     * Because Paystack has not been called yet, the wallet
-     * can safely be restored.
+     * Paystack has not been called yet.
+     *
+     * Therefore it is safe to restore the wallet balance.
      */
 
     try {
@@ -1438,19 +1861,32 @@ const processCourierPayout = async ({
         amount: payoutAmount,
       });
     } catch (restoreError) {
+      /*
+       * This is a serious reconciliation condition.
+       *
+       * The wallet was reserved but the transaction could
+       * not be created and the restoration also failed.
+       */
+
       console.error("CRITICAL: WALLET RESTORE FAILED:", restoreError);
     }
 
-    await markPayoutFailed({
-      payout,
+    try {
+      await markPayoutFailed({
+        payout,
 
-      reason: `Unable to create payout transaction: ${error.message}`,
-    });
+        reason: `Unable to create payout transaction: ${error.message}`,
+      });
+    } catch (payoutError) {
+      console.error("COULD NOT MARK PAYOUT FAILED:", payoutError);
+    }
 
     throw error;
   }
 
   if (!transaction?.id) {
+    console.error("PAYOUT TRANSACTION WAS NOT CREATED.");
+
     try {
       await restoreWalletBalance({
         courierID,
@@ -1461,11 +1897,15 @@ const processCourierPayout = async ({
       console.error("CRITICAL: WALLET RESTORE FAILED:", restoreError);
     }
 
-    await markPayoutFailed({
-      payout,
+    try {
+      await markPayoutFailed({
+        payout,
 
-      reason: "Unable to create payout transaction.",
-    });
+        reason: "Unable to create payout transaction.",
+      });
+    } catch (payoutError) {
+      console.error("COULD NOT MARK PAYOUT FAILED:", payoutError);
+    }
 
     throw new Error("Unable to create payout transaction.");
   }
@@ -1478,9 +1918,21 @@ const processCourierPayout = async ({
     status: transaction.status,
   });
 
-  /* ======================================================
-       13. CREATE / GET PAYSTACK RECIPIENT
-    ====================================================== */
+  /* ========================================================
+     13. CREATE PAYSTACK TRANSFER RECIPIENT
+  ========================================================
+
+     No transfer has been sent yet.
+
+     If recipient creation fails:
+
+         restore wallet
+         mark transaction FAILED
+         mark payout FAILED
+
+     This is safe because Paystack transfer has not
+     started.
+  ======================================================== */
 
   let recipient;
 
@@ -1494,8 +1946,10 @@ const processCourierPayout = async ({
     console.error("TRANSFER RECIPIENT ERROR:", error);
 
     /*
-     * No transfer has been attempted yet, so restoring the
-     * reserved balance is safe.
+     * No transfer has been attempted.
+     *
+     * Therefore the wallet reservation can safely
+     * be reversed.
      */
 
     try {
@@ -1508,30 +1962,42 @@ const processCourierPayout = async ({
       console.error("CRITICAL: WALLET RESTORE FAILED:", restoreError);
     }
 
-    await markTransactionFailed(reference);
+    try {
+      await markTransactionFailed(reference);
+    } catch (transactionError) {
+      console.error("COULD NOT MARK TRANSACTION FAILED:", transactionError);
+    }
 
-    await markPayoutFailed({
-      payout,
+    try {
+      await markPayoutFailed({
+        payout,
 
-      reason: error.message,
-    });
+        reason: error.message,
+      });
+    } catch (payoutError) {
+      console.error("COULD NOT MARK PAYOUT FAILED:", payoutError);
+    }
 
     throw error;
   }
 
   console.log("PAYSTACK RECIPIENT:", recipient.recipient_code);
 
-  /* ======================================================
-       14. MARK PAYOUT PROCESSING BEFORE TRANSFER
-    ======================================================
+  /* ========================================================
+     14. MARK PAYOUT AS PROCESSING BEFORE TRANSFER
+  ========================================================
 
-    This is an important protection.
+     This is an important safety step.
 
-    If Lambda crashes immediately after this point, the
-    payout remains PROCESSING and another invocation will not
-    create a second transfer.
+     From this point forward, the payout is considered
+     externally sensitive.
 
-    ====================================================== */
+     If Lambda crashes after this point, another payout
+     request will see the PROCESSING payout and will NOT
+     create another payout.
+
+     This protects against duplicate transfers.
+  ======================================================== */
 
   let processingPayout;
 
@@ -1549,8 +2015,10 @@ const processCourierPayout = async ({
     console.error("COULD NOT MARK PAYOUT PROCESSING:", error);
 
     /*
-     * Transfer has NOT been sent yet.
-     * Restore the reserved balance.
+     * The Paystack transfer has NOT been sent yet.
+     *
+     * Therefore restoring the reserved wallet amount
+     * is safe.
      */
 
     try {
@@ -1563,13 +2031,21 @@ const processCourierPayout = async ({
       console.error("CRITICAL: WALLET RESTORE FAILED:", restoreError);
     }
 
-    await markTransactionFailed(reference);
+    try {
+      await markTransactionFailed(reference);
+    } catch (transactionError) {
+      console.error("COULD NOT MARK TRANSACTION FAILED:", transactionError);
+    }
 
-    await markPayoutFailed({
-      payout,
+    try {
+      await markPayoutFailed({
+        payout,
 
-      reason: `Could not mark payout PROCESSING: ${error.message}`,
-    });
+        reason: `Could not mark payout PROCESSING: ${error.message}`,
+      });
+    } catch (payoutError) {
+      console.error("COULD NOT MARK PAYOUT FAILED:", payoutError);
+    }
 
     throw error;
   }
@@ -1578,9 +2054,17 @@ const processCourierPayout = async ({
     throw new Error("Payout could not be moved to PROCESSING.");
   }
 
-  /* ======================================================
-       15. INITIATE PAYSTACK TRANSFER
-    ====================================================== */
+  console.log("PAYOUT NOW PROCESSING:", {
+    payoutID: processingPayout.id,
+
+    reference: processingPayout.reference,
+
+    status: processingPayout.status,
+  });
+
+  /* ========================================================
+     15. INITIATE PAYSTACK TRANSFER
+  ======================================================== */
 
   let transfer;
 
@@ -1599,9 +2083,19 @@ const processCourierPayout = async ({
   } catch (error) {
     console.error("PAYSTACK TRANSFER ERROR:", error);
 
-    /* ====================================================
-         DETERMINE WHETHER THE TRANSFER EXISTS
-      ==================================================== */
+    /* ======================================================
+       15A. VERIFY THE TRANSFER
+    ======================================================
+
+       We MUST NOT automatically restore the wallet merely
+       because the original HTTP request failed.
+
+       The request could have reached Paystack and the
+       response could have been lost.
+
+       Therefore we first ask Paystack whether the
+       reference exists.
+    ====================================================== */
 
     let verification = null;
 
@@ -1611,13 +2105,20 @@ const processCourierPayout = async ({
       console.error("TRANSFER VERIFICATION ALSO FAILED:", verifyError);
 
       /*
-       * We cannot safely know whether Paystack received the
-       * original request.
+       * THIS IS AN UNCERTAIN STATE.
        *
-       * DO NOT restore the wallet.
+       * We do NOT know whether Paystack received the
+       * transfer.
+       *
+       * Therefore:
+       *
+       * DO NOT restore wallet.
+       *
+       * DO NOT mark transaction FAILED.
+       *
        * DO NOT create another transfer.
        *
-       * Keep Payout PROCESSING.
+       * Keep payout PROCESSING.
        */
 
       return {
@@ -1629,7 +2130,7 @@ const processCourierPayout = async ({
 
         courierID,
 
-        payoutID: payout.id,
+        payoutID: processingPayout.id,
 
         reference,
 
@@ -1640,11 +2141,20 @@ const processCourierPayout = async ({
       };
     }
 
-    /* ====================================================
-         TRANSFER DOES NOT EXIST
-      ==================================================== */
+    /* ======================================================
+       15B. TRANSFER DOES NOT EXIST
+    ====================================================== */
 
     if (verification.exists === false) {
+      /*
+       * Paystack confirms that this reference does not
+       * exist.
+       *
+       * Therefore the transfer was not created.
+       *
+       * It is now safe to restore the wallet.
+       */
+
       try {
         await restoreWalletBalance({
           courierID,
@@ -1653,9 +2163,26 @@ const processCourierPayout = async ({
         });
       } catch (restoreError) {
         console.error("CRITICAL: WALLET RESTORE FAILED:", restoreError);
+
+        /*
+         * Do not hide this failure.
+         *
+         * The payout remains recoverable because the
+         * payout reference exists in Atua.
+         */
+
+        throw new Error(
+          `Paystack transfer was not created, but wallet restoration failed: ${restoreError.message}`,
+        );
       }
 
-      await markTransactionFailed(reference);
+      try {
+        await markTransactionFailed(reference);
+      } catch (transactionError) {
+        console.error("COULD NOT MARK TRANSACTION FAILED:", transactionError);
+
+        throw transactionError;
+      }
 
       await markPayoutFailed({
         payout: processingPayout,
@@ -1664,33 +2191,126 @@ const processCourierPayout = async ({
           error.message || "Paystack transfer was rejected before creation.",
       });
 
-      throw error;
+      return {
+        success: false,
+
+        status: "FAILED",
+
+        courierID,
+
+        payoutID: processingPayout.id,
+
+        reference,
+
+        amount: payoutAmount,
+
+        message:
+          "Paystack transfer was not created. Wallet balance was restored.",
+      };
     }
 
-    /* ====================================================
-         TRANSFER EXISTS
-      ==================================================== */
+    /* ======================================================
+       15C. TRANSFER EXISTS
+    ====================================================== */
 
     const transferStatus = String(verification.status || "").toLowerCase();
 
+    console.log("VERIFIED PAYSTACK TRANSFER:", {
+      reference,
+
+      status: transferStatus,
+
+      transferID: verification.transfer?.id,
+
+      transferCode: verification.transfer?.transfer_code,
+    });
+
+    /* ======================================================
+       15D. TRANSFER IS PENDING OR SUCCESS
+    ====================================================== */
+
     if (transferStatus === "success" || transferStatus === "pending") {
       /*
-       * Money remains reserved.
-       * Webhook will finalize the payout.
+       * Paystack has the transfer.
+       *
+       * Therefore:
+       *
+       * DO NOT restore wallet.
+       *
+       * DO NOT create another transfer.
+       *
+       * DO NOT mark payout FAILED.
+       *
+       * Keep payout PROCESSING.
+       *
+       * The transfer webhook should eventually finalize
+       * the payout.
        */
 
-      await updatePayout({
-        payout: processingPayout,
+      let updatedPayout;
 
-        fields: {
-          transferCode: verification.transfer?.transfer_code || null,
+      try {
+        updatedPayout = await updatePayout({
+          payout: processingPayout,
 
-          transferID:
-            verification.transfer?.id != null
-              ? String(verification.transfer.id)
-              : null,
-        },
-      });
+          fields: {
+            transferCode: verification.transfer?.transfer_code || null,
+
+            transferID:
+              verification.transfer?.id != null
+                ? String(verification.transfer.id)
+                : null,
+          },
+        });
+      } catch (updateError) {
+        console.error("COULD NOT SAVE PAYSTACK TRANSFER DETAILS:", updateError);
+
+        /*
+         * Do NOT restore the wallet.
+         *
+         * Paystack already has the transfer.
+         */
+
+        return {
+          success: false,
+
+          status: "PROCESSING",
+
+          reconciliationRequired: true,
+
+          courierID,
+
+          payoutID: processingPayout.id,
+
+          reference,
+
+          amount: payoutAmount,
+
+          message:
+            "Paystack transfer exists, but transfer metadata could not be saved. Payout remains PROCESSING and requires reconciliation.",
+        };
+      }
+
+      if (!updatedPayout) {
+        return {
+          success: false,
+
+          status: "PROCESSING",
+
+          reconciliationRequired: true,
+
+          courierID,
+
+          payoutID: processingPayout.id,
+
+          reference,
+
+          amount: payoutAmount,
+
+          message:
+            "Paystack transfer exists but payout metadata could not be updated. Payout remains PROCESSING.",
+        };
+      }
 
       return {
         success: false,
@@ -1701,22 +2321,37 @@ const processCourierPayout = async ({
 
         courierID,
 
-        payoutID: payout.id,
+        payoutID: processingPayout.id,
 
         reference,
 
         amount: payoutAmount,
+
+        transferCode: verification.transfer?.transfer_code || null,
+
+        transferID:
+          verification.transfer?.id != null
+            ? String(verification.transfer.id)
+            : null,
 
         message:
           "Paystack transfer exists and remains PROCESSING. Awaiting transfer webhook.",
       };
     }
 
-    /* ====================================================
-         TRANSFER ALREADY FAILED / REVERSED
-      ==================================================== */
+    /* ======================================================
+       15E. TRANSFER FAILED OR REVERSED
+    ====================================================== */
 
     if (transferStatus === "failed" || transferStatus === "reversed") {
+      /*
+       * Paystack explicitly confirms that the transfer
+       * failed or was reversed.
+       *
+       * Therefore it is safe to restore the reserved
+       * wallet balance.
+       */
+
       const failureReason = verification.transfer?.failures
         ? JSON.stringify(verification.transfer.failures)
         : `Paystack transfer status: ${transferStatus}`;
@@ -1729,9 +2364,26 @@ const processCourierPayout = async ({
         });
       } catch (restoreError) {
         console.error("CRITICAL: WALLET RESTORE FAILED:", restoreError);
+
+        /*
+         * Do not silently continue.
+         *
+         * The transfer is confirmed failed, but the
+         * courier's wallet still needs reconciliation.
+         */
+
+        throw new Error(
+          `Paystack transfer ${transferStatus}, but wallet restoration failed: ${restoreError.message}`,
+        );
       }
 
-      await markTransactionFailed(reference);
+      try {
+        await markTransactionFailed(reference);
+      } catch (transactionError) {
+        console.error("COULD NOT MARK TRANSACTION FAILED:", transactionError);
+
+        throw transactionError;
+      }
 
       await markPayoutFailed({
         payout: processingPayout,
@@ -1748,21 +2400,34 @@ const processCourierPayout = async ({
 
         courierID,
 
-        payoutID: payout.id,
+        payoutID: processingPayout.id,
 
         reference,
 
         amount: payoutAmount,
 
         message:
-          "Paystack transfer failed and the wallet balance was restored.",
+          "Paystack transfer failed/reversed and the wallet balance was restored.",
       };
     }
 
-    /*
-     * Unknown Paystack status:
-     * keep processing rather than risking a duplicate payout.
-     */
+    /* ======================================================
+       15F. UNKNOWN PAYSTACK STATUS
+    ======================================================
+
+       If Paystack gives us a status that this Lambda does
+       not explicitly understand, we take the conservative
+       approach.
+
+       We keep the payout PROCESSING.
+
+       We do NOT restore the wallet.
+
+       We do NOT send another transfer.
+
+       This requires reconciliation rather than risking
+       duplicate payment.
+    ====================================================== */
 
     return {
       success: false,
@@ -1773,7 +2438,7 @@ const processCourierPayout = async ({
 
       courierID,
 
-      payoutID: payout.id,
+      payoutID: processingPayout.id,
 
       reference,
 
@@ -1783,17 +2448,34 @@ const processCourierPayout = async ({
     };
   }
 
-  /* ======================================================
-       16. PAYSTACK ACCEPTED THE TRANSFER
-    ======================================================
+  /* ========================================================
+     16. PAYSTACK ACCEPTED THE TRANSFER
+  ========================================================
 
-    A successful initiation means Paystack has queued the
-    transfer. It does NOT mean the courier's bank has finally
-    received it.
+     Reaching this point means the initial Paystack request
+     returned successfully.
 
-    The transfer webhook will finalize the payout.
+     IMPORTANT:
 
-    ====================================================== */
+     A successful transfer initiation does NOT necessarily
+     mean the courier's bank account has finally received
+     the money.
+
+     Paystack may still report:
+
+         pending
+
+     before eventually reporting:
+
+         success
+
+     Therefore the Atua payout remains:
+
+         PROCESSING
+
+     until the Paystack transfer webhook confirms the final
+     result.
+  ======================================================== */
 
   console.log("PAYSTACK TRANSFER INITIATED:", {
     reference,
@@ -1805,26 +2487,43 @@ const processCourierPayout = async ({
     status: transfer?.status,
   });
 
-  const finalProcessingPayout = await updatePayout({
-    payout: processingPayout,
+  /* ========================================================
+     17. SAVE PAYSTACK TRANSFER DETAILS
+  ======================================================== */
 
-    fields: {
-      status: "PROCESSING",
+  let finalProcessingPayout;
 
-      transferCode: transfer?.transfer_code || null,
+  try {
+    finalProcessingPayout = await updatePayout({
+      payout: processingPayout,
 
-      transferID: transfer?.id != null ? String(transfer.id) : null,
+      fields: {
+        /*
+         * Keep the payout PROCESSING.
+         */
 
-      processedAt: processingPayout.processedAt || new Date().toISOString(),
-    },
-  });
+        status: "PROCESSING",
 
-  if (!finalProcessingPayout) {
+        transferCode: transfer?.transfer_code || null,
+
+        transferID: transfer?.id != null ? String(transfer.id) : null,
+
+        processedAt: processingPayout.processedAt || new Date().toISOString(),
+      },
+    });
+  } catch (updateError) {
+    console.error("COULD NOT SAVE PAYSTACK TRANSFER DETAILS:", updateError);
+
     /*
-     * Paystack has accepted the transfer, therefore we must
-     * NOT restore the wallet or send another transfer.
+     * VERY IMPORTANT:
      *
-     * Payout remains recoverable using the reference.
+     * Paystack has already accepted the transfer.
+     *
+     * Therefore we MUST NOT restore the wallet.
+     *
+     * We also MUST NOT create another transfer.
+     *
+     * The payout can be recovered by its reference.
      */
 
     return {
@@ -1836,7 +2535,7 @@ const processCourierPayout = async ({
 
       courierID,
 
-      payoutID: payout.id,
+      payoutID: processingPayout.id,
 
       reference,
 
@@ -1851,9 +2550,54 @@ const processCourierPayout = async ({
     };
   }
 
-  /* ======================================================
-       17. SUCCESSFULLY INITIATED
-    ====================================================== */
+  if (!finalProcessingPayout) {
+    /*
+     * Again, Paystack has already accepted the transfer.
+     *
+     * Never restore the wallet in this situation.
+     */
+
+    return {
+      success: false,
+
+      status: "PROCESSING",
+
+      reconciliationRequired: true,
+
+      courierID,
+
+      payoutID: processingPayout.id,
+
+      reference,
+
+      transferCode: transfer?.transfer_code || null,
+
+      transferID: transfer?.id != null ? String(transfer.id) : null,
+
+      amount: payoutAmount,
+
+      message:
+        "Paystack transfer was initiated, but payout metadata could not be fully updated. Reconciliation required.",
+    };
+  }
+
+  /* ========================================================
+     18. SUCCESSFULLY INITIATED
+  ======================================================== */
+
+  console.log("PAYOUT SUCCESSFULLY INITIATED:", {
+    payoutID: finalProcessingPayout.id,
+
+    reference,
+
+    amount: payoutAmount,
+
+    transferCode: transfer?.transfer_code,
+
+    transferID: transfer?.id,
+
+    status: finalProcessingPayout.status,
+  });
 
   return {
     success: true,
@@ -1862,7 +2606,7 @@ const processCourierPayout = async ({
 
     courierID,
 
-    payoutID: payout.id,
+    payoutID: finalProcessingPayout.id,
 
     reference,
 
@@ -1878,7 +2622,7 @@ const processCourierPayout = async ({
 };
 
 /* ==========================================================
-   MAIN HANDLER
+   MAIN LAMBDA HANDLER
 ========================================================== */
 
 exports.handler = async (event) => {
@@ -1892,13 +2636,45 @@ exports.handler = async (event) => {
 
   try {
     /* ======================================================
-       1. GET PAYSTACK SECRET
+       1. GET PAYSTACK SECRET KEY
     ====================================================== */
 
     const secretKey = await getPaystackSecretKey();
 
     /* ======================================================
        2. GET INPUT
+    ======================================================
+
+       Depending on how this Lambda is invoked, the input
+       may arrive through:
+
+           event.arguments
+           event.detail
+           event
+
+       We support all three.
+
+       Examples:
+
+       MANUAL_SINGLE:
+
+       {
+         "courierID": "COURIER_ID",
+         "amount": 10000,
+         "payoutMethod": "MANUAL_SINGLE"
+       }
+
+       MANUAL_ALL:
+
+       {
+         "payoutMethod": "MANUAL_ALL"
+       }
+
+       AUTOMATIC:
+
+       {
+         "payoutMethod": "AUTOMATIC"
+       }
     ====================================================== */
 
     const argumentsData = event?.arguments || event?.detail || event || {};
@@ -1909,6 +2685,10 @@ exports.handler = async (event) => {
     const courierID =
       argumentsData?.courierID || argumentsData?.courierId || null;
 
+    /* ======================================================
+       3. GET REQUESTED AMOUNT
+    ====================================================== */
+
     const requestedAmount =
       argumentsData?.amount !== undefined &&
       argumentsData?.amount !== null &&
@@ -1916,22 +2696,95 @@ exports.handler = async (event) => {
         ? Number(argumentsData.amount)
         : null;
 
+    /*
+     * If amount was supplied but could not be converted
+     * to a valid number, reject it immediately.
+     *
+     * This prevents values such as:
+     *
+     *     "abc"
+     *
+     * from silently becoming an invalid payout.
+     */
+
+    if (
+      argumentsData?.amount !== undefined &&
+      argumentsData?.amount !== null &&
+      argumentsData?.amount !== ""
+    ) {
+      if (!Number.isFinite(requestedAmount) || requestedAmount <= 0) {
+        throw new Error(
+          "Payout amount must be a valid number greater than zero.",
+        );
+      }
+    }
+
     /* ======================================================
-       3. DEFAULT SINGLE MODE
+       4. DEFAULT TO MANUAL_SINGLE
+    ======================================================
+
+       If the caller supplies a courierID but does not
+       explicitly specify a payout method, we treat the
+       request as a single-courier manual payout.
+
+       Example:
+
+       {
+         "courierID": "123"
+       }
+
+       becomes:
+
+       {
+         "courierID": "123",
+         "payoutMethod": "MANUAL_SINGLE"
+       }
     ====================================================== */
 
     if (!payoutMethod && courierID) {
       payoutMethod = "MANUAL_SINGLE";
     }
 
+    /* ======================================================
+       5. PAYOUT METHOD IS REQUIRED
+    ====================================================== */
+
     if (!payoutMethod) {
       throw new Error("payoutMethod is required.");
     }
 
+    /*
+     * Normalize the value so that:
+
+         manual_single
+         Manual_Single
+         MANUAL_SINGLE
+
+     * all become:
+
+         MANUAL_SINGLE
+     */
+
     payoutMethod = String(payoutMethod).trim().toUpperCase();
 
+    console.log("NORMALIZED PAYOUT METHOD:", payoutMethod);
+
     /* ======================================================
-       4. MANUAL SINGLE
+       6. MANUAL SINGLE
+    ======================================================
+
+       Processes exactly one courier.
+
+       Example:
+
+       {
+         "payoutMethod": "MANUAL_SINGLE",
+         "courierID": "courier123",
+         "amount": 10000
+       }
+
+       If amount is omitted, the entire available balance
+       is paid out.
     ====================================================== */
 
     if (payoutMethod === "MANUAL_SINGLE") {
@@ -1957,13 +2810,56 @@ exports.handler = async (event) => {
     }
 
     /* ======================================================
-       5. MANUAL ALL
+       7. MANUAL ALL
+    ======================================================
+
+       Finds every courier wallet with available funds and
+       attempts to process a payout for each courier.
+
+       Each courier is processed independently.
+
+       Therefore:
+
+       Courier A fails
+       ↓
+       Courier B still gets processed
+
+       instead of the first failure terminating the entire
+       batch.
     ====================================================== */
 
     if (payoutMethod === "MANUAL_ALL") {
+      /*
+       * A specific amount does not make sense for MANUAL_ALL
+       * because different couriers have different balances.
+       *
+       * MANUAL_ALL therefore pays each eligible courier's
+       * entire available balance.
+       */
+
+      if (requestedAmount !== null) {
+        throw new Error(
+          "A specific amount cannot be supplied for MANUAL_ALL. Each courier will be paid their available balance.",
+        );
+      }
+
       const wallets = await getEligibleWallets();
 
+      console.log("ELIGIBLE WALLETS FOR MANUAL_ALL:", wallets.length);
+
       const results = [];
+
+      /*
+       * Process sequentially rather than firing every payout
+       * simultaneously.
+       *
+       * This reduces:
+       *
+       * - Paystack request bursts
+       * - wallet concurrency conflicts
+       * - Lambda/API pressure
+       * - accidental duplicate processing
+       */
 
       for (const wallet of wallets) {
         try {
@@ -1982,8 +2878,13 @@ exports.handler = async (event) => {
           console.error("MANUAL_ALL PAYOUT ERROR:", {
             courierID: wallet.ownerID,
 
-            error: error.message,
+            error: error?.message,
           });
+
+          /*
+           * One courier failing must not prevent the
+           * remaining couriers from being processed.
+           */
 
           results.push({
             success: false,
@@ -1992,10 +2893,24 @@ exports.handler = async (event) => {
 
             status: "FAILED",
 
-            message: error.message,
+            message: error?.message || "Payout failed.",
           });
         }
       }
+
+      /* ====================================================
+         MANUAL_ALL SUMMARY
+      ==================================================== */
+
+      const successful = results.filter((item) => item.success === true).length;
+
+      const failed = results.filter((item) => item.success === false).length;
+
+      const processing = results.filter(
+        (item) => item.status === "PROCESSING",
+      ).length;
+
+      const skipped = results.filter((item) => item.skipped === true).length;
 
       return {
         statusCode: 200,
@@ -2007,9 +2922,13 @@ exports.handler = async (event) => {
 
           processed: results.length,
 
-          successful: results.filter((item) => item.success === true).length,
+          successful,
 
-          failed: results.filter((item) => item.success === false).length,
+          failed,
+
+          processing,
+
+          skipped,
 
           results,
         }),
@@ -2017,13 +2936,47 @@ exports.handler = async (event) => {
     }
 
     /* ======================================================
-       6. AUTOMATIC
+       8. AUTOMATIC
+    ======================================================
+
+       Automatic payout works similarly to MANUAL_ALL.
+
+       The difference is simply the payoutMethod recorded
+       against each payout:
+
+           AUTOMATIC
+
+       This allows your system to distinguish automatically
+       generated payouts from administrator-triggered
+       MANUAL_ALL payouts.
     ====================================================== */
 
     if (payoutMethod === "AUTOMATIC") {
+      /*
+       * Automatic payouts also pay the entire available
+       * balance of each eligible courier.
+       */
+
+      if (requestedAmount !== null) {
+        throw new Error(
+          "A specific amount cannot be supplied for AUTOMATIC payouts. Each courier will be paid their available balance.",
+        );
+      }
+
       const wallets = await getEligibleWallets();
 
+      console.log("ELIGIBLE WALLETS FOR AUTOMATIC PAYOUT:", wallets.length);
+
       const results = [];
+
+      /*
+       * Process sequentially.
+       *
+       * This is intentionally not Promise.all().
+       *
+       * We want each payout to complete its wallet/version
+       * checks before moving to the next courier.
+       */
 
       for (const wallet of wallets) {
         try {
@@ -2042,8 +2995,13 @@ exports.handler = async (event) => {
           console.error("AUTOMATIC PAYOUT ERROR:", {
             courierID: wallet.ownerID,
 
-            error: error.message,
+            error: error?.message,
           });
+
+          /*
+           * Do not stop the entire automatic payout run
+           * because one courier failed.
+           */
 
           results.push({
             success: false,
@@ -2052,10 +3010,24 @@ exports.handler = async (event) => {
 
             status: "FAILED",
 
-            message: error.message,
+            message: error?.message || "Payout failed.",
           });
         }
       }
+
+      /* ====================================================
+         AUTOMATIC PAYOUT SUMMARY
+      ==================================================== */
+
+      const successful = results.filter((item) => item.success === true).length;
+
+      const failed = results.filter((item) => item.success === false).length;
+
+      const processing = results.filter(
+        (item) => item.status === "PROCESSING",
+      ).length;
+
+      const skipped = results.filter((item) => item.skipped === true).length;
 
       return {
         statusCode: 200,
@@ -2067,9 +3039,13 @@ exports.handler = async (event) => {
 
           processed: results.length,
 
-          successful: results.filter((item) => item.success === true).length,
+          successful,
 
-          failed: results.filter((item) => item.success === false).length,
+          failed,
+
+          processing,
+
+          skipped,
 
           results,
         }),
@@ -2077,11 +3053,15 @@ exports.handler = async (event) => {
     }
 
     /* ======================================================
-       7. INVALID PAYOUT METHOD
+       9. INVALID PAYOUT METHOD
     ====================================================== */
 
     throw new Error(`Unsupported payoutMethod: ${payoutMethod}`);
   } catch (error) {
+    /* ======================================================
+       GLOBAL ERROR HANDLER
+    ====================================================== */
+
     console.error("==========================================");
 
     console.error("ATUA PROCESS PAYOUTS ERROR");
