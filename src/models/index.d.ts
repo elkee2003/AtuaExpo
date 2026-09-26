@@ -2,6 +2,11 @@ import { ModelInit, MutableModel, __modelMeta__, ManagedIdentifier } from "@aws-
 // @ts-ignore
 import { LazyLoading, LazyLoadingDisabled, AsyncCollection, AsyncItem } from "@aws-amplify/datastore";
 
+export enum OrderEnvironment {
+  PRODUCTION = "PRODUCTION",
+  TEST = "TEST"
+}
+
 export enum EarningsAllocationStatus {
   NOT_ALLOCATED = "NOT_ALLOCATED",
   PROCESSING = "PROCESSING",
@@ -574,6 +579,7 @@ type EagerOrder = {
   readonly fundsStatus?: FundsStatus | keyof typeof FundsStatus | null;
   readonly earningsAllocationStatus?: EarningsAllocationStatus | keyof typeof EarningsAllocationStatus | null;
   readonly earningsAllocatedAt?: string | null;
+  readonly maxiCountIncrementedAt?: string | null;
   readonly fundsReleaseBlocked?: boolean | null;
   readonly fundsHoldReason?: string | null;
   readonly fundsHeldBy?: string | null;
@@ -582,6 +588,7 @@ type EagerOrder = {
   readonly pickupFundsReleasedAt?: string | null;
   readonly fundsReleasedAt?: string | null;
   readonly fundsReleaseType?: string | null;
+  readonly orderEnvironment?: OrderEnvironment | keyof typeof OrderEnvironment | null;
   readonly assignedCourierId?: string | null;
   readonly assignmentExpiresAt?: string | null;
   readonly assignmentAttempts?: number | null;
@@ -702,6 +709,7 @@ type LazyOrder = {
   readonly fundsStatus?: FundsStatus | keyof typeof FundsStatus | null;
   readonly earningsAllocationStatus?: EarningsAllocationStatus | keyof typeof EarningsAllocationStatus | null;
   readonly earningsAllocatedAt?: string | null;
+  readonly maxiCountIncrementedAt?: string | null;
   readonly fundsReleaseBlocked?: boolean | null;
   readonly fundsHoldReason?: string | null;
   readonly fundsHeldBy?: string | null;
@@ -710,6 +718,7 @@ type LazyOrder = {
   readonly pickupFundsReleasedAt?: string | null;
   readonly fundsReleasedAt?: string | null;
   readonly fundsReleaseType?: string | null;
+  readonly orderEnvironment?: OrderEnvironment | keyof typeof OrderEnvironment | null;
   readonly assignedCourierId?: string | null;
   readonly assignmentExpiresAt?: string | null;
   readonly assignmentAttempts?: number | null;

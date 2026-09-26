@@ -765,6 +765,8 @@ const finalizePaidOrder = async ({ order, payment }) => {
 
     fundsStatus: "HELD",
 
+    earningsAllocationStatus: "NOT_ALLOCATED",
+
     deliveryVerificationCode: deliveryVerificationCode,
 
     recipientTrackingToken: recipientTrackingToken,

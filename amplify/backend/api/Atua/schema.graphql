@@ -29,6 +29,11 @@ type CourierCompany @model @auth(rules: [{ allow: public }]) {
 }
 
 # ---------------- ENUMS ----------------
+enum OrderEnvironment {
+  PRODUCTION
+  TEST
+}
+
 enum EarningsAllocationStatus {
   NOT_ALLOCATED
   PROCESSING
@@ -388,6 +393,14 @@ type Order @model @auth(rules: [{ allow: public }]) {
   earningsAllocationStatus: EarningsAllocationStatus
   earningsAllocatedAt: AWSDateTime
 
+  # ---------------- MAXI CAPACITY ----------------
+
+  # Timestamp showing that this Order has caused
+  # the assigned MAXI courier's active count to increase.
+  # Used to prevent duplicate increments when
+  # Paystack/webhook/fallback processing is retried.
+  maxiCountIncrementedAt: AWSDateTime
+
   # ---------------- FUNDS HOLD ----------------
 
   fundsReleaseBlocked: Boolean
@@ -404,6 +417,9 @@ type Order @model @auth(rules: [{ allow: public }]) {
 
   fundsReleasedAt: AWSDateTime
   fundsReleaseType: String
+
+  # ---------------- ORDER ENVIRONMENT ----------------
+  orderEnvironment: OrderEnvironment
 
   # ---------------- ASSIGNMENT FIELDS ----------------
   assignedCourierId: ID @index(name: "byAssignedCourier")

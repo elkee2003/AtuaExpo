@@ -1,3 +1,4 @@
+// delete this page it is not needed. when you want to delete it make sure you delete from app /screens also.
 import { useState } from "react";
 import { Text, View } from "react-native";
 import { useOrderContext } from "../../../../providers/OrderProvider";

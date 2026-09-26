@@ -204,6 +204,15 @@ const Checkout = () => {
       const order = await DataStore.save(
         new Order({
           //---------------------------------
+          // Order Environment
+          //---------------------------------
+
+          // REAL customer orders must be PRODUCTION.
+          // TEST orders should explicitly use TEST.
+          // orderEnvironment: "PRODUCTION",
+          orderEnvironment: "TEST",
+
+          //---------------------------------
           // Recipient
           //---------------------------------
 

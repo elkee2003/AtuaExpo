@@ -896,6 +896,7 @@ export const getPayment = /* GraphQL */ `
         fundsStatus
         earningsAllocationStatus
         earningsAllocatedAt
+        maxiCountIncrementedAt
         fundsReleaseBlocked
         fundsHoldReason
         fundsHeldBy
@@ -904,6 +905,7 @@ export const getPayment = /* GraphQL */ `
         pickupFundsReleasedAt
         fundsReleasedAt
         fundsReleaseType
+        orderEnvironment
         assignedCourierId
         assignmentExpiresAt
         assignmentAttempts
@@ -1233,6 +1235,7 @@ export const getOffer = /* GraphQL */ `
         fundsStatus
         earningsAllocationStatus
         earningsAllocatedAt
+        maxiCountIncrementedAt
         fundsReleaseBlocked
         fundsHoldReason
         fundsHeldBy
@@ -1241,6 +1244,7 @@ export const getOffer = /* GraphQL */ `
         pickupFundsReleasedAt
         fundsReleasedAt
         fundsReleaseType
+        orderEnvironment
         assignedCourierId
         assignmentExpiresAt
         assignmentAttempts
@@ -1558,6 +1562,7 @@ export const getOrder = /* GraphQL */ `
       fundsStatus
       earningsAllocationStatus
       earningsAllocatedAt
+      maxiCountIncrementedAt
       fundsReleaseBlocked
       fundsHoldReason
       fundsHeldBy
@@ -1566,6 +1571,7 @@ export const getOrder = /* GraphQL */ `
       pickupFundsReleasedAt
       fundsReleasedAt
       fundsReleaseType
+      orderEnvironment
       assignedCourierId
       assignmentExpiresAt
       assignmentAttempts
@@ -1767,6 +1773,7 @@ export const listOrders = /* GraphQL */ `
         fundsStatus
         earningsAllocationStatus
         earningsAllocatedAt
+        maxiCountIncrementedAt
         fundsReleaseBlocked
         fundsHoldReason
         fundsHeldBy
@@ -1775,6 +1782,7 @@ export const listOrders = /* GraphQL */ `
         pickupFundsReleasedAt
         fundsReleasedAt
         fundsReleaseType
+        orderEnvironment
         assignedCourierId
         assignmentExpiresAt
         assignmentAttempts
@@ -1908,6 +1916,7 @@ export const syncOrders = /* GraphQL */ `
         fundsStatus
         earningsAllocationStatus
         earningsAllocatedAt
+        maxiCountIncrementedAt
         fundsReleaseBlocked
         fundsHoldReason
         fundsHeldBy
@@ -1916,6 +1925,7 @@ export const syncOrders = /* GraphQL */ `
         pickupFundsReleasedAt
         fundsReleasedAt
         fundsReleaseType
+        orderEnvironment
         assignedCourierId
         assignmentExpiresAt
         assignmentAttempts
@@ -2051,6 +2061,7 @@ export const ordersByAssignedCourierId = /* GraphQL */ `
         fundsStatus
         earningsAllocationStatus
         earningsAllocatedAt
+        maxiCountIncrementedAt
         fundsReleaseBlocked
         fundsHoldReason
         fundsHeldBy
@@ -2059,6 +2070,7 @@ export const ordersByAssignedCourierId = /* GraphQL */ `
         pickupFundsReleasedAt
         fundsReleasedAt
         fundsReleaseType
+        orderEnvironment
         assignedCourierId
         assignmentExpiresAt
         assignmentAttempts
@@ -2196,6 +2208,7 @@ export const ordersByAssignmentStatusAndAssignmentExpiresAt = /* GraphQL */ `
         fundsStatus
         earningsAllocationStatus
         earningsAllocatedAt
+        maxiCountIncrementedAt
         fundsReleaseBlocked
         fundsHoldReason
         fundsHeldBy
@@ -2204,6 +2217,7 @@ export const ordersByAssignmentStatusAndAssignmentExpiresAt = /* GraphQL */ `
         pickupFundsReleasedAt
         fundsReleasedAt
         fundsReleaseType
+        orderEnvironment
         assignedCourierId
         assignmentExpiresAt
         assignmentAttempts
@@ -2339,6 +2353,7 @@ export const ordersByRecipientTrackingToken = /* GraphQL */ `
         fundsStatus
         earningsAllocationStatus
         earningsAllocatedAt
+        maxiCountIncrementedAt
         fundsReleaseBlocked
         fundsHoldReason
         fundsHeldBy
@@ -2347,6 +2362,7 @@ export const ordersByRecipientTrackingToken = /* GraphQL */ `
         pickupFundsReleasedAt
         fundsReleasedAt
         fundsReleaseType
+        orderEnvironment
         assignedCourierId
         assignmentExpiresAt
         assignmentAttempts
@@ -2482,6 +2498,7 @@ export const ordersByUserID = /* GraphQL */ `
         fundsStatus
         earningsAllocationStatus
         earningsAllocatedAt
+        maxiCountIncrementedAt
         fundsReleaseBlocked
         fundsHoldReason
         fundsHeldBy
@@ -2490,6 +2507,7 @@ export const ordersByUserID = /* GraphQL */ `
         pickupFundsReleasedAt
         fundsReleasedAt
         fundsReleaseType
+        orderEnvironment
         assignedCourierId
         assignmentExpiresAt
         assignmentAttempts
@@ -2696,6 +2714,7 @@ export const getCourierReport = /* GraphQL */ `
         fundsStatus
         earningsAllocationStatus
         earningsAllocatedAt
+        maxiCountIncrementedAt
         fundsReleaseBlocked
         fundsHoldReason
         fundsHeldBy
@@ -2704,6 +2723,7 @@ export const getCourierReport = /* GraphQL */ `
         pickupFundsReleasedAt
         fundsReleasedAt
         fundsReleaseType
+        orderEnvironment
         assignedCourierId
         assignmentExpiresAt
         assignmentAttempts
@@ -3104,6 +3124,7 @@ export const getCourierReview = /* GraphQL */ `
         fundsStatus
         earningsAllocationStatus
         earningsAllocatedAt
+        maxiCountIncrementedAt
         fundsReleaseBlocked
         fundsHoldReason
         fundsHeldBy
@@ -3112,6 +3133,7 @@ export const getCourierReview = /* GraphQL */ `
         pickupFundsReleasedAt
         fundsReleasedAt
         fundsReleaseType
+        orderEnvironment
         assignedCourierId
         assignmentExpiresAt
         assignmentAttempts

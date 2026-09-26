@@ -528,6 +528,10 @@ const OrderDetails = ({ orderId: receivedOrderId }) => {
     "IN_TRANSIT",
   ].includes(order.status);
 
+  const isPaid = order?.paymentStatus === "PAID";
+
+  const showCourierPhone = isPaid;
+
   const isDelivered = order.status === "DELIVERED";
 
   const isCancelled = ["CANCELLED", "CANCELED"].includes(order.status);
@@ -760,7 +764,7 @@ const OrderDetails = ({ orderId: receivedOrderId }) => {
               </View>
 
               <View style={styles.courierContactButtons}>
-                {courier.phoneNumber && (
+                {showCourierPhone && courier.phoneNumber && (
                   <TouchableOpacity
                     style={styles.contactButton}
                     onPress={() =>
@@ -774,7 +778,7 @@ const OrderDetails = ({ orderId: receivedOrderId }) => {
               </View>
             </View>
 
-            {courier.phoneNumber && (
+            {showCourierPhone && courier.phoneNumber && (
               <TouchableOpacity
                 style={styles.phoneCopyRow}
                 onPress={() =>

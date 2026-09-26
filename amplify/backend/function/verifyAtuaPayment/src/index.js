@@ -608,6 +608,8 @@ const markOrderAsPaidFallback = async ({
 
     fundsStatus: "HELD",
 
+    earningsAllocationStatus: "NOT_ALLOCATED",
+
     deliveryVerificationCode: verificationCode,
 
     // Enable recipient tracking when payment is successfully confirmed.

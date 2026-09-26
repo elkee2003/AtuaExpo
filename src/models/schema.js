@@ -1693,6 +1693,13 @@ export const schema = {
                     "isRequired": false,
                     "attributes": []
                 },
+                "maxiCountIncrementedAt": {
+                    "name": "maxiCountIncrementedAt",
+                    "isArray": false,
+                    "type": "AWSDateTime",
+                    "isRequired": false,
+                    "attributes": []
+                },
                 "fundsReleaseBlocked": {
                     "name": "fundsReleaseBlocked",
                     "isArray": false,
@@ -1746,6 +1753,15 @@ export const schema = {
                     "name": "fundsReleaseType",
                     "isArray": false,
                     "type": "String",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "orderEnvironment": {
+                    "name": "orderEnvironment",
+                    "isArray": false,
+                    "type": {
+                        "enum": "OrderEnvironment"
+                    },
                     "isRequired": false,
                     "attributes": []
                 },
@@ -3195,6 +3211,13 @@ export const schema = {
         }
     },
     "enums": {
+        "OrderEnvironment": {
+            "name": "OrderEnvironment",
+            "values": [
+                "PRODUCTION",
+                "TEST"
+            ]
+        },
         "EarningsAllocationStatus": {
             "name": "EarningsAllocationStatus",
             "values": [
@@ -3447,5 +3470,5 @@ export const schema = {
         }
     },
     "codegenVersion": "3.4.4",
-    "version": "4d3d09e71077e9814f5379ad7d37df12"
+    "version": "45c838da409e9ff44815c8268619fc99"
 };

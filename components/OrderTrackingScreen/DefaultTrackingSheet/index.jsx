@@ -136,14 +136,16 @@ const DefaultTrackingSheet = ({
             )}
 
             {/* PHONE */}
-            {courier?.phoneNumber && (
-              <TouchableOpacity onPress={copyPhone}>
-                <Text style={styles.phoneText}>{courier.phoneNumber}</Text>
-                <Text style={styles.copyHint}>
-                  {copied ? "Copied!" : "Tap to copy"}
-                </Text>
-              </TouchableOpacity>
-            )}
+            {courier?.phoneNumber &&
+              (order?.transportationType !== "MAXI" ||
+                order?.paymentStatus === "PAID") && (
+                <TouchableOpacity onPress={copyPhone}>
+                  <Text style={styles.phoneText}>{courier.phoneNumber}</Text>
+                  <Text style={styles.copyHint}>
+                    {copied ? "Copied!" : "Tap to copy"}
+                  </Text>
+                </TouchableOpacity>
+              )}
 
             {/* PRICE */}
             <View style={styles.priceBadge}>

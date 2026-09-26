@@ -2,6 +2,11 @@
 import { initSchema } from '@aws-amplify/datastore';
 import { schema } from './schema';
 
+const OrderEnvironment = {
+  "PRODUCTION": "PRODUCTION",
+  "TEST": "TEST"
+};
+
 const EarningsAllocationStatus = {
   "NOT_ALLOCATED": "NOT_ALLOCATED",
   "PROCESSING": "PROCESSING",
@@ -131,6 +136,7 @@ export {
   CourierLiveLocation,
   Courier,
   User,
+  OrderEnvironment,
   EarningsAllocationStatus,
   FundsStatus,
   OrderPayoutStatus,

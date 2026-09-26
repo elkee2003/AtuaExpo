@@ -121,6 +121,12 @@ const MaxiSubmit = () => {
       const newOrder = await DataStore.save(
         new Order({
           // BASIC INFO
+
+          // REAL customer orders = PRODUCTION
+          // Test orders = TEST
+          // orderEnvironment: "PRODUCTION",
+          orderEnvironment: "TEST",
+
           recipientName,
           recipientNumber,
           recipientNumber2,
