@@ -261,6 +261,7 @@ const ORDER_FIELDS = `
 
   transportationType
   vehicleClass
+  orderEnvironment
   status
 
   hasNewOffer
@@ -747,6 +748,8 @@ const finalizePaidOrder = async ({ order, payment }) => {
   const input = {
     id: order.id,
 
+    orderEnvironment: order.orderEnvironment,
+
     /*
      * IMPORTANT:
      *
@@ -841,6 +844,8 @@ const finalizePaidOrder = async ({ order, payment }) => {
     JSON.stringify(
       {
         id: updatedOrder.id,
+
+        orderEnvironment: updatedOrder.orderEnvironment,
 
         userID: updatedOrder.userID,
 
@@ -1221,6 +1226,8 @@ exports.handler = async (event) => {
       JSON.stringify(
         {
           id: order.id,
+
+          orderEnvironment: order.orderEnvironment,
 
           userID: order.userID,
 

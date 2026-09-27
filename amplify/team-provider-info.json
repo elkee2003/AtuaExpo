@@ -58,12 +58,12 @@
         "verifyAtuaPayment": {
           "secretsPathAmplifyAppId": "d4d2e6dwzso4a",
           "deploymentBucketName": "amplify-atua-staging-19d66-deployment",
-          "s3Key": "amplify-builds/verifyAtuaPayment-494350582f6d524c6d71-build.zip"
+          "s3Key": "amplify-builds/verifyAtuaPayment-62507a4f526153357668-build.zip"
         },
         "paystackWebhook": {
           "secretsPathAmplifyAppId": "d4d2e6dwzso4a",
           "deploymentBucketName": "amplify-atua-staging-19d66-deployment",
-          "s3Key": "amplify-builds/paystackWebhook-54324e6543412b6c6167-build.zip"
+          "s3Key": "amplify-builds/paystackWebhook-46344937367868737a57-build.zip"
         },
         "allocateCourierEarnings": {
           "deploymentBucketName": "amplify-atua-staging-19d66-deployment",

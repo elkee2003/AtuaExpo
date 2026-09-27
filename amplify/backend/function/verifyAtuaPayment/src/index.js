@@ -204,6 +204,7 @@ const ORDER_FIELDS = `
 
   transportationType
   vehicleClass
+  orderEnvironment
 
   status
 
@@ -598,6 +599,8 @@ const markOrderAsPaidFallback = async ({
   const input = {
     id: order.id,
 
+    orderEnvironment: order.orderEnvironment,
+
     userID: order.userID,
 
     paymentStatus: "PAID",
@@ -627,6 +630,8 @@ const markOrderAsPaidFallback = async ({
 
   console.log("FALLBACK ORDER UPDATE:", {
     orderID: order.id,
+
+    orderEnvironment: order.orderEnvironment,
 
     userID: order.userID,
 
@@ -665,6 +670,8 @@ const markOrderAsPaidFallback = async ({
     JSON.stringify(
       {
         id: updatedOrder.id,
+
+        orderEnvironment: updatedOrder.orderEnvironment,
 
         userID: updatedOrder.userID,
 
@@ -950,6 +957,8 @@ const repairMissingVerificationCode = async ({
   const input = {
     id: order.id,
 
+    orderEnvironment: order.orderEnvironment,
+
     /*
      * Keep required userID present.
      */
@@ -1016,6 +1025,8 @@ const repairMissingVerificationCode = async ({
     JSON.stringify(
       {
         id: updatedOrder.id,
+
+        orderEnvironment: updatedOrder.orderEnvironment,
 
         userID: updatedOrder.userID,
 
@@ -1361,6 +1372,8 @@ exports.handler = async (event) => {
         {
           id: order.id,
 
+          orderEnvironment: order.orderEnvironment,
+
           userID: order.userID,
 
           paymentStatus: order.paymentStatus,
@@ -1663,6 +1676,8 @@ exports.handler = async (event) => {
         {
           id: finalOrder.id,
 
+          orderEnvironment: finalOrder.orderEnvironment,
+
           userID: finalOrder.userID,
 
           paymentStatus: finalOrder.paymentStatus,
@@ -1736,6 +1751,13 @@ exports.handler = async (event) => {
 
     if (!finalOrder.userID) {
       throw new Error("Order userID disappeared during fallback update.");
+    }
+
+    if (finalOrder.orderEnvironment !== order.orderEnvironment) {
+      throw new Error(
+        `Order ${order.id} orderEnvironment changed unexpectedly. ` +
+          `Expected ${order.orderEnvironment}, received ${finalOrder.orderEnvironment}.`,
+      );
     }
 
     /* ======================================================
