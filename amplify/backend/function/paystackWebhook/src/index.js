@@ -387,6 +387,11 @@ const ORDER_FIELDS = `
   lastAssignedAt
   rejectedCourierIds
   assignmentStatus
+  
+  # MAXI payment idempotency marker.
+  # Records that this paid Order has already caused
+  # the assigned MAXI courier's currentMaxiCount to increase.
+  maxiCountIncrementedAt
 
   userID
 
@@ -428,6 +433,281 @@ const getOrder = async (orderId) => {
   );
 
   return data?.getOrder || null;
+};
+
+/* ==========================================================
+   GET COURIER FOR MAXI COUNT UPDATE
+========================================================== */
+
+/*
+ * For a paid MAXI Order, assignedCourierId identifies the
+ * exact courier whose active MAXI capacity must increase.
+ *
+ * We do NOT search for another courier here.
+ *
+ * The courier must be the same courier whose bid was accepted
+ * and whose ID is stored on the Order.
+ */
+const getCourierForMaxiCount = async (courierId) => {
+  if (!courierId) {
+    throw new Error("assignedCourierId is required for a MAXI count update.");
+  }
+
+  const query = `
+    query GetCourier(
+      $id: ID!
+    ) {
+      getCourier(
+        id: $id
+      ) {
+        id
+        currentMaxiCount
+        _version
+        _lastChangedAt
+        _deleted
+      }
+    }
+  `;
+
+  const data = await graphqlRequest(
+    query,
+    {
+      id: courierId,
+    },
+    "GetCourierForMaxiCount",
+  );
+
+  return data?.getCourier || null;
+};
+
+/* ==========================================================
+   INCREMENT MAXI COURIER COUNT
+========================================================== */
+
+/*
+ * A MAXI courier's active count increases ONLY after the
+ * corresponding MAXI Order has been successfully paid.
+ *
+ * The accepted bid/assignment itself does NOT increment
+ * currentMaxiCount.
+ *
+ * Payment is the point at which the MAXI capacity becomes active.
+ *
+ * maxiCountIncrementedAt is stored on the Order as an
+ * idempotency marker so normal Paystack webhook retries do not
+ * increment the same courier repeatedly.
+ */
+const incrementMaxiCourierCount = async (order) => {
+  /*
+   * --------------------------------------------------------
+   * ONLY MAXI ORDERS
+   * --------------------------------------------------------
+   *
+   * Micro and Moto orders do not use currentMaxiCount.
+   *
+   * Therefore, leave them completely untouched.
+   */
+  if (order?.transportationType !== "MAXI") {
+    return order;
+  }
+
+  /*
+   * --------------------------------------------------------
+   * IDEMPOTENCY CHECK
+   * --------------------------------------------------------
+   *
+   * If this Order has already incremented a MAXI courier,
+   * do not increment again.
+   *
+   * This protects against normal Paystack webhook retries.
+   */
+  if (order?.maxiCountIncrementedAt) {
+    console.log("MAXI COUNT ALREADY INCREMENTED:", {
+      orderID: order.id,
+      assignedCourierId: order.assignedCourierId,
+      maxiCountIncrementedAt: order.maxiCountIncrementedAt,
+    });
+
+    return order;
+  }
+
+  /*
+   * --------------------------------------------------------
+   * GET THE ASSIGNED COURIER ID
+   * --------------------------------------------------------
+   *
+   * For MAXI, the courier was selected when the accepted bid
+   * was chosen.
+   *
+   * We therefore use the exact assignedCourierId stored
+   * on this Order.
+   */
+  if (!order?.assignedCourierId) {
+    throw new Error(
+      `MAXI Order ${order?.id || "unknown"} is PAID but has no assignedCourierId.`,
+    );
+  }
+
+  /*
+   * --------------------------------------------------------
+   * GET THE EXACT COURIER
+   * --------------------------------------------------------
+   */
+  const courier = await getCourierForMaxiCount(order.assignedCourierId);
+
+  if (!courier || courier._deleted) {
+    throw new Error(
+      `Assigned MAXI courier ${order.assignedCourierId} was not found.`,
+    );
+  }
+
+  /*
+   * --------------------------------------------------------
+   * CALCULATE NEW MAXI COUNT
+   * --------------------------------------------------------
+   */
+  const currentMaxiCount = Number(courier.currentMaxiCount || 0);
+
+  if (!Number.isFinite(currentMaxiCount) || currentMaxiCount < 0) {
+    throw new Error(
+      `Invalid currentMaxiCount for courier ${courier.id}: ${courier.currentMaxiCount}`,
+    );
+  }
+
+  const nextMaxiCount = currentMaxiCount + 1;
+
+  /*
+   * --------------------------------------------------------
+   * UPDATE COURIER
+   * --------------------------------------------------------
+   */
+  const mutation = `
+    mutation UpdateCourier(
+      $input: UpdateCourierInput!
+    ) {
+      updateCourier(
+        input: $input
+      ) {
+        id
+        currentMaxiCount
+        _version
+        _lastChangedAt
+        _deleted
+      }
+    }
+  `;
+
+  const courierInput = {
+    id: courier.id,
+    currentMaxiCount: nextMaxiCount,
+  };
+
+  /*
+   * AppSync/DataStore uses _version for optimistic
+   * concurrency.
+   *
+   * Send the current Courier version so we don't blindly
+   * overwrite a newer Courier record.
+   */
+  if (Number.isInteger(courier._version)) {
+    courierInput._version = courier._version;
+  }
+
+  console.log("INCREMENTING MAXI COURIER COUNT:", {
+    orderID: order.id,
+    courierID: courier.id,
+    previousMaxiCount: currentMaxiCount,
+    nextMaxiCount,
+    courierVersion: courier._version,
+  });
+
+  const data = await graphqlRequest(
+    mutation,
+    {
+      input: courierInput,
+    },
+    "IncrementMaxiCourierCount",
+  );
+
+  const updatedCourier = data?.updateCourier || null;
+
+  if (!updatedCourier) {
+    throw new Error(`updateCourier returned no Courier for ${courier.id}.`);
+  }
+
+  /*
+   * --------------------------------------------------------
+   * SAVE IDEMPOTENCY MARKER ON ORDER
+   * --------------------------------------------------------
+   *
+   * The Courier count has now successfully increased.
+   *
+   * We record the time on the Order so that a later Paystack
+   * retry knows this Order has already consumed one MAXI
+   * capacity slot.
+   */
+  const markMutation = `
+    mutation MarkMaxiCountIncremented(
+      $input: UpdateOrderInput!
+    ) {
+      updateOrder(
+        input: $input
+      ) {
+        id
+        maxiCountIncrementedAt
+        _version
+        _lastChangedAt
+        _deleted
+      }
+    }
+  `;
+
+  const incrementedAt = new Date().toISOString();
+
+  const orderInput = {
+    id: order.id,
+    maxiCountIncrementedAt: incrementedAt,
+  };
+
+  /*
+   * Use the current Order version.
+   *
+   * When this function is called, the Order has already gone
+   * through finalizePaidOrder(), so order._version is the
+   * version returned by that successful payment update.
+   */
+  if (Number.isInteger(order._version)) {
+    orderInput._version = order._version;
+  }
+
+  const markedData = await graphqlRequest(
+    markMutation,
+    {
+      input: orderInput,
+    },
+    "MarkMaxiCountIncremented",
+  );
+
+  const markedOrder = markedData?.updateOrder || null;
+
+  if (!markedOrder) {
+    throw new Error(
+      `MAXI courier count was increased for Order ${order.id}, but the idempotency marker could not be saved.`,
+    );
+  }
+
+  console.log("MAXI COURIER COUNT INCREMENTED:", {
+    orderID: order.id,
+    courierID: updatedCourier.id,
+    currentMaxiCount: updatedCourier.currentMaxiCount,
+    maxiCountIncrementedAt: markedOrder.maxiCountIncrementedAt,
+  });
+
+  return {
+    ...order,
+    maxiCountIncrementedAt: markedOrder.maxiCountIncrementedAt,
+    _version: markedOrder._version,
+  };
 };
 
 /* ==========================================================
@@ -1399,7 +1679,25 @@ exports.handler = async (event) => {
 
     /*
      * ------------------------------------------------------
-     * 14. FINAL SUCCESS
+     * 14. INCREMENT MAXI COURIER COUNT
+     * ------------------------------------------------------
+     *
+     * Only MAXI Orders reach this capacity update.
+     *
+     * The assignedCourierId is the courier whose accepted
+     * bid was selected for this Order.
+     *
+     * Because MAXI payment happens AFTER bid acceptance,
+     * successful payment is the point at which we increase
+     * that courier's currentMaxiCount.
+     *
+     * Micro/Moto count logic is completely untouched.
+     */
+    const countUpdatedOrder = await incrementMaxiCourierCount(finalizedOrder);
+
+    /*
+     * ------------------------------------------------------
+     * 15. FINAL SUCCESS
      * ------------------------------------------------------
      */
 
@@ -1407,22 +1705,20 @@ exports.handler = async (event) => {
 
     console.log("ATUA PAYSTACK WEBHOOK COMPLETED");
 
-    console.log("ORDER:", finalizedOrder.id);
+    console.log("ORDER:", countUpdatedOrder.id);
 
-    console.log("USER:", finalizedOrder.userID);
+    console.log("USER:", countUpdatedOrder.userID);
 
-    console.log("PAYMENT:", payment.id);
+    console.log("PAYMENT STATUS:", countUpdatedOrder.paymentStatus);
 
-    console.log("PAYMENT STATUS:", finalizedOrder.paymentStatus);
-
-    console.log("FUNDS STATUS:", finalizedOrder.fundsStatus);
+    console.log("FUNDS STATUS:", countUpdatedOrder.fundsStatus);
 
     console.log(
       "DELIVERY VERIFICATION CODE:",
-      finalizedOrder.deliveryVerificationCode,
+      countUpdatedOrder.deliveryVerificationCode,
     );
 
-    console.log("ORDER VERSION:", finalizedOrder._version);
+    console.log("ORDER VERSION:", countUpdatedOrder._version);
 
     console.log("==========================================");
 
@@ -1431,21 +1727,21 @@ exports.handler = async (event) => {
 
       event: eventType,
 
-      orderID: finalizedOrder.id,
+      orderID: countUpdatedOrder.id,
 
       paymentID: payment.id,
 
-      paymentStatus: finalizedOrder.paymentStatus,
+      paymentStatus: countUpdatedOrder.paymentStatus,
 
-      status: finalizedOrder.status,
+      status: countUpdatedOrder.status,
 
-      fundsStatus: finalizedOrder.fundsStatus,
+      fundsStatus: countUpdatedOrder.fundsStatus,
 
-      deliveryVerificationCode: finalizedOrder.deliveryVerificationCode,
+      deliveryVerificationCode: countUpdatedOrder.deliveryVerificationCode,
 
-      recipientTrackingToken: finalizedOrder.recipientTrackingToken,
+      recipientTrackingToken: countUpdatedOrder.recipientTrackingToken,
 
-      recipientTrackingEnabled: finalizedOrder.recipientTrackingEnabled,
+      recipientTrackingEnabled: countUpdatedOrder.recipientTrackingEnabled,
     });
   } catch (error) {
     console.error("==========================================");

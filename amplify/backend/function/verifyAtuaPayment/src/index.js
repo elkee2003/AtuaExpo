@@ -331,6 +331,9 @@ const ORDER_FIELDS = `
   rejectedCourierIds
   assignmentStatus
 
+  # MAXI capacity idempotency marker
+  maxiCountIncrementedAt
+
   userID
 
   createdAt
@@ -371,6 +374,258 @@ const getOrder = async (orderId) => {
   );
 
   return data?.getOrder || null;
+};
+
+/* ==========================================================
+   GET COURIER FOR MAXI COUNT
+========================================================== */
+
+/*
+ * Gets the exact courier assigned to this MAXI Order.
+ *
+ * IMPORTANT:
+ * We use assignedCourierId from the Order.
+ *
+ * We do NOT search for another available courier.
+ * The courier whose accepted bid caused the Order to become
+ * ACCEPTED is the courier whose MAXI capacity must increase.
+ */
+
+const getCourierForMaxiCount = async (courierId) => {
+  if (!courierId) {
+    throw new Error("Courier ID is required for MAXI count update.");
+  }
+
+  const query = `
+    query GetCourier(
+      $id: ID!
+    ) {
+      getCourier(
+        id: $id
+      ) {
+        id
+        currentMaxiCount
+        _version
+        _lastChangedAt
+        _deleted
+      }
+    }
+  `;
+
+  const data = await graphqlRequest(
+    query,
+    {
+      id: courierId,
+    },
+    "GetCourierForMaxiCount",
+  );
+
+  const courier = data?.getCourier || null;
+
+  if (!courier || courier._deleted) {
+    throw new Error(`Assigned MAXI courier ${courierId} could not be found.`);
+  }
+
+  return courier;
+};
+
+/* ==========================================================
+   INCREMENT MAXI COURIER COUNT
+========================================================== */
+
+/*
+ * Increments currentMaxiCount for the courier assigned to
+ * this MAXI Order.
+ *
+ * This function is intentionally idempotent at the Order level.
+ *
+ * Once maxiCountIncrementedAt has been saved on the Order,
+ * subsequent webhook / verifyAtuaPayment retries will NOT
+ * increment the courier again.
+ *
+ * Micro and Moto Orders are completely ignored.
+ */
+
+const incrementMaxiCourierCount = async (order) => {
+  if (!order?.id) {
+    throw new Error("Order is required for MAXI count update.");
+  }
+
+  /*
+   * Only MAXI Orders use currentMaxiCount.
+   *
+   * Micro and Moto must never enter this logic.
+   */
+  if (order.transportationType !== "MAXI") {
+    return order;
+  }
+
+  /*
+   * If this Order has already caused the courier's MAXI count
+   * to increase, do nothing.
+   *
+   * This protects against webhook retries and verifyAtuaPayment
+   * being called more than once.
+   */
+  if (order.maxiCountIncrementedAt) {
+    console.log("MAXI COUNT ALREADY INCREMENTED:", {
+      orderID: order.id,
+      maxiCountIncrementedAt: order.maxiCountIncrementedAt,
+    });
+
+    return order;
+  }
+
+  /*
+   * A MAXI Order must already have an assigned courier before
+   * payment can increase that courier's active MAXI count.
+   */
+  if (!order.assignedCourierId) {
+    throw new Error(
+      `MAXI Order ${order.id} has no assignedCourierId. ` +
+        "Cannot increment MAXI courier count.",
+    );
+  }
+
+  console.log("PREPARING MAXI COURIER COUNT INCREMENT:", {
+    orderID: order.id,
+    assignedCourierId: order.assignedCourierId,
+    currentMaxiCountMarker: order.maxiCountIncrementedAt || null,
+  });
+
+  /*
+   * Get the exact assigned courier.
+   */
+  const courier = await getCourierForMaxiCount(order.assignedCourierId);
+
+  const currentMaxiCount = Number(courier.currentMaxiCount || 0);
+
+  if (!Number.isFinite(currentMaxiCount) || currentMaxiCount < 0) {
+    throw new Error(
+      `Invalid currentMaxiCount for courier ${courier.id}: ` +
+        `${courier.currentMaxiCount}`,
+    );
+  }
+
+  const nextMaxiCount = currentMaxiCount + 1;
+
+  /*
+   * Update the Courier.
+   *
+   * We include _version because this is an Amplify/DataStore
+   * backed model using optimistic concurrency.
+   */
+  const courierMutation = `
+    mutation UpdateCourier(
+      $input: UpdateCourierInput!
+    ) {
+      updateCourier(
+        input: $input
+      ) {
+        id
+        currentMaxiCount
+        _version
+        _lastChangedAt
+        _deleted
+      }
+    }
+  `;
+
+  const courierInput = {
+    id: courier.id,
+    currentMaxiCount: nextMaxiCount,
+  };
+
+  if (Number.isInteger(courier._version)) {
+    courierInput._version = courier._version;
+  }
+
+  console.log("INCREMENTING MAXI COURIER COUNT:", {
+    courierID: courier.id,
+    previousCount: currentMaxiCount,
+    nextCount: nextMaxiCount,
+    orderID: order.id,
+  });
+
+  const courierData = await graphqlRequest(
+    courierMutation,
+    {
+      input: courierInput,
+    },
+    "UpdateCourierMaxiCount",
+  );
+
+  const updatedCourier = courierData?.updateCourier || null;
+
+  if (!updatedCourier) {
+    throw new Error(
+      `MAXI courier count update returned no Courier for ${courier.id}.`,
+    );
+  }
+
+  /*
+   * Now mark the Order so that retries do not increment the
+   * same courier again.
+   */
+  const orderMutation = `
+    mutation UpdateOrder(
+      $input: UpdateOrderInput!
+    ) {
+      updateOrder(
+        input: $input
+      ) {
+        ${ORDER_FIELDS}
+      }
+    }
+  `;
+
+  const maxiCountIncrementedAt = new Date().toISOString();
+
+  const orderInput = {
+    id: order.id,
+    maxiCountIncrementedAt,
+  };
+
+  if (Number.isInteger(order._version)) {
+    orderInput._version = order._version;
+  }
+
+  console.log("MARKING MAXI COUNT INCREMENTED:", {
+    orderID: order.id,
+    courierID: updatedCourier.id,
+    maxiCountIncrementedAt,
+    currentOrderVersion: order._version,
+  });
+
+  const orderData = await graphqlRequest(
+    orderMutation,
+    {
+      input: orderInput,
+    },
+    "MarkMaxiCountIncremented",
+  );
+
+  const updatedOrder = orderData?.updateOrder || null;
+
+  if (!updatedOrder) {
+    throw new Error(
+      `MAXI count marker update returned no Order for ${order.id}.`,
+    );
+  }
+
+  console.log("MAXI COURIER COUNT INCREMENTED SUCCESSFULLY:", {
+    orderID: updatedOrder.id,
+    courierID: updatedCourier.id,
+    previousCount: currentMaxiCount,
+    newCount: updatedCourier.currentMaxiCount,
+    maxiCountIncrementedAt: updatedOrder.maxiCountIncrementedAt,
+  });
+
+  /*
+   * Return the updated Order so the caller can continue using
+   * the newest Order state.
+   */
+  return updatedOrder;
 };
 
 /* ==========================================================
@@ -1433,13 +1688,29 @@ exports.handler = async (event) => {
       order.recipientTrackingToken &&
       order.recipientTrackingEnabled === true
     ) {
+      /*
+       * The webhook already completed the payment.
+       *
+       * However, for MAXI Orders we still need to make sure the
+       * assigned courier's currentMaxiCount was incremented.
+       *
+       * incrementMaxiCourierCount() is idempotent because it checks
+       * maxiCountIncrementedAt first.
+       */
+      const countUpdatedOrder = await incrementMaxiCourierCount(order);
+
       console.log("==========================================");
 
       console.log("WEBHOOK ALREADY COMPLETED PAYMENT.");
 
       console.log("VERIFICATION CODE ALREADY EXISTS.");
 
-      console.log("NO ORDER UPDATE WILL BE PERFORMED.");
+      console.log(
+        "MAXI COURIER COUNT VERIFIED/UPDATED:",
+        countUpdatedOrder.maxiCountIncrementedAt || null,
+      );
+
+      console.log("NO PAYMENT UPDATE WILL BE PERFORMED.");
 
       console.log("==========================================");
 
@@ -1454,9 +1725,9 @@ exports.handler = async (event) => {
 
         message: "Payment has already been processed by the Paystack webhook.",
 
-        orderId: order.id,
+        orderId: countUpdatedOrder.id,
 
-        deliveryVerificationCode: order.deliveryVerificationCode,
+        deliveryVerificationCode: countUpdatedOrder.deliveryVerificationCode,
 
         payment: buildPaymentDetails({
           reference: transaction.reference,
@@ -1543,9 +1814,7 @@ exports.handler = async (event) => {
 
       const repairedOrder = await repairMissingVerificationCode({
         order,
-
         verificationCode,
-
         recipientTrackingToken,
       });
 
@@ -1553,11 +1822,16 @@ exports.handler = async (event) => {
         throw new Error("Could not repair missing verification code.");
       }
 
-      if (!repairedOrder.deliveryVerificationCode) {
-        throw new Error(
-          "Verification code repair completed without a saved code.",
-        );
-      }
+      /*
+       * The payment is already PAID.
+       *
+       * For MAXI Orders, make sure the assigned courier's
+       * currentMaxiCount has also been incremented.
+       *
+       * If the webhook already did it, the helper will simply
+       * return without incrementing again.
+       */
+      const countUpdatedOrder = await incrementMaxiCourierCount(repairedOrder);
 
       if (!repairedOrder.recipientTrackingToken) {
         throw new Error(
@@ -1692,39 +1966,54 @@ exports.handler = async (event) => {
       throw new Error("Could not reload Order after fallback update.");
     }
 
+    /*
+     * --------------------------------------------------------
+     * MAXI COURIER COUNT
+     * --------------------------------------------------------
+     *
+     * The fallback payment has now been successfully written.
+     *
+     * If this is a MAXI Order, increase the active MAXI count
+     * for the exact courier who accepted the Order.
+     *
+     * The helper is idempotent, so if the count was already
+     * incremented by the webhook, it will not increment again.
+     */
+    const countUpdatedOrder = await incrementMaxiCourierCount(finalOrder);
+
     console.log(
       "FINAL FALLBACK ORDER:",
       JSON.stringify(
         {
-          id: finalOrder.id,
+          id: countUpdatedOrder.id,
 
-          orderEnvironment: finalOrder.orderEnvironment,
+          orderEnvironment: countUpdatedOrder.orderEnvironment,
 
-          userID: finalOrder.userID,
+          userID: countUpdatedOrder.userID,
 
-          paymentStatus: finalOrder.paymentStatus,
+          paymentStatus: countUpdatedOrder.paymentStatus,
 
-          paymentID: finalOrder.paymentID,
+          paymentID: countUpdatedOrder.paymentID,
 
-          fundsStatus: finalOrder.fundsStatus,
+          fundsStatus: countUpdatedOrder.fundsStatus,
 
-          status: finalOrder.status,
+          status: countUpdatedOrder.status,
 
-          deliveryVerificationCode: finalOrder.deliveryVerificationCode,
+          deliveryVerificationCode: countUpdatedOrder.deliveryVerificationCode,
 
-          recipientName: finalOrder.recipientName,
+          recipientName: countUpdatedOrder.recipientName,
 
-          originAddress: finalOrder.originAddress,
+          originAddress: countUpdatedOrder.originAddress,
 
-          destinationAddress: finalOrder.destinationAddress,
+          destinationAddress: countUpdatedOrder.destinationAddress,
 
-          totalPrice: finalOrder.totalPrice,
+          totalPrice: countUpdatedOrder.totalPrice,
 
-          courierEarnings: finalOrder.courierEarnings,
+          courierEarnings: countUpdatedOrder.courierEarnings,
 
-          version: finalOrder._version,
+          version: countUpdatedOrder._version,
 
-          lastChangedAt: finalOrder._lastChangedAt,
+          lastChangedAt: countUpdatedOrder._lastChangedAt,
         },
         null,
         2,
@@ -1735,54 +2024,67 @@ exports.handler = async (event) => {
        19. VALIDATE FINAL STATE
     ====================================================== */
 
-    if (finalOrder.paymentStatus !== "PAID") {
+    if (countUpdatedOrder.paymentStatus !== "PAID") {
       throw new Error(
-        `Fallback payment update did not produce PAID status. Current: ${finalOrder.paymentStatus}`,
+        `Fallback payment update did not produce PAID status. Current: ${countUpdatedOrder.paymentStatus}`,
       );
     }
 
-    if (finalOrder.paymentID !== payment.id) {
+    if (countUpdatedOrder.paymentID !== payment.id) {
       throw new Error(
-        `Fallback payment ID mismatch. Expected ${payment.id}, received ${finalOrder.paymentID}.`,
+        `Fallback payment ID mismatch. Expected ${payment.id}, received ${countUpdatedOrder.paymentID}.`,
       );
     }
 
-    if (finalOrder.fundsStatus !== "HELD") {
+    if (countUpdatedOrder.fundsStatus !== "HELD") {
       throw new Error(
-        `Fallback fundsStatus mismatch. Current: ${finalOrder.fundsStatus}`,
+        `Fallback fundsStatus mismatch. Current: ${countUpdatedOrder.fundsStatus}`,
       );
     }
 
     const expectedFallbackStatus =
       order.transportationType === "MAXI" ? "ACCEPTED" : "READY_FOR_PICKUP";
 
-    if (finalOrder.status !== expectedFallbackStatus) {
+    if (countUpdatedOrder.status !== expectedFallbackStatus) {
       throw new Error(
-        `Fallback status mismatch. Expected: ${expectedFallbackStatus}, Current: ${finalOrder.status}`,
+        `Fallback status mismatch. Expected: ${expectedFallbackStatus}, Current: ${countUpdatedOrder.status}`,
       );
     }
 
-    if (!finalOrder.deliveryVerificationCode) {
+    if (!countUpdatedOrder.deliveryVerificationCode) {
       throw new Error("Fallback verification code was not saved.");
     }
 
-    if (!finalOrder.recipientTrackingToken) {
+    if (!countUpdatedOrder.recipientTrackingToken) {
       throw new Error("Fallback recipient tracking token was not saved.");
     }
 
-    if (finalOrder.recipientTrackingEnabled !== true) {
+    if (countUpdatedOrder.recipientTrackingEnabled !== true) {
       throw new Error("Fallback recipient tracking was not enabled.");
     }
 
-    if (!finalOrder.userID) {
+    if (!countUpdatedOrder.userID) {
       throw new Error("Order userID disappeared during fallback update.");
     }
 
-    if (finalOrder.orderEnvironment !== order.orderEnvironment) {
+    if (countUpdatedOrder.orderEnvironment !== order.orderEnvironment) {
       throw new Error(
         `Order ${order.id} orderEnvironment changed unexpectedly. ` +
-          `Expected ${order.orderEnvironment}, received ${finalOrder.orderEnvironment}.`,
+          `Expected ${order.orderEnvironment}, received ${countUpdatedOrder.orderEnvironment}.`,
       );
+    }
+
+    /*
+     * MAXI Orders must have a marker after the courier count
+     * has been successfully incremented.
+     *
+     * Micro and Moto Orders do not use this marker.
+     */
+    if (
+      countUpdatedOrder.transportationType === "MAXI" &&
+      !countUpdatedOrder.maxiCountIncrementedAt
+    ) {
+      throw new Error("MAXI courier count was not marked as incremented.");
     }
 
     /* ======================================================
@@ -1793,13 +2095,11 @@ exports.handler = async (event) => {
 
     console.log("VERIFY ATUA PAYMENT FALLBACK COMPLETED");
 
-    console.log("ORDER:", finalOrder.id);
+    console.log("ORDER:", countUpdatedOrder.id);
 
-    console.log("PAYMENT:", payment.id);
+    console.log("CODE:", countUpdatedOrder.deliveryVerificationCode);
 
-    console.log("CODE:", finalOrder.deliveryVerificationCode);
-
-    console.log("VERSION:", finalOrder._version);
+    console.log("VERSION:", countUpdatedOrder._version);
 
     console.log("==========================================");
 
@@ -1815,13 +2115,15 @@ exports.handler = async (event) => {
       message:
         "Payment successfully verified and recorded by fallback verification.",
 
-      orderId: finalOrder.id,
+      orderId: countUpdatedOrder.id,
 
-      deliveryVerificationCode: finalOrder.deliveryVerificationCode,
+      deliveryVerificationCode: countUpdatedOrder.deliveryVerificationCode,
 
-      recipientTrackingToken: finalOrder.recipientTrackingToken,
-      recipientTrackingEnabled: finalOrder.recipientTrackingEnabled,
-      recipientTrackingRevokedAt: finalOrder.recipientTrackingRevokedAt,
+      recipientTrackingToken: countUpdatedOrder.recipientTrackingToken,
+
+      recipientTrackingEnabled: countUpdatedOrder.recipientTrackingEnabled,
+
+      recipientTrackingRevokedAt: countUpdatedOrder.recipientTrackingRevokedAt,
 
       payment: buildPaymentDetails({
         reference: transaction.reference,
