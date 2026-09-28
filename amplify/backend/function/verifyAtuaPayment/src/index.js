@@ -596,6 +596,22 @@ const markOrderAsPaidFallback = async ({
     }
   `;
 
+  /*
+   * --------------------------------------------------------
+   * PAYMENT FINALIZATION STATUS
+   * --------------------------------------------------------
+   *
+   * MICRO and MOTO orders are paid before courier acceptance.
+   * Therefore, successful payment moves them to READY_FOR_PICKUP.
+   *
+   * MAXI orders are different.
+   * A MAXI order is already ACCEPTED when the accepted bid is
+   * chosen. Payment must NOT change it to READY_FOR_PICKUP.
+   * It must remain ACCEPTED.
+   */
+  const paymentFinalizedStatus =
+    order.transportationType === "MAXI" ? "ACCEPTED" : "READY_FOR_PICKUP";
+
   const input = {
     id: order.id,
 
@@ -607,7 +623,7 @@ const markOrderAsPaidFallback = async ({
 
     paymentID: paymentId,
 
-    status: "READY_FOR_PICKUP",
+    status: paymentFinalizedStatus,
 
     fundsStatus: "HELD",
 
@@ -641,7 +657,7 @@ const markOrderAsPaidFallback = async ({
 
     paymentStatus: "PAID",
 
-    status: "READY_FOR_PICKUP",
+    status: paymentFinalizedStatus,
 
     fundsStatus: "HELD",
 
@@ -845,7 +861,13 @@ const buildPaymentDetails = ({
  * Order:
  *    PAID
  *    HELD
+ *
+ *    MICRO / MOTO:
  *    READY_FOR_PICKUP
+ *
+ *    MAXI:
+ *    ACCEPTED
+ *
  *    deliveryVerificationCode
  *
  *
@@ -1731,9 +1753,12 @@ exports.handler = async (event) => {
       );
     }
 
-    if (finalOrder.status !== "READY_FOR_PICKUP") {
+    const expectedFallbackStatus =
+      order.transportationType === "MAXI" ? "ACCEPTED" : "READY_FOR_PICKUP";
+
+    if (finalOrder.status !== expectedFallbackStatus) {
       throw new Error(
-        `Fallback status mismatch. Current: ${finalOrder.status}`,
+        `Fallback status mismatch. Expected: ${expectedFallbackStatus}, Current: ${finalOrder.status}`,
       );
     }
 

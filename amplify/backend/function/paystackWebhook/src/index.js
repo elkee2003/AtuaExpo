@@ -745,6 +745,22 @@ const finalizePaidOrder = async ({ order, payment }) => {
     }
   `;
 
+  /*
+   * --------------------------------------------------------
+   * PAYMENT FINALIZATION STATUS
+   * --------------------------------------------------------
+   *
+   * MICRO and MOTO orders are paid before courier acceptance.
+   * Therefore, successful payment moves them to READY_FOR_PICKUP.
+   *
+   * MAXI orders are different.
+   * A MAXI order is already ACCEPTED when the accepted bid is
+   * chosen. Payment must NOT change it to READY_FOR_PICKUP.
+   * It must remain ACCEPTED.
+   */
+  const paymentFinalizedStatus =
+    order.transportationType === "MAXI" ? "ACCEPTED" : "READY_FOR_PICKUP";
+
   const input = {
     id: order.id,
 
@@ -764,7 +780,7 @@ const finalizePaidOrder = async ({ order, payment }) => {
 
     paymentID: payment.id,
 
-    status: "READY_FOR_PICKUP",
+    status: paymentFinalizedStatus,
 
     fundsStatus: "HELD",
 
@@ -804,7 +820,7 @@ const finalizePaidOrder = async ({ order, payment }) => {
 
     paymentStatus: "PAID",
 
-    status: "READY_FOR_PICKUP",
+    status: paymentFinalizedStatus,
 
     fundsStatus: "HELD",
 
