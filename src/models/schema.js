@@ -358,6 +358,15 @@ export const schema = {
                     "isRequired": false,
                     "attributes": []
                 },
+                "payoutSource": {
+                    "name": "payoutSource",
+                    "isArray": false,
+                    "type": {
+                        "enum": "PayoutSource"
+                    },
+                    "isRequired": false,
+                    "attributes": []
+                },
                 "processedAt": {
                     "name": "processedAt",
                     "isArray": false,
@@ -374,6 +383,13 @@ export const schema = {
                 },
                 "failedAt": {
                     "name": "failedAt",
+                    "isArray": false,
+                    "type": "AWSDateTime",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "walletRestoredAt": {
+                    "name": "walletRestoredAt",
                     "isArray": false,
                     "type": "AWSDateTime",
                     "isRequired": false,
@@ -3284,6 +3300,14 @@ export const schema = {
                 "FAILED"
             ]
         },
+        "PayoutSource": {
+            "name": "PayoutSource",
+            "values": [
+                "COURIER_REQUESTED",
+                "ADMIN_MANUAL",
+                "SYSTEM"
+            ]
+        },
         "OwnerType": {
             "name": "OwnerType",
             "values": [
@@ -3467,8 +3491,99 @@ export const schema = {
                     "attributes": []
                 }
             }
+        },
+        "ProcessPayoutsResponse": {
+            "name": "ProcessPayoutsResponse",
+            "fields": {
+                "statusCode": {
+                    "name": "statusCode",
+                    "isArray": false,
+                    "type": "Int",
+                    "isRequired": true,
+                    "attributes": []
+                },
+                "body": {
+                    "name": "body",
+                    "isArray": false,
+                    "type": "String",
+                    "isRequired": true,
+                    "attributes": []
+                }
+            }
+        },
+        "ReversePayoutResponse": {
+            "name": "ReversePayoutResponse",
+            "fields": {
+                "success": {
+                    "name": "success",
+                    "isArray": false,
+                    "type": "Boolean",
+                    "isRequired": true,
+                    "attributes": []
+                },
+                "payoutID": {
+                    "name": "payoutID",
+                    "isArray": false,
+                    "type": "ID",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "transactionID": {
+                    "name": "transactionID",
+                    "isArray": false,
+                    "type": "ID",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "walletID": {
+                    "name": "walletID",
+                    "isArray": false,
+                    "type": "ID",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "payoutStatus": {
+                    "name": "payoutStatus",
+                    "isArray": false,
+                    "type": {
+                        "enum": "PayoutStatus"
+                    },
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "transactionStatus": {
+                    "name": "transactionStatus",
+                    "isArray": false,
+                    "type": {
+                        "enum": "TransactionStatus"
+                    },
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "restoredAmount": {
+                    "name": "restoredAmount",
+                    "isArray": false,
+                    "type": "Float",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "alreadyReversed": {
+                    "name": "alreadyReversed",
+                    "isArray": false,
+                    "type": "Boolean",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "message": {
+                    "name": "message",
+                    "isArray": false,
+                    "type": "String",
+                    "isRequired": false,
+                    "attributes": []
+                }
+            }
         }
     },
     "codegenVersion": "3.4.4",
-    "version": "45c838da409e9ff44815c8268619fc99"
+    "version": "ebb0a9a62a178026de773e50f5ae926a"
 };

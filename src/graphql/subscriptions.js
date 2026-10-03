@@ -181,9 +181,11 @@ export const onCreatePayout = /* GraphQL */ `
       transferID
       failureReason
       payoutMethod
+      payoutSource
       processedAt
       paidAt
       failedAt
+      walletRestoredAt
       createdAt
       updatedAt
       _version
@@ -208,9 +210,11 @@ export const onUpdatePayout = /* GraphQL */ `
       transferID
       failureReason
       payoutMethod
+      payoutSource
       processedAt
       paidAt
       failedAt
+      walletRestoredAt
       createdAt
       updatedAt
       _version
@@ -235,9 +239,11 @@ export const onDeletePayout = /* GraphQL */ `
       transferID
       failureReason
       payoutMethod
+      payoutSource
       processedAt
       paidAt
       failedAt
+      walletRestoredAt
       createdAt
       updatedAt
       _version

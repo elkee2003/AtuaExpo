@@ -84,6 +84,12 @@ enum PayoutStatus {
   FAILED
 }
 
+enum PayoutSource {
+  COURIER_REQUESTED
+  ADMIN_MANUAL
+  SYSTEM
+}
+
 enum OwnerType {
   COURIER
   USER
@@ -172,13 +178,24 @@ type Payout @model @auth(rules: [{ allow: public }]) {
   # Failure / reconciliation
   failureReason: String
 
+  # How the payout operation was initiated
   # MANUAL_SINGLE | MANUAL_ALL | AUTOMATIC
   payoutMethod: String
+
+  # Who/what initiated the payout
+  # COURIER_REQUESTED | ADMIN_MANUAL | SYSTEM
+  payoutSource: PayoutSource
 
   # Lifecycle timestamps
   processedAt: AWSDateTime
   paidAt: AWSDateTime
   failedAt: AWSDateTime
+
+  # Timestamp showing that the wallet has already been
+  # restored for this failed/reversed payout.
+  # Used to prevent duplicate wallet restoration if
+  # Paystack/webhook/reconciliation is retried.
+  walletRestoredAt: AWSDateTime
 }
 
 type Transaction @model @auth(rules: [{ allow: public }]) {
@@ -653,4 +670,97 @@ type VerifiedPaymentDetails {
 type Mutation {
   verifyAtuaPayment(orderId: ID!, reference: String!): VerifyAtuaPaymentResult
     @function(name: "verifyAtuaPayment-${env}")
+
+  reversePayout(input: ReversePayoutInput!): ReversePayoutResponse
+    @function(name: "reversePayout-${env}")
+
+  # ==========================================================
+  # ADMIN: MAKE PAYOUT TO ONE SPECIFIC COURIER
+  # ==========================================================
+  #
+  # Used when an admin opens a particular courier's
+  # payout page and clicks "Make Payout".
+
+  # The processPayouts Lambda will handle the actual
+  # wallet reservation, transaction, Paystack transfer,
+  # payout record, reconciliation, etc.
+  #
+  # This is an ADMIN_MANUAL / MANUAL_SINGLE operation.
+  #
+  adminMakePayout(
+    courierID: ID!
+    requestedAmount: Float!
+  ): ProcessPayoutsResponse @function(name: "processPayouts-${env}")
+
+  # ==========================================================
+  # ADMIN: MAKE PAYOUTS TO ALL ELIGIBLE COURIERS
+  # ==========================================================
+  #
+  # Used by the admin's "Pay All Couriers" button.
+  #
+  # This tells processPayouts to run its MANUAL_ALL flow.
+  #
+  # The existing Lambda decides which couriers are eligible
+  # and processes their available balances according to its
+  # existing payout rules.
+  #
+  adminMakeAllPayouts: ProcessPayoutsResponse
+    @function(name: "processPayouts-${env}")
+}
+
+# ==========================================================
+# PROCESS PAYOUTS RESPONSE
+# ==========================================================
+#
+# processPayouts currently returns an object containing:
+
+# We keep this response generic because the same Lambda
+# supports:
+#
+#   MANUAL_SINGLE
+#   MANUAL_ALL
+#   AUTOMATIC
+type ProcessPayoutsResponse {
+  statusCode: Int!
+  body: String!
+}
+
+# ---------------- PAYOUT REVERSAL ----------------
+
+input ReversePayoutInput {
+  payoutID: ID!
+  transactionID: ID!
+  walletID: ID!
+  reference: String!
+
+  # Informational value supplied by the caller.
+  # reversePayout does NOT trust this value when restoring
+  # the wallet. It reads Transaction.amount from the database.
+  restorationAmount: Float
+
+  # Paystack event that caused the reversal.
+  # Expected:
+  # transfer.failed
+  # transfer.reversed
+  eventType: String!
+
+  transferCode: String
+  transferID: String
+
+  failureReason: String
+}
+
+type ReversePayoutResponse {
+  success: Boolean!
+  payoutID: ID
+  transactionID: ID
+  walletID: ID
+
+  payoutStatus: PayoutStatus
+  transactionStatus: TransactionStatus
+
+  restoredAmount: Float
+  alreadyReversed: Boolean
+
+  message: String
 }

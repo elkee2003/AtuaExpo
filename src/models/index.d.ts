@@ -57,6 +57,12 @@ export enum PayoutStatus {
   FAILED = "FAILED"
 }
 
+export enum PayoutSource {
+  COURIER_REQUESTED = "COURIER_REQUESTED",
+  ADMIN_MANUAL = "ADMIN_MANUAL",
+  SYSTEM = "SYSTEM"
+}
+
 export enum OwnerType {
   COURIER = "COURIER",
   USER = "USER"
@@ -165,6 +171,48 @@ type LazyVerifiedPaymentDetails = {
 export declare type VerifiedPaymentDetails = LazyLoading extends LazyLoadingDisabled ? EagerVerifiedPaymentDetails : LazyVerifiedPaymentDetails
 
 export declare const VerifiedPaymentDetails: (new (init: ModelInit<VerifiedPaymentDetails>) => VerifiedPaymentDetails)
+
+type EagerProcessPayoutsResponse = {
+  readonly statusCode: number;
+  readonly body: string;
+}
+
+type LazyProcessPayoutsResponse = {
+  readonly statusCode: number;
+  readonly body: string;
+}
+
+export declare type ProcessPayoutsResponse = LazyLoading extends LazyLoadingDisabled ? EagerProcessPayoutsResponse : LazyProcessPayoutsResponse
+
+export declare const ProcessPayoutsResponse: (new (init: ModelInit<ProcessPayoutsResponse>) => ProcessPayoutsResponse)
+
+type EagerReversePayoutResponse = {
+  readonly success: boolean;
+  readonly payoutID?: string | null;
+  readonly transactionID?: string | null;
+  readonly walletID?: string | null;
+  readonly payoutStatus?: PayoutStatus | keyof typeof PayoutStatus | null;
+  readonly transactionStatus?: TransactionStatus | keyof typeof TransactionStatus | null;
+  readonly restoredAmount?: number | null;
+  readonly alreadyReversed?: boolean | null;
+  readonly message?: string | null;
+}
+
+type LazyReversePayoutResponse = {
+  readonly success: boolean;
+  readonly payoutID?: string | null;
+  readonly transactionID?: string | null;
+  readonly walletID?: string | null;
+  readonly payoutStatus?: PayoutStatus | keyof typeof PayoutStatus | null;
+  readonly transactionStatus?: TransactionStatus | keyof typeof TransactionStatus | null;
+  readonly restoredAmount?: number | null;
+  readonly alreadyReversed?: boolean | null;
+  readonly message?: string | null;
+}
+
+export declare type ReversePayoutResponse = LazyLoading extends LazyLoadingDisabled ? EagerReversePayoutResponse : LazyReversePayoutResponse
+
+export declare const ReversePayoutResponse: (new (init: ModelInit<ReversePayoutResponse>) => ReversePayoutResponse)
 
 type EagerCompanyVehicle = {
   readonly [__modelMeta__]: {
@@ -277,9 +325,11 @@ type EagerPayout = {
   readonly transferID?: string | null;
   readonly failureReason?: string | null;
   readonly payoutMethod?: string | null;
+  readonly payoutSource?: PayoutSource | keyof typeof PayoutSource | null;
   readonly processedAt?: string | null;
   readonly paidAt?: string | null;
   readonly failedAt?: string | null;
+  readonly walletRestoredAt?: string | null;
   readonly createdAt?: string | null;
   readonly updatedAt?: string | null;
 }
@@ -301,9 +351,11 @@ type LazyPayout = {
   readonly transferID?: string | null;
   readonly failureReason?: string | null;
   readonly payoutMethod?: string | null;
+  readonly payoutSource?: PayoutSource | keyof typeof PayoutSource | null;
   readonly processedAt?: string | null;
   readonly paidAt?: string | null;
   readonly failedAt?: string | null;
+  readonly walletRestoredAt?: string | null;
   readonly createdAt?: string | null;
   readonly updatedAt?: string | null;
 }

@@ -23,6 +23,40 @@ export const verifyAtuaPayment = /* GraphQL */ `
     }
   }
 `;
+export const reversePayout = /* GraphQL */ `
+  mutation ReversePayout($input: ReversePayoutInput!) {
+    reversePayout(input: $input) {
+      success
+      payoutID
+      transactionID
+      walletID
+      payoutStatus
+      transactionStatus
+      restoredAmount
+      alreadyReversed
+      message
+      __typename
+    }
+  }
+`;
+export const adminMakePayout = /* GraphQL */ `
+  mutation AdminMakePayout($courierID: ID!, $requestedAmount: Float!) {
+    adminMakePayout(courierID: $courierID, requestedAmount: $requestedAmount) {
+      statusCode
+      body
+      __typename
+    }
+  }
+`;
+export const adminMakeAllPayouts = /* GraphQL */ `
+  mutation AdminMakeAllPayouts {
+    adminMakeAllPayouts {
+      statusCode
+      body
+      __typename
+    }
+  }
+`;
 export const createCompanyVehicle = /* GraphQL */ `
   mutation CreateCompanyVehicle(
     $input: CreateCompanyVehicleInput!
@@ -212,9 +246,11 @@ export const createPayout = /* GraphQL */ `
       transferID
       failureReason
       payoutMethod
+      payoutSource
       processedAt
       paidAt
       failedAt
+      walletRestoredAt
       createdAt
       updatedAt
       _version
@@ -242,9 +278,11 @@ export const updatePayout = /* GraphQL */ `
       transferID
       failureReason
       payoutMethod
+      payoutSource
       processedAt
       paidAt
       failedAt
+      walletRestoredAt
       createdAt
       updatedAt
       _version
@@ -272,9 +310,11 @@ export const deletePayout = /* GraphQL */ `
       transferID
       failureReason
       payoutMethod
+      payoutSource
       processedAt
       paidAt
       failedAt
+      walletRestoredAt
       createdAt
       updatedAt
       _version

@@ -245,9 +245,11 @@ export const getPayout = /* GraphQL */ `
       transferID
       failureReason
       payoutMethod
+      payoutSource
       processedAt
       paidAt
       failedAt
+      walletRestoredAt
       createdAt
       updatedAt
       _version
@@ -277,9 +279,11 @@ export const listPayouts = /* GraphQL */ `
         transferID
         failureReason
         payoutMethod
+        payoutSource
         processedAt
         paidAt
         failedAt
+        walletRestoredAt
         createdAt
         updatedAt
         _version
@@ -319,9 +323,11 @@ export const syncPayouts = /* GraphQL */ `
         transferID
         failureReason
         payoutMethod
+        payoutSource
         processedAt
         paidAt
         failedAt
+        walletRestoredAt
         createdAt
         updatedAt
         _version
@@ -363,9 +369,11 @@ export const payoutsByCourierID = /* GraphQL */ `
         transferID
         failureReason
         payoutMethod
+        payoutSource
         processedAt
         paidAt
         failedAt
+        walletRestoredAt
         createdAt
         updatedAt
         _version
@@ -407,9 +415,11 @@ export const payoutsByWalletID = /* GraphQL */ `
         transferID
         failureReason
         payoutMethod
+        payoutSource
         processedAt
         paidAt
         failedAt
+        walletRestoredAt
         createdAt
         updatedAt
         _version
@@ -451,9 +461,11 @@ export const payoutsByReference = /* GraphQL */ `
         transferID
         failureReason
         payoutMethod
+        payoutSource
         processedAt
         paidAt
         failedAt
+        walletRestoredAt
         createdAt
         updatedAt
         _version

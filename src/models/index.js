@@ -57,6 +57,12 @@ const PayoutStatus = {
   "FAILED": "FAILED"
 };
 
+const PayoutSource = {
+  "COURIER_REQUESTED": "COURIER_REQUESTED",
+  "ADMIN_MANUAL": "ADMIN_MANUAL",
+  "SYSTEM": "SYSTEM"
+};
+
 const OwnerType = {
   "COURIER": "COURIER",
   "USER": "USER"
@@ -120,7 +126,7 @@ const CourierReportStatus = {
   "DISMISSED": "DISMISSED"
 };
 
-const { CompanyVehicle, CourierCompany, Payout, Transaction, Wallet, Payment, Offer, Order, CourierReport, CourierReview, CourierLiveLocation, Courier, User, VerifyAtuaPaymentResult, VerifiedPaymentDetails } = initSchema(schema);
+const { CompanyVehicle, CourierCompany, Payout, Transaction, Wallet, Payment, Offer, Order, CourierReport, CourierReview, CourierLiveLocation, Courier, User, VerifyAtuaPaymentResult, VerifiedPaymentDetails, ProcessPayoutsResponse, ReversePayoutResponse } = initSchema(schema);
 
 export {
   CompanyVehicle,
@@ -145,6 +151,7 @@ export {
   TransactionType,
   TransactionStatus,
   PayoutStatus,
+  PayoutSource,
   OwnerType,
   OfferStatus,
   CourierPreTransferUploadStatus,
@@ -154,5 +161,7 @@ export {
   OrderStatus,
   CourierReportStatus,
   VerifyAtuaPaymentResult,
-  VerifiedPaymentDetails
+  VerifiedPaymentDetails,
+  ProcessPayoutsResponse,
+  ReversePayoutResponse
 };
