@@ -57,6 +57,23 @@ export const adminMakeAllPayouts = /* GraphQL */ `
     }
   }
 `;
+export const requestPayout = /* GraphQL */ `
+  mutation RequestPayout(
+    $courierID: ID!
+    $requestedAmount: Float!
+    $payoutMethod: String!
+  ) {
+    requestPayout(
+      courierID: $courierID
+      requestedAmount: $requestedAmount
+      payoutMethod: $payoutMethod
+    ) {
+      statusCode
+      body
+      __typename
+    }
+  }
+`;
 export const createCompanyVehicle = /* GraphQL */ `
   mutation CreateCompanyVehicle(
     $input: CreateCompanyVehicleInput!
@@ -3565,6 +3582,108 @@ export const deleteCourierReview = /* GraphQL */ `
       rating
       comment
       createdAt
+      updatedAt
+      _version
+      _deleted
+      _lastChangedAt
+      __typename
+    }
+  }
+`;
+export const createAdminAlert = /* GraphQL */ `
+  mutation CreateAdminAlert(
+    $input: CreateAdminAlertInput!
+    $condition: ModelAdminAlertConditionInput
+  ) {
+    createAdminAlert(input: $input, condition: $condition) {
+      id
+      type
+      title
+      message
+      severity
+      status
+      payoutID
+      payoutMethod
+      payoutSource
+      courierID
+      amount
+      courierObligations
+      paystackCosts
+      totalRequired
+      paystackBalance
+      topUpRequired
+      affectedCourierCount
+      createdAt
+      readAt
+      resolvedAt
+      updatedAt
+      _version
+      _deleted
+      _lastChangedAt
+      __typename
+    }
+  }
+`;
+export const updateAdminAlert = /* GraphQL */ `
+  mutation UpdateAdminAlert(
+    $input: UpdateAdminAlertInput!
+    $condition: ModelAdminAlertConditionInput
+  ) {
+    updateAdminAlert(input: $input, condition: $condition) {
+      id
+      type
+      title
+      message
+      severity
+      status
+      payoutID
+      payoutMethod
+      payoutSource
+      courierID
+      amount
+      courierObligations
+      paystackCosts
+      totalRequired
+      paystackBalance
+      topUpRequired
+      affectedCourierCount
+      createdAt
+      readAt
+      resolvedAt
+      updatedAt
+      _version
+      _deleted
+      _lastChangedAt
+      __typename
+    }
+  }
+`;
+export const deleteAdminAlert = /* GraphQL */ `
+  mutation DeleteAdminAlert(
+    $input: DeleteAdminAlertInput!
+    $condition: ModelAdminAlertConditionInput
+  ) {
+    deleteAdminAlert(input: $input, condition: $condition) {
+      id
+      type
+      title
+      message
+      severity
+      status
+      payoutID
+      payoutMethod
+      payoutSource
+      courierID
+      amount
+      courierObligations
+      paystackCosts
+      totalRequired
+      paystackBalance
+      topUpRequired
+      affectedCourierCount
+      createdAt
+      readAt
+      resolvedAt
       updatedAt
       _version
       _deleted

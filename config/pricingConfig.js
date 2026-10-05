@@ -2,15 +2,15 @@ export const PRICING_CONFIG = {
   // MICRO
   MICRO_BATCH: {
     baseFare: 250,
-    perKm: 150,
-    minFare: 600,
+    perKm: 400,
+    minFare: 950,
     commissionRate: 0.15,
     platformFee: 200,
   },
   MICRO_EXPRESS: {
     baseFare: 300,
-    perKm: 170,
-    minFare: 700,
+    perKm: 500,
+    minFare: 1095,
     commissionRate: 0.15,
     platformFee: 250,
   },
@@ -18,15 +18,15 @@ export const PRICING_CONFIG = {
   // MOTO
   MOTO_BATCH: {
     baseFare: 400,
-    perKm: 200,
-    minFare: 900,
+    perKm: 650,
+    minFare: 1220,
     commissionRate: 0.18,
     platformFee: 300,
   },
   MOTO_EXPRESS: {
     baseFare: 500,
-    perKm: 220,
-    minFare: 1100,
+    perKm: 800,
+    minFare: 1550,
     commissionRate: 0.18,
     platformFee: 350,
   },

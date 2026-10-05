@@ -75,6 +75,7 @@ enum TransactionStatus {
   PENDING
   COMPLETED
   FAILED
+  REVERSED
 }
 
 enum PayoutStatus {
@@ -515,6 +516,124 @@ type CourierReview @model @auth(rules: [{ allow: public }]) {
   comment: String
 }
 
+# ==========================================================
+# ADMIN ALERTS
+# ==========================================================
+
+type AdminAlert @model @auth(rules: [{ allow: public }]) {
+  id: ID!
+
+  # --------------------------------------------------------
+  # BASIC ALERT INFORMATION
+  # --------------------------------------------------------
+
+  # Examples:
+  # PAYOUT
+  # ORDER
+  # COURIER
+  # PAYMENT
+  # SYSTEM
+  type: String!
+
+  # "Automatic Payout Not Started"
+  # "Automatic Payout Completed"
+  # "Payout Transfer Failed"
+  # "Courier Approval Backlog"
+  title: String!
+
+  # Main descriptive message shown to the admin.
+  message: String!
+
+  # --------------------------------------------------------
+  # ALERT SEVERITY
+  # --------------------------------------------------------
+
+  # Examples:
+  # CRITICAL
+  # WARNING
+  # INFO
+  # SUCCESS
+  severity: String!
+
+  # --------------------------------------------------------
+  # ALERT LIFECYCLE
+  # --------------------------------------------------------
+
+  # Examples:
+  # UNREAD
+  # READ
+  # RESOLVED
+  # DISMISSED
+  status: String!
+
+  # --------------------------------------------------------
+  # PAYOUT INFORMATION
+  # --------------------------------------------------------
+
+  # Links this alert to a specific payout when applicable.
+  payoutID: ID
+
+  # Examples:
+  # MANUAL_SINGLE
+  # MANUAL_ALL
+  # AUTOMATIC
+  payoutMethod: String
+
+  # COURIER_REQUESTED | ADMIN_MANUAL | SYSTEM
+  payoutSource: PayoutSource
+
+  # --------------------------------------------------------
+  # COURIER INFORMATION
+  # --------------------------------------------------------
+
+  # Used when the alert relates to one specific courier.
+  courierID: ID
+
+  # --------------------------------------------------------
+  # FINANCIAL INFORMATION
+  # --------------------------------------------------------
+
+  # General amount associated with the alert.
+  #
+  # Example:
+  # A failed single courier payout of ₦15,000.
+  amount: Float
+
+  # Total amount all eligible couriers are owed
+  # during an automatic payout run.
+  courierObligations: Float
+
+  # Total Paystack transfer fees + stamp duty
+  # expected for the automatic payout run.
+  paystackCosts: Float
+
+  # Total amount that Atua must have available
+  # in Paystack before automatic payout can begin.
+  totalRequired: Float
+
+  # Atua's Paystack balance at the time of preflight.
+  paystackBalance: Float
+
+  # Exact amount required to top up Paystack.
+  topUpRequired: Float
+
+  # Number of couriers affected by the event.
+  affectedCourierCount: Int
+
+  # --------------------------------------------------------
+  # TIMESTAMPS
+  # --------------------------------------------------------
+
+  # When the alert was created.
+  createdAt: AWSDateTime!
+
+  # When an admin opened/read the alert.
+  readAt: AWSDateTime
+
+  # When the underlying issue/event was resolved.
+  resolvedAt: AWSDateTime
+}
+
 type CourierLiveLocation @model @auth(rules: [{ allow: public }]) {
   id: ID!
 
@@ -677,16 +796,7 @@ type Mutation {
   # ==========================================================
   # ADMIN: MAKE PAYOUT TO ONE SPECIFIC COURIER
   # ==========================================================
-  #
-  # Used when an admin opens a particular courier's
-  # payout page and clicks "Make Payout".
 
-  # The processPayouts Lambda will handle the actual
-  # wallet reservation, transaction, Paystack transfer,
-  # payout record, reconciliation, etc.
-  #
-  # This is an ADMIN_MANUAL / MANUAL_SINGLE operation.
-  #
   adminMakePayout(
     courierID: ID!
     requestedAmount: Float!
@@ -695,17 +805,41 @@ type Mutation {
   # ==========================================================
   # ADMIN: MAKE PAYOUTS TO ALL ELIGIBLE COURIERS
   # ==========================================================
-  #
-  # Used by the admin's "Pay All Couriers" button.
-  #
-  # This tells processPayouts to run its MANUAL_ALL flow.
-  #
-  # The existing Lambda decides which couriers are eligible
-  # and processes their available balances according to its
-  # existing payout rules.
-  #
+
   adminMakeAllPayouts: ProcessPayoutsResponse
     @function(name: "processPayouts-${env}")
+
+  # ==========================================================
+  # COURIER: REQUEST PAYOUT
+  # ==========================================================
+  #
+  # Used by the courier app when a courier confirms
+  # a payout request.
+  #
+  # The courier sends:
+  #
+  #     payoutMethod = BANK_TRANSFER
+  #
+  # processPayouts recognizes BANK_TRANSFER as the
+  # legacy courier-requested payout flow and internally
+  # converts it to:
+  #
+  #     MANUAL_SINGLE
+  #     COURIER_REQUESTED
+  #
+  # This means:
+  #
+  #     - ₦3,000 minimum applies
+  #     - ₦100 payout fee applies
+  #     - wallet reservation/debit is handled by backend
+  #     - Payout and Transaction are created by backend
+  #     - Paystack transfer is initiated by backend
+  #
+  requestPayout(
+    courierID: ID!
+    requestedAmount: Float!
+    payoutMethod: String!
+  ): ProcessPayoutsResponse @function(name: "processPayouts-${env}")
 }
 
 # ==========================================================

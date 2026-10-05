@@ -47,7 +47,8 @@ export enum TransactionType {
 export enum TransactionStatus {
   PENDING = "PENDING",
   COMPLETED = "COMPLETED",
-  FAILED = "FAILED"
+  FAILED = "FAILED",
+  REVERSED = "REVERSED"
 }
 
 export enum PayoutStatus {
@@ -888,6 +889,68 @@ export declare type CourierReview = LazyLoading extends LazyLoadingDisabled ? Ea
 
 export declare const CourierReview: (new (init: ModelInit<CourierReview>) => CourierReview) & {
   copyOf(source: CourierReview, mutator: (draft: MutableModel<CourierReview>) => MutableModel<CourierReview> | void): CourierReview;
+}
+
+type EagerAdminAlert = {
+  readonly [__modelMeta__]: {
+    identifier: ManagedIdentifier<AdminAlert, 'id'>;
+    readOnlyFields: 'updatedAt';
+  };
+  readonly id: string;
+  readonly type: string;
+  readonly title: string;
+  readonly message: string;
+  readonly severity: string;
+  readonly status: string;
+  readonly payoutID?: string | null;
+  readonly payoutMethod?: string | null;
+  readonly payoutSource?: PayoutSource | keyof typeof PayoutSource | null;
+  readonly courierID?: string | null;
+  readonly amount?: number | null;
+  readonly courierObligations?: number | null;
+  readonly paystackCosts?: number | null;
+  readonly totalRequired?: number | null;
+  readonly paystackBalance?: number | null;
+  readonly topUpRequired?: number | null;
+  readonly affectedCourierCount?: number | null;
+  readonly createdAt: string;
+  readonly readAt?: string | null;
+  readonly resolvedAt?: string | null;
+  readonly updatedAt?: string | null;
+}
+
+type LazyAdminAlert = {
+  readonly [__modelMeta__]: {
+    identifier: ManagedIdentifier<AdminAlert, 'id'>;
+    readOnlyFields: 'updatedAt';
+  };
+  readonly id: string;
+  readonly type: string;
+  readonly title: string;
+  readonly message: string;
+  readonly severity: string;
+  readonly status: string;
+  readonly payoutID?: string | null;
+  readonly payoutMethod?: string | null;
+  readonly payoutSource?: PayoutSource | keyof typeof PayoutSource | null;
+  readonly courierID?: string | null;
+  readonly amount?: number | null;
+  readonly courierObligations?: number | null;
+  readonly paystackCosts?: number | null;
+  readonly totalRequired?: number | null;
+  readonly paystackBalance?: number | null;
+  readonly topUpRequired?: number | null;
+  readonly affectedCourierCount?: number | null;
+  readonly createdAt: string;
+  readonly readAt?: string | null;
+  readonly resolvedAt?: string | null;
+  readonly updatedAt?: string | null;
+}
+
+export declare type AdminAlert = LazyLoading extends LazyLoadingDisabled ? EagerAdminAlert : LazyAdminAlert
+
+export declare const AdminAlert: (new (init: ModelInit<AdminAlert>) => AdminAlert) & {
+  copyOf(source: AdminAlert, mutator: (draft: MutableModel<AdminAlert>) => MutableModel<AdminAlert> | void): AdminAlert;
 }
 
 type EagerCourierLiveLocation = {

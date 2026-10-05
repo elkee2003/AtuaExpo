@@ -3341,6 +3341,123 @@ export const courierReviewsByOrderID = /* GraphQL */ `
     }
   }
 `;
+export const getAdminAlert = /* GraphQL */ `
+  query GetAdminAlert($id: ID!) {
+    getAdminAlert(id: $id) {
+      id
+      type
+      title
+      message
+      severity
+      status
+      payoutID
+      payoutMethod
+      payoutSource
+      courierID
+      amount
+      courierObligations
+      paystackCosts
+      totalRequired
+      paystackBalance
+      topUpRequired
+      affectedCourierCount
+      createdAt
+      readAt
+      resolvedAt
+      updatedAt
+      _version
+      _deleted
+      _lastChangedAt
+      __typename
+    }
+  }
+`;
+export const listAdminAlerts = /* GraphQL */ `
+  query ListAdminAlerts(
+    $filter: ModelAdminAlertFilterInput
+    $limit: Int
+    $nextToken: String
+  ) {
+    listAdminAlerts(filter: $filter, limit: $limit, nextToken: $nextToken) {
+      items {
+        id
+        type
+        title
+        message
+        severity
+        status
+        payoutID
+        payoutMethod
+        payoutSource
+        courierID
+        amount
+        courierObligations
+        paystackCosts
+        totalRequired
+        paystackBalance
+        topUpRequired
+        affectedCourierCount
+        createdAt
+        readAt
+        resolvedAt
+        updatedAt
+        _version
+        _deleted
+        _lastChangedAt
+        __typename
+      }
+      nextToken
+      startedAt
+      __typename
+    }
+  }
+`;
+export const syncAdminAlerts = /* GraphQL */ `
+  query SyncAdminAlerts(
+    $filter: ModelAdminAlertFilterInput
+    $limit: Int
+    $nextToken: String
+    $lastSync: AWSTimestamp
+  ) {
+    syncAdminAlerts(
+      filter: $filter
+      limit: $limit
+      nextToken: $nextToken
+      lastSync: $lastSync
+    ) {
+      items {
+        id
+        type
+        title
+        message
+        severity
+        status
+        payoutID
+        payoutMethod
+        payoutSource
+        courierID
+        amount
+        courierObligations
+        paystackCosts
+        totalRequired
+        paystackBalance
+        topUpRequired
+        affectedCourierCount
+        createdAt
+        readAt
+        resolvedAt
+        updatedAt
+        _version
+        _deleted
+        _lastChangedAt
+        __typename
+      }
+      nextToken
+      startedAt
+      __typename
+    }
+  }
+`;
 export const getCourierLiveLocation = /* GraphQL */ `
   query GetCourierLiveLocation($id: ID!) {
     getCourierLiveLocation(id: $id) {

@@ -47,7 +47,8 @@ const TransactionType = {
 const TransactionStatus = {
   "PENDING": "PENDING",
   "COMPLETED": "COMPLETED",
-  "FAILED": "FAILED"
+  "FAILED": "FAILED",
+  "REVERSED": "REVERSED"
 };
 
 const PayoutStatus = {
@@ -126,7 +127,7 @@ const CourierReportStatus = {
   "DISMISSED": "DISMISSED"
 };
 
-const { CompanyVehicle, CourierCompany, Payout, Transaction, Wallet, Payment, Offer, Order, CourierReport, CourierReview, CourierLiveLocation, Courier, User, VerifyAtuaPaymentResult, VerifiedPaymentDetails, ProcessPayoutsResponse, ReversePayoutResponse } = initSchema(schema);
+const { CompanyVehicle, CourierCompany, Payout, Transaction, Wallet, Payment, Offer, Order, CourierReport, CourierReview, AdminAlert, CourierLiveLocation, Courier, User, VerifyAtuaPaymentResult, VerifiedPaymentDetails, ProcessPayoutsResponse, ReversePayoutResponse } = initSchema(schema);
 
 export {
   CompanyVehicle,
@@ -139,6 +140,7 @@ export {
   Order,
   CourierReport,
   CourierReview,
+  AdminAlert,
   CourierLiveLocation,
   Courier,
   User,

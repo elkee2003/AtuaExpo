@@ -3457,6 +3457,105 @@ export const onDeleteCourierReview = /* GraphQL */ `
     }
   }
 `;
+export const onCreateAdminAlert = /* GraphQL */ `
+  subscription OnCreateAdminAlert(
+    $filter: ModelSubscriptionAdminAlertFilterInput
+  ) {
+    onCreateAdminAlert(filter: $filter) {
+      id
+      type
+      title
+      message
+      severity
+      status
+      payoutID
+      payoutMethod
+      payoutSource
+      courierID
+      amount
+      courierObligations
+      paystackCosts
+      totalRequired
+      paystackBalance
+      topUpRequired
+      affectedCourierCount
+      createdAt
+      readAt
+      resolvedAt
+      updatedAt
+      _version
+      _deleted
+      _lastChangedAt
+      __typename
+    }
+  }
+`;
+export const onUpdateAdminAlert = /* GraphQL */ `
+  subscription OnUpdateAdminAlert(
+    $filter: ModelSubscriptionAdminAlertFilterInput
+  ) {
+    onUpdateAdminAlert(filter: $filter) {
+      id
+      type
+      title
+      message
+      severity
+      status
+      payoutID
+      payoutMethod
+      payoutSource
+      courierID
+      amount
+      courierObligations
+      paystackCosts
+      totalRequired
+      paystackBalance
+      topUpRequired
+      affectedCourierCount
+      createdAt
+      readAt
+      resolvedAt
+      updatedAt
+      _version
+      _deleted
+      _lastChangedAt
+      __typename
+    }
+  }
+`;
+export const onDeleteAdminAlert = /* GraphQL */ `
+  subscription OnDeleteAdminAlert(
+    $filter: ModelSubscriptionAdminAlertFilterInput
+  ) {
+    onDeleteAdminAlert(filter: $filter) {
+      id
+      type
+      title
+      message
+      severity
+      status
+      payoutID
+      payoutMethod
+      payoutSource
+      courierID
+      amount
+      courierObligations
+      paystackCosts
+      totalRequired
+      paystackBalance
+      topUpRequired
+      affectedCourierCount
+      createdAt
+      readAt
+      resolvedAt
+      updatedAt
+      _version
+      _deleted
+      _lastChangedAt
+      __typename
+    }
+  }
+`;
 export const onCreateCourierLiveLocation = /* GraphQL */ `
   subscription OnCreateCourierLiveLocation(
     $filter: ModelSubscriptionCourierLiveLocationFilterInput

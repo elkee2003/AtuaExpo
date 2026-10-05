@@ -50,13 +50,31 @@
  *     Payout      -> PAID
  *
  *
- * Paystack failed/reversed:
+ * Paystack failed/reversed/abandoned/blocked/rejected:
  *
  *     reversePayout
  *          ↓
  *     Wallet restored
- *     Transaction -> FAILED
+ *          ↓
+ *     Transaction -> REVERSED
  *     Payout      -> FAILED
+ *
+ *
+ * IMPORTANT
+ * ------------------------------------------------------------
+ *
+ * REVERSED means:
+ *
+ *     The Paystack payout failed
+ *     AND
+ *     The wallet debit was successfully restored.
+ *
+ * Therefore:
+ *
+ *     Transaction -> REVERSED
+ *
+ * must only happen after wallet restoration has been
+ * successfully confirmed.
  *
  *
  * Paystack pending/unknown:
@@ -235,6 +253,9 @@ async function getProcessingPayouts() {
             paidAt
             failedAt
 
+            createdAt
+            updatedAt
+
             _version
             _lastChangedAt
             _deleted
@@ -323,6 +344,9 @@ async function getPayoutTransaction(payout) {
           reference
 
           status
+
+          createdAt
+          updatedAt
 
           _version
           _lastChangedAt
@@ -415,6 +439,9 @@ async function updatePayout({ payout, fields }) {
         paidAt
         failedAt
 
+        createdAt
+        updatedAt
+
         _version
         _lastChangedAt
         _deleted
@@ -476,6 +503,9 @@ async function updateTransaction({ transaction, fields }) {
 
         status
 
+        createdAt
+        updatedAt
+
         _version
         _lastChangedAt
         _deleted
@@ -533,9 +563,9 @@ async function verifyPaystackTransfer({ reference, secretKey }) {
     throw new Error("Paystack secret key is required.");
   }
 
-  const url = `https://api.paystack.co/transfer/verify/${encodeURIComponent(
-    reference,
-  )}`;
+  const url =
+    `https://api.paystack.co/transfer/verify/` +
+    `${encodeURIComponent(reference)}`;
 
   const response = await fetch(url, {
     method: "GET",
@@ -676,6 +706,17 @@ function validateTransfer({ payout, transfer }) {
  * reconcilePayouts does NOT directly modify the wallet.
  *
  * reversePayout owns wallet restoration.
+ *
+ * reversePayout is also responsible for making sure the
+ * Transaction is marked REVERSED only after the wallet
+ * restoration succeeds.
+ *
+ * Expected final result:
+ *
+ *     Wallet restored
+ *          ↓
+ *     Transaction -> REVERSED
+ *     Payout      -> FAILED
  */
 async function requestPayoutReversal({
   payout,
@@ -777,6 +818,28 @@ async function requestPayoutReversal({
   /*
    * Confirm that reversePayout actually reached the expected
    * final states.
+   *
+   * IMPORTANT:
+   *
+   * Payout and Transaction have different meanings here.
+   *
+   * Payout:
+   *
+   *     FAILED
+   *
+   * means the Paystack payout itself failed/reversed.
+   *
+   * Transaction:
+   *
+   *     REVERSED
+   *
+   * means the original wallet debit was successfully
+   * reversed/restored.
+   *
+   * Therefore we expect:
+   *
+   *     Payout      -> FAILED
+   *     Transaction -> REVERSED
    */
   if (result.payoutStatus !== "FAILED") {
     throw new Error(
@@ -784,9 +847,9 @@ async function requestPayoutReversal({
     );
   }
 
-  if (result.transactionStatus !== "FAILED") {
+  if (result.transactionStatus !== "REVERSED") {
     throw new Error(
-      `reversePayout returned transaction status ${result.transactionStatus} for ${payout.reference}.`,
+      `reversePayout returned transaction status ${result.transactionStatus} for ${payout.reference}. Expected REVERSED after successful wallet restoration.`,
     );
   }
 
@@ -900,6 +963,7 @@ async function reconcileOnePayout({ payout, secretKey }) {
 
   validateTransfer({
     payout,
+
     transfer,
   });
 
@@ -935,8 +999,6 @@ async function reconcileOnePayout({ payout, secretKey }) {
     -------------------------------------------------------- */
 
     /**
-     * This is one of the most important corrections.
-     *
      * If Paystack says SUCCESS:
      *
      *     PENDING    -> COMPLETED
@@ -952,12 +1014,6 @@ async function reconcileOnePayout({ payout, secretKey }) {
      *     FAILED -> COMPLETED
      *
      * is NEVER allowed automatically.
-     *
-     * A FAILED transaction means the accounting system already
-     * considers that debit failed/reversed.
-     *
-     * Changing it to COMPLETED could create an inconsistent
-     * wallet/accounting state.
      */
 
     if (transaction.status === "FAILED") {
@@ -1047,60 +1103,76 @@ async function reconcileOnePayout({ payout, secretKey }) {
   }
 
   /* ==========================================================
-     TRANSFER FAILED
+     TERMINAL TRANSFER FAILURE
   ========================================================== */
 
-  if (transferStatus === "failed") {
-    const failureReason =
-      transfer.reason ||
-      transfer.gateway_response ||
-      (transfer.failures ? JSON.stringify(transfer.failures) : null) ||
-      "Paystack transfer failed.";
+  /*
+   * Paystack has several conclusive failure states.
+   *
+   * These states mean the transfer will not complete successfully:
+   *
+   *     failed
+   *     reversed
+   *     abandoned
+   *     blocked
+   *     rejected
+   *
+   * Atua must restore the wallet for all of these states.
+   *
+   * Once wallet restoration succeeds:
+   *
+   *     Transaction -> REVERSED
+   *     Payout      -> FAILED
+   *
+   * REVERSED is used instead of FAILED for the Transaction
+   * because the original wallet debit has been successfully
+   * undone.
+   *
+   * We intentionally route:
+   *
+   *     reversed -> transfer.reversed
+   *     everything else -> transfer.failed
+   *
+   * because reversePayout accepts only the two event types above.
+   */
 
-    console.log("PAYSTACK TRANSFER FAILED:", {
-      reference: payout.reference,
+  const terminalFailureStatuses = new Set([
+    "failed",
+    "reversed",
+    "abandoned",
+    "blocked",
+    "rejected",
+  ]);
 
-      failureReason,
-    });
+  if (terminalFailureStatuses.has(transferStatus)) {
+    const defaultFailureReasons = {
+      failed: "Paystack transfer failed.",
 
-    const reversal = await requestPayoutReversal({
-      payout,
+      reversed: "Paystack transfer was reversed.",
 
-      transaction,
+      abandoned: "Paystack transfer was abandoned before completion.",
 
-      transfer,
+      blocked: "Paystack transfer was blocked by Paystack.",
 
-      eventType: "transfer.failed",
-
-      failureReason,
-    });
-
-    return {
-      payoutID: payout.id,
-
-      reference: payout.reference,
-
-      status: "FAILED",
-
-      transactionStatus: reversal.transactionStatus,
-
-      action: reversal.alreadyReversed ? "ALREADY_REVERSED" : "REVERSED",
+      rejected: "Paystack transfer was rejected by Paystack.",
     };
-  }
 
-  /* ==========================================================
-     TRANSFER REVERSED
-  ========================================================== */
-
-  if (transferStatus === "reversed") {
     const failureReason =
       transfer.reason ||
       transfer.gateway_response ||
       (transfer.failures ? JSON.stringify(transfer.failures) : null) ||
-      "Paystack transfer was reversed.";
+      defaultFailureReasons[transferStatus] ||
+      `Paystack transfer ended with terminal status: ${transferStatus}.`;
 
-    console.log("PAYSTACK TRANSFER REVERSED:", {
+    const eventType =
+      transferStatus === "reversed" ? "transfer.reversed" : "transfer.failed";
+
+    console.log("PAYSTACK TRANSFER TERMINAL FAILURE:", {
       reference: payout.reference,
+
+      transferStatus,
+
+      eventType,
 
       failureReason,
     });
@@ -1112,18 +1184,21 @@ async function reconcileOnePayout({ payout, secretKey }) {
 
       transfer,
 
-      eventType: "transfer.reversed",
+      eventType,
 
       failureReason,
     });
 
     return {
       payoutID: payout.id,
-
       reference: payout.reference,
 
+      // The Paystack payout itself failed.
       status: "FAILED",
 
+      transferStatus,
+
+      // The wallet debit was successfully restored.
       transactionStatus: reversal.transactionStatus,
 
       action: reversal.alreadyReversed ? "ALREADY_REVERSED" : "REVERSED",
@@ -1239,6 +1314,7 @@ exports.handler = async (event) => {
      * This avoids sending a large number of simultaneous
      * GraphQL/Paystack requests.
      */
+
     for (const payout of payouts) {
       try {
         const result = await reconcileOnePayout({
@@ -1282,6 +1358,7 @@ exports.handler = async (event) => {
          * This means another reconciliation run can safely
          * inspect it again.
          */
+
         results.push({
           payoutID: payout.id,
 
@@ -1324,6 +1401,7 @@ exports.handler = async (event) => {
      * Those payouts remain PROCESSING and can be checked
      * again during the next reconciliation run.
      */
+
     return {
       success: true,
 

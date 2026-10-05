@@ -438,6 +438,8 @@ async function updatePayoutFailed({
 
         walletRestoredAt
 
+        createdAt
+        updatedAt
         _version
         _lastChangedAt
         _deleted
@@ -454,17 +456,21 @@ async function updatePayoutFailed({
       failureReason || payout.failureReason || "Paystack transfer failed.",
 
     failedAt: payout.failedAt || new Date().toISOString(),
-
-    /*
-     * IMPORTANT:
-     *
-     * This is the durable marker that tells future retries:
-     *
-     * "The wallet has already been restored."
-     */
-    walletRestoredAt:
-      walletRestoredAt || payout.walletRestoredAt || new Date().toISOString(),
   };
+
+  /*
+   * walletRestoredAt is intentionally optional.
+   *
+   * We need to be able to mark the Payout FAILED BEFORE restoring
+   * the wallet.
+   *
+   * This protects against double wallet restoration if the Lambda
+   * fails after the wallet is restored but before the restoration
+   * marker is saved.
+   */
+  if (walletRestoredAt) {
+    input.walletRestoredAt = walletRestoredAt;
+  }
 
   if (transferCode) {
     input.transferCode = transferCode;
@@ -499,18 +505,40 @@ async function updatePayoutFailed({
 }
 
 /* ============================================================
-   UPDATE TRANSACTION -> FAILED
+   UPDATE TRANSACTION -> REVERSED
 ============================================================ */
 
-async function updateTransactionFailed(transaction) {
+/**
+ * Marks the payout DEBIT transaction as REVERSED.
+ *
+ * IMPORTANT:
+ *
+ * REVERSED means:
+ *
+ *   1. The Paystack payout failed/reversed
+ *   2. The original wallet debit has been successfully restored
+ *
+ * Therefore this function must ONLY be called AFTER the wallet
+ * restoration has succeeded and walletRestoredAt has been saved.
+ *
+ * PENDING -> REVERSED
+ *
+ * Already REVERSED -> safe / idempotent
+ *
+ * COMPLETED -> never move backwards automatically.
+ */
+async function updateTransactionReversed(transaction) {
   /*
-   * Already FAILED is safe and idempotent.
+   * Already REVERSED is safe and idempotent.
    */
-  if (transaction.status === "FAILED") {
+  if (transaction.status === "REVERSED") {
     return transaction;
   }
 
   /*
+   * A COMPLETED transaction represents a completed financial
+   * transaction.
+   *
    * Never move COMPLETED backwards automatically.
    */
   if (transaction.status === "COMPLETED") {
@@ -520,11 +548,14 @@ async function updateTransactionFailed(transaction) {
   }
 
   /*
-   * Only PENDING can normally become FAILED.
+   * Only PENDING can normally become REVERSED.
+   *
+   * We deliberately do not automatically convert other unexpected
+   * states because that could hide an accounting inconsistency.
    */
   if (transaction.status !== "PENDING") {
     throw new Error(
-      `Transaction ${transaction.id} has unexpected status ${transaction.status}.`,
+      `Transaction ${transaction.id} has unexpected status ${transaction.status}. Manual reconciliation is required.`,
     );
   }
 
@@ -532,20 +563,16 @@ async function updateTransactionFailed(transaction) {
     mutation UpdateTransaction($input: UpdateTransactionInput!) {
       updateTransaction(input: $input) {
         id
-
         walletID
         type
         amount
-
         description
-
         orderID
         paymentID
-
         reference
-
         status
-
+        createdAt
+        updatedAt
         _version
         _lastChangedAt
         _deleted
@@ -555,9 +582,12 @@ async function updateTransactionFailed(transaction) {
 
   const input = {
     id: transaction.id,
-    status: "FAILED",
+    status: "REVERSED",
   };
 
+  /*
+   * Optimistic concurrency protection.
+   */
   if (transaction._version !== undefined && transaction._version !== null) {
     input._version = transaction._version;
   }
@@ -574,7 +604,7 @@ async function updateTransactionFailed(transaction) {
 
   if (!updatedTransaction) {
     throw new Error(
-      `Transaction ${transaction.id} was not returned after update.`,
+      `Transaction ${transaction.id} was not returned after reversal.`,
     );
   }
 
@@ -824,12 +854,19 @@ async function reversePayout(input) {
 
     /*
      * If the transaction is still PENDING,
-     * repair it to FAILED.
+     * repair it to REVERSED.
      *
-     * We DO NOT touch the wallet.
+     * walletRestoredAt already exists, which proves that the
+     * wallet restoration was completed previously.
+     *
+     * Therefore:
+     *
+     *   - DO NOT restore the wallet again.
+     *   - Payout should end as FAILED.
+     *   - Transaction should end as REVERSED.
      */
     if (transaction.status === "PENDING") {
-      const repairedTransaction = await updateTransactionFailed(transaction);
+      const repairedTransaction = await updateTransactionReversed(transaction);
 
       /*
        * If Payout is not yet FAILED, finish it.
@@ -886,9 +923,17 @@ async function reversePayout(input) {
     }
 
     /*
-     * FAILED + FAILED is completely idempotent.
+     * Payout FAILED + Transaction REVERSED is completely idempotent.
+     *
+     * At this point the financial reversal has already completed:
+     *
+     *   Payout      = FAILED
+     *   Transaction = REVERSED
+     *   walletRestoredAt = present
+     *
+     * Never touch the wallet again.
      */
-    if (payout.status === "FAILED" && transaction.status === "FAILED") {
+    if (payout.status === "FAILED" && transaction.status === "REVERSED") {
       return {
         success: true,
 
@@ -897,7 +942,7 @@ async function reversePayout(input) {
         walletID: payout.walletID,
 
         payoutStatus: "FAILED",
-        transactionStatus: "FAILED",
+        transactionStatus: "REVERSED",
 
         restoredAmount: normalizeMoney(transaction.amount),
 
@@ -1067,9 +1112,60 @@ async function reversePayout(input) {
   }
 
   /* ==========================================================
-     STEP 9
-     RESTORE WALLET
-  ========================================================== */
+   STEP 9
+   MARK PAYOUT FAILED FIRST
+========================================================== */
+
+  /**
+   * IMPORTANT SAFETY ORDER
+   * ----------------------
+   *
+   * We mark the Payout FAILED BEFORE touching the wallet.
+   *
+   * Why?
+   *
+   * If the wallet restoration succeeds but a later database update
+   * fails, the next retry will see:
+   *
+   *   Payout.status       = FAILED
+   *   walletRestoredAt    = NULL
+   *
+   * and will STOP rather than restoring the wallet again.
+   *
+   * This prevents accidental double-crediting of the wallet.
+   */
+  let failedPayout;
+
+  try {
+    failedPayout = await updatePayoutFailed({
+      payout,
+
+      failureReason: failureReason || `Paystack ${eventType}.`,
+
+      transferCode,
+      transferID,
+
+      /*
+       * DO NOT set walletRestoredAt yet.
+       *
+       * The wallet has not been restored at this point.
+       */
+    });
+  } catch (error) {
+    console.error(
+      "PAYOUT FAILED STATUS UPDATE FAILED BEFORE WALLET RESTORATION:",
+      error,
+    );
+
+    throw new Error(
+      `Could not mark payout ${payout.id} as FAILED. Wallet was NOT restored. ${error.message}`,
+    );
+  }
+
+  /* ==========================================================
+   STEP 10
+   RESTORE WALLET
+========================================================== */
 
   /**
    * Restore the COMPLETE original wallet debit.
@@ -1082,38 +1178,35 @@ async function reversePayout(input) {
    * Restore:
    *
    *   ₦10,100
+   *
+   * Transaction.amount is authoritative because it represents
+   * the actual amount removed from the wallet.
    */
-
   const walletResult = await restoreWallet({
     wallet,
     transaction,
   });
 
   /* ==========================================================
-     STEP 10
-     MARK PAYOUT FAILED + RECORD WALLET RESTORATION
-  ========================================================== */
+   STEP 11
+   SAVE WALLET RESTORATION MARKER
+========================================================== */
 
   /**
-   * VERY IMPORTANT:
-   *
    * The wallet has now been restored.
    *
-   * We immediately persist walletRestoredAt.
+   * We MUST immediately persist walletRestoredAt.
    *
-   * If this update fails, we THROW and DO NOT retry the wallet
-   * restoration automatically.
-   *
-   * The correct next action is reconciliation.
+   * This becomes the durable idempotency marker that prevents
+   * future retries from restoring the wallet again.
    */
-
   const walletRestoredAt = new Date().toISOString();
 
   let updatedPayout;
 
   try {
     updatedPayout = await updatePayoutFailed({
-      payout,
+      payout: failedPayout,
 
       failureReason: failureReason || `Paystack ${eventType}.`,
 
@@ -1123,46 +1216,75 @@ async function reversePayout(input) {
       walletRestoredAt,
     });
   } catch (error) {
-    console.error("PAYOUT UPDATE FAILED AFTER WALLET RESTORATION:", error);
+    /*
+     * VERY IMPORTANT:
+     *
+     * The wallet has already been restored.
+     *
+     * The Payout is already FAILED.
+     *
+     * walletRestoredAt could not be saved.
+     *
+     * Therefore we MUST NOT retry the wallet restoration
+     * automatically.
+     *
+     * Manual reconciliation is required.
+     */
+    console.error(
+      "WALLET RESTORED BUT WALLET RESTORATION MARKER COULD NOT BE SAVED:",
+      error,
+    );
 
     throw new Error(
-      `Wallet ${wallet.id} was restored for payout ${payout.id}, but walletRestoredAt could not be saved. DO NOT retry wallet restoration automatically. Manual reconciliation is required. ${error.message}`,
+      `Wallet ${wallet.id} was restored for payout ${payout.id}, but walletRestoredAt could not be saved. Payout is FAILED. DO NOT retry wallet restoration automatically. Manual reconciliation is required. ${error.message}`,
     );
   }
 
   /* ==========================================================
-     STEP 11
-     MARK TRANSACTION FAILED
-  ========================================================== */
+   STEP 12
+   MARK TRANSACTION REVERSED
+========================================================== */
 
+  /**
+   * At this point:
+   *
+   *   Wallet              = RESTORED
+   *   Payout              = FAILED
+   *   walletRestoredAt    = SAVED
+   *
+   * Therefore the original wallet debit has been successfully
+   * reversed.
+   *
+   * Transaction must now become REVERSED.
+   */
   let updatedTransaction;
 
   try {
-    updatedTransaction = await updateTransactionFailed(transaction);
+    updatedTransaction = await updateTransactionReversed(transaction);
   } catch (error) {
-    /**
+    /*
      * At this point:
      *
-     *   Wallet          = RESTORED
-     *   walletRestoredAt = SET
-     *   Payout          = FAILED
+     *   Wallet              = RESTORED
+     *   Payout              = FAILED
+     *   walletRestoredAt    = SAVED
      *
-     * Therefore a retry will NOT restore the wallet again.
+     * Therefore retrying reversePayout is safe because the wallet
+     * restoration marker prevents another wallet credit.
      *
      * The remaining repair is the Transaction status.
      */
-
     console.error("TRANSACTION UPDATE FAILED AFTER PAYOUT REVERSAL:", error);
 
     throw new Error(
-      `Payout ${payout.id} is FAILED and walletRestoredAt is recorded, but Transaction could not be marked FAILED. Reconciliation required. ${error.message}`,
+      `Payout ${payout.id} is FAILED and walletRestoredAt is recorded, but Transaction could not be marked REVERSED. Reconciliation required. ${error.message}`,
     );
   }
 
   /* ==========================================================
-     STEP 12
-     FINAL VALIDATION
-  ========================================================== */
+   STEP 13
+   FINAL VALIDATION
+========================================================== */
 
   if (updatedPayout.status !== "FAILED") {
     throw new Error(`Payout ${updatedPayout.id} did not end in FAILED status.`);
@@ -1174,16 +1296,16 @@ async function reversePayout(input) {
     );
   }
 
-  if (updatedTransaction.status !== "FAILED") {
+  if (updatedTransaction.status !== "REVERSED") {
     throw new Error(
-      `Transaction ${updatedTransaction.id} did not end in FAILED status.`,
+      `Transaction ${updatedTransaction.id} did not end in REVERSED status.`,
     );
   }
 
   /* ==========================================================
-     STEP 13
-     SUCCESS
-  ========================================================== */
+   STEP 14
+   SUCCESS
+========================================================== */
 
   console.log("PAYOUT REVERSAL COMPLETED:", {
     payoutID: updatedPayout.id,
