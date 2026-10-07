@@ -4080,6 +4080,8 @@ const processCourierPayout = async ({
 
         courierID,
 
+        payoutID: payout?.id || null,
+
         payout,
 
         transaction,

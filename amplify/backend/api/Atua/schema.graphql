@@ -34,6 +34,13 @@ enum OrderEnvironment {
   TEST
 }
 
+enum PaymentMethodStatus {
+  ACTIVE
+  INACTIVE
+  EXPIRED
+  FAILED
+}
+
 enum EarningsAllocationStatus {
   NOT_ALLOCATED
   PROCESSING
@@ -155,6 +162,85 @@ enum CourierReportStatus {
 }
 
 # ---------------- MODELS ----------------
+type PaymentMethod
+  @model
+  @auth(
+    rules: [
+      { allow: owner, ownerField: "owner", identityClaim: "sub" }
+      {
+        allow: private
+        provider: iam
+        operations: [create, read, update, delete]
+      }
+    ]
+  ) {
+  id: ID!
+
+  # Cognito user's sub.
+  # This is used by @auth to ensure the payment method
+  # belongs to the currently authenticated user.
+  owner: String!
+    @index(name: "byPaymentMethodOwner", queryField: "paymentMethodsByOwner")
+
+  # Atua User.id.
+  # This lets our backend easily relate the payment method
+  # to the existing User model.
+  userID: ID!
+    @index(name: "byPaymentMethodUser", queryField: "paymentMethodsByUser")
+
+  # TEST or PRODUCTION Paystack environment.
+  environment: OrderEnvironment
+
+  # Payment provider.
+  # Currently PAYSTACK.
+  provider: String!
+
+  # Paystack reusable authorization.
+  #
+  # IMPORTANT:
+  # This is NOT a card number, CVV or PIN.
+  # It is the Paystack authorization token/code that
+  # Paystack gives us after a successful reusable card payment.
+  authorizationCode: String!
+
+  # Paystack's unique signature for the card authorization.
+  #
+  # Used to prevent saving the same card multiple times.
+  signature: String!
+
+  # Safe card information for displaying in Atua.
+  # We NEVER store the full PAN/card number.
+  cardType: String
+  last4: String
+  expMonth: String
+  expYear: String
+
+  # Additional Paystack metadata.
+  bank: String
+  countryCode: String
+  channel: String
+
+  # Whether Paystack says this authorization can be reused.
+  reusable: Boolean!
+
+  # Email used when the authorization was created.
+  #
+  # Paystack requires the same email when charging
+  # a reusable authorization.
+  email: String!
+
+  # Whether this is the user's default card.
+  isDefault: Boolean!
+
+  status: PaymentMethodStatus!
+
+  # Set when the user deletes/deactivates the card.
+  deactivatedAt: AWSDateTime
+
+  createdAt: AWSDateTime
+  updatedAt: AWSDateTime
+}
+
 type Payout @model @auth(rules: [{ allow: public }]) {
   id: ID!
 
@@ -213,7 +299,11 @@ type Transaction @model @auth(rules: [{ allow: public }]) {
   orderID: ID @index(name: "byOrder")
   paymentID: ID @index(name: "byPayment")
 
-  reference: String @index(name: "byTransactionReference")
+  reference: String
+    @index(
+      name: "byTransactionReference"
+      queryField: "transactionsByReference"
+    )
 
   status: TransactionStatus # PENDING | COMPLETED
 }
@@ -756,6 +846,9 @@ type User @model @auth(rules: [{ allow: public }]) {
   courierReports: [CourierReport] @hasMany(indexName: "byUser", fields: ["id"])
   Orders: [Order] @hasMany(indexName: "byUser", fields: ["id"])
   payments: [Payment] @hasMany(indexName: "byUser", fields: ["id"])
+
+  paymentMethods: [PaymentMethod]
+    @hasMany(indexName: "byPaymentMethodUser", fields: ["id"])
 }
 
 # ---------------- WALLET AND PAYMENT STRUCTURE ----------------
@@ -784,6 +877,23 @@ type VerifiedPaymentDetails {
   status: String
   channel: String
   paidAt: AWSDateTime
+}
+
+# ==========================================================
+# SAVED PAYMENT METHOD RESPONSES
+# ==========================================================
+
+type ChargeAtuaPaymentMethodResult {
+  success: Boolean!
+  message: String!
+  reference: String
+  orderId: ID
+}
+
+type DeletePaymentMethodResult {
+  success: Boolean!
+  message: String!
+  paymentMethodId: ID
 }
 
 type Mutation {

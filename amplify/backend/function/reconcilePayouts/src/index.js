@@ -302,108 +302,152 @@ async function getProcessingPayouts() {
 ============================================================ */
 
 /**
- * Finds the original payout DEBIT transaction.
+ * Retrieves the original wallet DEBIT transaction belonging
+ * to a payout.
  *
- * We require:
+ * IMPORTANT:
+ * ------------------------------------------------------------
+ * We intentionally use the generated DynamoDB/AppSync index
+ * query for Transaction.reference instead of:
  *
- *     reference = payout.reference
- *     walletID  = payout.walletID
- *     type      = DEBIT
+ *     listTransactions(filter: { reference: { eq: ... } })
  *
- * This prevents reconciliation from accidentally operating
- * on another transaction belonging to the same wallet.
+ * The diagnostic testing proved that the generic list/filter
+ * query does NOT return the existing Transaction, even though:
+ *
+ *     getTransaction(id)
+ *
+ * can see the exact record.
+ *
+ * Transaction.reference is indexed using:
+ *
+ *     @index(name: "byTransactionReference")
+ *
+ * Therefore Amplify generates the dedicated query:
+ *
+ *     transactionsByReference
+ *
+ * We use that indexed query here.
+ *
+ * SECURITY / ACCOUNTING:
+ * ------------------------------------------------------------
+ * After retrieving the indexed results, we STILL verify:
+ *
+ *     1. record is not deleted
+ *     2. reference exactly matches
+ *     3. walletID exactly matches
+ *     4. type is DEBIT
+ *
+ * This prevents an unrelated Transaction from ever being
+ * associated with a payout.
  */
 async function getPayoutTransaction(payout) {
   if (!payout?.reference) {
-    throw new Error(`Payout ${payout?.id || "unknown"} has no reference.`);
+    throw new Error("Payout reference is required.");
   }
 
   if (!payout?.walletID) {
-    throw new Error(`Payout ${payout.id} has no walletID.`);
+    throw new Error("Payout walletID is required.");
   }
 
   const query = /* GraphQL */ `
-    query GetPayoutTransaction(
-      $filter: ModelTransactionFilterInput
-      $limit: Int
-    ) {
-      listTransactions(filter: $filter, limit: $limit) {
+    query TransactionsByReference($reference: String!, $limit: Int) {
+      transactionsByReference(reference: $reference, limit: $limit) {
         items {
           id
-
           walletID
-
           type
           amount
-
           description
-
           orderID
           paymentID
-
           reference
-
           status
-
+          _version
+          _deleted
+          _lastChangedAt
           createdAt
           updatedAt
-
-          _version
-          _lastChangedAt
-          _deleted
         }
       }
     }
   `;
 
+  console.log("GETTING PAYOUT TRANSACTION BY INDEX:", {
+    payoutID: payout.id,
+    walletID: payout.walletID,
+    reference: payout.reference,
+  });
+
   const data = await graphqlRequest(
     query,
     {
-      filter: {
-        and: [
-          {
-            reference: {
-              eq: payout.reference,
-            },
-          },
-
-          {
-            walletID: {
-              eq: payout.walletID,
-            },
-          },
-
-          {
-            type: {
-              eq: "DEBIT",
-            },
-          },
-        ],
-      },
-
+      reference: payout.reference,
       limit: 20,
     },
-    "GetPayoutTransaction",
+    "TransactionsByReference",
   );
 
-  const transactions = data?.listTransactions?.items || [];
+  const transactions = data?.transactionsByReference?.items || [];
 
-  const matches = transactions.filter(
-    (item) =>
-      item &&
-      !item._deleted &&
-      item.reference === payout.reference &&
-      item.walletID === payout.walletID &&
-      item.type === "DEBIT",
-  );
+  console.log("INDEX QUERY TRANSACTIONS:", transactions);
 
-  if (matches.length > 1) {
-    throw new Error(
-      `Multiple DEBIT transactions were found for payout ${payout.reference}. Manual reconciliation is required.`,
-    );
+  /**
+   * Find the exact Transaction belonging to this payout.
+   *
+   * We do not blindly trust the reference index result.
+   * Every identity field is checked again.
+   */
+  const transaction = transactions.find((item) => {
+    if (!item) {
+      return false;
+    }
+
+    // Ignore deleted/tombstone records.
+    if (item._deleted === true) {
+      return false;
+    }
+
+    // Reference must match the payout exactly.
+    if (item.reference !== payout.reference) {
+      return false;
+    }
+
+    // Wallet must match the payout wallet exactly.
+    if (item.walletID !== payout.walletID) {
+      return false;
+    }
+
+    // Only the original wallet debit belongs here.
+    if (item.type !== "DEBIT") {
+      return false;
+    }
+
+    return true;
+  });
+
+  if (!transaction) {
+    console.error("NO MATCHING PAYOUT TRANSACTION FOUND:", {
+      payoutID: payout.id,
+      walletID: payout.walletID,
+      reference: payout.reference,
+      indexedResults: transactions,
+    });
+
+    return null;
   }
 
-  return matches[0] || null;
+  console.log("PAYOUT TRANSACTION FOUND:", {
+    transactionID: transaction.id,
+    walletID: transaction.walletID,
+    reference: transaction.reference,
+    type: transaction.type,
+    amount: transaction.amount,
+    status: transaction.status,
+    version: transaction._version,
+  });
+
+  return transaction;
 }
 
 /* ============================================================

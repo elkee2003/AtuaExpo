@@ -589,6 +589,7 @@ export const schema = {
                     "type": "key",
                     "properties": {
                         "name": "byTransactionReference",
+                        "queryField": "transactionsByReference",
                         "fields": [
                             "reference"
                         ]
