@@ -58,12 +58,12 @@
         "verifyAtuaPayment": {
           "secretsPathAmplifyAppId": "d4d2e6dwzso4a",
           "deploymentBucketName": "amplify-atua-staging-19d66-deployment",
-          "s3Key": "amplify-builds/verifyAtuaPayment-496e6a67773438553049-build.zip"
+          "s3Key": "amplify-builds/verifyAtuaPayment-556f4c76794c4e2f5937-build.zip"
         },
         "paystackWebhook": {
           "secretsPathAmplifyAppId": "d4d2e6dwzso4a",
           "deploymentBucketName": "amplify-atua-staging-19d66-deployment",
-          "s3Key": "amplify-builds/paystackWebhook-2f364178422b6a686e69-build.zip"
+          "s3Key": "amplify-builds/paystackWebhook-4136327052304d6c344e-build.zip"
         },
         "allocateCourierEarnings": {
           "deploymentBucketName": "amplify-atua-staging-19d66-deployment",
@@ -85,6 +85,25 @@
           "secretsPathAmplifyAppId": "d4d2e6dwzso4a",
           "deploymentBucketName": "amplify-atua-staging-19d66-deployment",
           "s3Key": "amplify-builds/reconcilePayouts-41306e5a674264306a4a-build.zip"
+        },
+        "chargeAtuaPaymentMethod": {
+          "secretsPathAmplifyAppId": "d4d2e6dwzso4a",
+          "deploymentBucketName": "amplify-atua-staging-19d66-deployment",
+          "s3Key": "amplify-builds/chargeAtuaPaymentMethod-4d2b6a4c5a5a69675839-build.zip"
+        },
+        "deletePaymentMethod": {
+          "secretsPathAmplifyAppId": "d4d2e6dwzso4a",
+          "deploymentBucketName": "amplify-atua-staging-19d66-deployment",
+          "s3Key": "amplify-builds/deletePaymentMethod-5a4354524f4c796c4536-build.zip"
+        },
+        "cancelOrder": {
+          "secretsPathAmplifyAppId": "d4d2e6dwzso4a",
+          "deploymentBucketName": "amplify-atua-staging-19d66-deployment",
+          "s3Key": "amplify-builds/cancelOrder-704375796b6957526333-build.zip"
+        },
+        "deleteOrder": {
+          "deploymentBucketName": "amplify-atua-staging-19d66-deployment",
+          "s3Key": "amplify-builds/deleteOrder-724c7952527453512b6b-build.zip"
         }
       },
       "storage": {

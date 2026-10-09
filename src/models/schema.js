@@ -269,6 +269,219 @@ export const schema = {
                 }
             ]
         },
+        "PaymentMethod": {
+            "name": "PaymentMethod",
+            "fields": {
+                "id": {
+                    "name": "id",
+                    "isArray": false,
+                    "type": "ID",
+                    "isRequired": true,
+                    "attributes": []
+                },
+                "owner": {
+                    "name": "owner",
+                    "isArray": false,
+                    "type": "String",
+                    "isRequired": true,
+                    "attributes": []
+                },
+                "userID": {
+                    "name": "userID",
+                    "isArray": false,
+                    "type": "ID",
+                    "isRequired": true,
+                    "attributes": []
+                },
+                "paystackEnvironment": {
+                    "name": "paystackEnvironment",
+                    "isArray": false,
+                    "type": {
+                        "enum": "PaystackEnvironment"
+                    },
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "provider": {
+                    "name": "provider",
+                    "isArray": false,
+                    "type": "String",
+                    "isRequired": true,
+                    "attributes": []
+                },
+                "authorizationCode": {
+                    "name": "authorizationCode",
+                    "isArray": false,
+                    "type": "String",
+                    "isRequired": true,
+                    "attributes": []
+                },
+                "signature": {
+                    "name": "signature",
+                    "isArray": false,
+                    "type": "String",
+                    "isRequired": true,
+                    "attributes": []
+                },
+                "cardType": {
+                    "name": "cardType",
+                    "isArray": false,
+                    "type": "String",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "last4": {
+                    "name": "last4",
+                    "isArray": false,
+                    "type": "String",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "expMonth": {
+                    "name": "expMonth",
+                    "isArray": false,
+                    "type": "String",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "expYear": {
+                    "name": "expYear",
+                    "isArray": false,
+                    "type": "String",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "bank": {
+                    "name": "bank",
+                    "isArray": false,
+                    "type": "String",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "countryCode": {
+                    "name": "countryCode",
+                    "isArray": false,
+                    "type": "String",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "channel": {
+                    "name": "channel",
+                    "isArray": false,
+                    "type": "String",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "reusable": {
+                    "name": "reusable",
+                    "isArray": false,
+                    "type": "Boolean",
+                    "isRequired": true,
+                    "attributes": []
+                },
+                "email": {
+                    "name": "email",
+                    "isArray": false,
+                    "type": "String",
+                    "isRequired": true,
+                    "attributes": []
+                },
+                "isDefault": {
+                    "name": "isDefault",
+                    "isArray": false,
+                    "type": "Boolean",
+                    "isRequired": true,
+                    "attributes": []
+                },
+                "status": {
+                    "name": "status",
+                    "isArray": false,
+                    "type": {
+                        "enum": "PaymentMethodStatus"
+                    },
+                    "isRequired": true,
+                    "attributes": []
+                },
+                "deactivatedAt": {
+                    "name": "deactivatedAt",
+                    "isArray": false,
+                    "type": "AWSDateTime",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "createdAt": {
+                    "name": "createdAt",
+                    "isArray": false,
+                    "type": "AWSDateTime",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "updatedAt": {
+                    "name": "updatedAt",
+                    "isArray": false,
+                    "type": "AWSDateTime",
+                    "isRequired": false,
+                    "attributes": []
+                }
+            },
+            "syncable": true,
+            "pluralName": "PaymentMethods",
+            "attributes": [
+                {
+                    "type": "model",
+                    "properties": {}
+                },
+                {
+                    "type": "key",
+                    "properties": {
+                        "name": "byPaymentMethodOwner",
+                        "queryField": "paymentMethodsByOwner",
+                        "fields": [
+                            "owner"
+                        ]
+                    }
+                },
+                {
+                    "type": "key",
+                    "properties": {
+                        "name": "byPaymentMethodUser",
+                        "queryField": "paymentMethodsByUser",
+                        "fields": [
+                            "userID"
+                        ]
+                    }
+                },
+                {
+                    "type": "auth",
+                    "properties": {
+                        "rules": [
+                            {
+                                "provider": "userPools",
+                                "ownerField": "owner",
+                                "allow": "owner",
+                                "identityClaim": "sub",
+                                "operations": [
+                                    "create",
+                                    "update",
+                                    "delete",
+                                    "read"
+                                ]
+                            },
+                            {
+                                "allow": "private",
+                                "provider": "iam",
+                                "operations": [
+                                    "create",
+                                    "read",
+                                    "update",
+                                    "delete"
+                                ]
+                            }
+                        ]
+                    }
+                }
+            ]
+        },
         "Payout": {
             "name": "Payout",
             "fields": {
@@ -1022,6 +1235,249 @@ export const schema = {
                 }
             ]
         },
+        "OrderCancellation": {
+            "name": "OrderCancellation",
+            "fields": {
+                "id": {
+                    "name": "id",
+                    "isArray": false,
+                    "type": "ID",
+                    "isRequired": true,
+                    "attributes": []
+                },
+                "orderID": {
+                    "name": "orderID",
+                    "isArray": false,
+                    "type": "ID",
+                    "isRequired": true,
+                    "attributes": []
+                },
+                "userID": {
+                    "name": "userID",
+                    "isArray": false,
+                    "type": "ID",
+                    "isRequired": true,
+                    "attributes": []
+                },
+                "courierID": {
+                    "name": "courierID",
+                    "isArray": false,
+                    "type": "ID",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "status": {
+                    "name": "status",
+                    "isArray": false,
+                    "type": {
+                        "enum": "CancellationStatus"
+                    },
+                    "isRequired": true,
+                    "attributes": []
+                },
+                "stage": {
+                    "name": "stage",
+                    "isArray": false,
+                    "type": {
+                        "enum": "CancellationStage"
+                    },
+                    "isRequired": true,
+                    "attributes": []
+                },
+                "reason": {
+                    "name": "reason",
+                    "isArray": false,
+                    "type": {
+                        "enum": "CancellationReason"
+                    },
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "reasonNote": {
+                    "name": "reasonNote",
+                    "isArray": false,
+                    "type": "String",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "originalAmount": {
+                    "name": "originalAmount",
+                    "isArray": false,
+                    "type": "Float",
+                    "isRequired": true,
+                    "attributes": []
+                },
+                "cancellationFee": {
+                    "name": "cancellationFee",
+                    "isArray": false,
+                    "type": "Float",
+                    "isRequired": true,
+                    "attributes": []
+                },
+                "refundAmount": {
+                    "name": "refundAmount",
+                    "isArray": false,
+                    "type": "Float",
+                    "isRequired": true,
+                    "attributes": []
+                },
+                "refundStatus": {
+                    "name": "refundStatus",
+                    "isArray": false,
+                    "type": {
+                        "enum": "RefundStatus"
+                    },
+                    "isRequired": true,
+                    "attributes": []
+                },
+                "refundReference": {
+                    "name": "refundReference",
+                    "isArray": false,
+                    "type": "String",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "paymentReference": {
+                    "name": "paymentReference",
+                    "isArray": false,
+                    "type": "String",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "cancellationRequestedAt": {
+                    "name": "cancellationRequestedAt",
+                    "isArray": false,
+                    "type": "AWSDateTime",
+                    "isRequired": true,
+                    "attributes": []
+                },
+                "cancellationProcessedAt": {
+                    "name": "cancellationProcessedAt",
+                    "isArray": false,
+                    "type": "AWSDateTime",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "refundRequestedAt": {
+                    "name": "refundRequestedAt",
+                    "isArray": false,
+                    "type": "AWSDateTime",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "refundedAt": {
+                    "name": "refundedAt",
+                    "isArray": false,
+                    "type": "AWSDateTime",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "courierReversed": {
+                    "name": "courierReversed",
+                    "isArray": false,
+                    "type": "Boolean",
+                    "isRequired": true,
+                    "attributes": []
+                },
+                "courierEarningsReversed": {
+                    "name": "courierEarningsReversed",
+                    "isArray": false,
+                    "type": "Boolean",
+                    "isRequired": true,
+                    "attributes": []
+                },
+                "walletReversed": {
+                    "name": "walletReversed",
+                    "isArray": false,
+                    "type": "Boolean",
+                    "isRequired": true,
+                    "attributes": []
+                },
+                "assignmentReversed": {
+                    "name": "assignmentReversed",
+                    "isArray": false,
+                    "type": "Boolean",
+                    "isRequired": true,
+                    "attributes": []
+                },
+                "errorMessage": {
+                    "name": "errorMessage",
+                    "isArray": false,
+                    "type": "String",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "createdAt": {
+                    "name": "createdAt",
+                    "isArray": false,
+                    "type": "AWSDateTime",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "updatedAt": {
+                    "name": "updatedAt",
+                    "isArray": false,
+                    "type": "AWSDateTime",
+                    "isRequired": false,
+                    "attributes": []
+                }
+            },
+            "syncable": true,
+            "pluralName": "OrderCancellations",
+            "attributes": [
+                {
+                    "type": "model",
+                    "properties": {}
+                },
+                {
+                    "type": "key",
+                    "properties": {
+                        "name": "byOrder",
+                        "fields": [
+                            "orderID"
+                        ]
+                    }
+                },
+                {
+                    "type": "key",
+                    "properties": {
+                        "name": "byPaymentReference",
+                        "fields": [
+                            "paymentReference"
+                        ]
+                    }
+                },
+                {
+                    "type": "auth",
+                    "properties": {
+                        "rules": [
+                            {
+                                "provider": "userPools",
+                                "ownerField": "userID",
+                                "allow": "owner",
+                                "identityClaim": "sub",
+                                "operations": [
+                                    "create",
+                                    "update",
+                                    "delete",
+                                    "read"
+                                ]
+                            },
+                            {
+                                "allow": "private",
+                                "provider": "iam",
+                                "operations": [
+                                    "create",
+                                    "read",
+                                    "update",
+                                    "delete"
+                                ]
+                            }
+                        ]
+                    }
+                }
+            ]
+        },
         "Order": {
             "name": "Order",
             "fields": {
@@ -1150,6 +1606,98 @@ export const schema = {
                     "type": {
                         "enum": "OrderStatus"
                     },
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "cancellationStatus": {
+                    "name": "cancellationStatus",
+                    "isArray": false,
+                    "type": {
+                        "enum": "CancellationStatus"
+                    },
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "refundStatus": {
+                    "name": "refundStatus",
+                    "isArray": false,
+                    "type": {
+                        "enum": "RefundStatus"
+                    },
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "cancellationFee": {
+                    "name": "cancellationFee",
+                    "isArray": false,
+                    "type": "Float",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "refundAmount": {
+                    "name": "refundAmount",
+                    "isArray": false,
+                    "type": "Float",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "cancellationReason": {
+                    "name": "cancellationReason",
+                    "isArray": false,
+                    "type": {
+                        "enum": "CancellationReason"
+                    },
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "cancellationReasonNote": {
+                    "name": "cancellationReasonNote",
+                    "isArray": false,
+                    "type": "String",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "cancellationStage": {
+                    "name": "cancellationStage",
+                    "isArray": false,
+                    "type": {
+                        "enum": "CancellationStage"
+                    },
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "cancellationRequestedAt": {
+                    "name": "cancellationRequestedAt",
+                    "isArray": false,
+                    "type": "AWSDateTime",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "cancellationProcessedAt": {
+                    "name": "cancellationProcessedAt",
+                    "isArray": false,
+                    "type": "AWSDateTime",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "refundReference": {
+                    "name": "refundReference",
+                    "isArray": false,
+                    "type": "String",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "refundRequestedAt": {
+                    "name": "refundRequestedAt",
+                    "isArray": false,
+                    "type": "AWSDateTime",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "refundedAt": {
+                    "name": "refundedAt",
+                    "isArray": false,
+                    "type": "AWSDateTime",
                     "isRequired": false,
                     "attributes": []
                 },
@@ -3363,6 +3911,22 @@ export const schema = {
                         ]
                     }
                 },
+                "paymentMethods": {
+                    "name": "paymentMethods",
+                    "isArray": true,
+                    "type": {
+                        "model": "PaymentMethod"
+                    },
+                    "isRequired": false,
+                    "attributes": [],
+                    "isArrayNullable": true,
+                    "association": {
+                        "connectionType": "HAS_MANY",
+                        "associatedWith": [
+                            "userID"
+                        ]
+                    }
+                },
                 "createdAt": {
                     "name": "createdAt",
                     "isArray": false,
@@ -3407,11 +3971,27 @@ export const schema = {
         }
     },
     "enums": {
+        "PaystackEnvironment": {
+            "name": "PaystackEnvironment",
+            "values": [
+                "TEST",
+                "LIVE"
+            ]
+        },
         "OrderEnvironment": {
             "name": "OrderEnvironment",
             "values": [
                 "PRODUCTION",
                 "TEST"
+            ]
+        },
+        "PaymentMethodStatus": {
+            "name": "PaymentMethodStatus",
+            "values": [
+                "ACTIVE",
+                "INACTIVE",
+                "EXPIRED",
+                "FAILED"
             ]
         },
         "EarningsAllocationStatus": {
@@ -3501,7 +4081,8 @@ export const schema = {
             "values": [
                 "ACTIVE",
                 "ACCEPTED",
-                "REJECTED"
+                "REJECTED",
+                "CANCELLED"
             ]
         },
         "CourierPreTransferUploadStatus": {
@@ -3540,10 +4121,60 @@ export const schema = {
                 "FAILED"
             ]
         },
+        "RefundStatus": {
+            "name": "RefundStatus",
+            "values": [
+                "NONE",
+                "PENDING",
+                "PROCESSING",
+                "NEEDS_ATTENTION",
+                "PROCESSED",
+                "FAILED"
+            ]
+        },
+        "CancellationStage": {
+            "name": "CancellationStage",
+            "values": [
+                "BEFORE_ACCEPTANCE",
+                "ACCEPTED",
+                "COURIER_ARRIVED",
+                "PICKUP_STARTED",
+                "PICKED_UP",
+                "IN_TRANSIT",
+                "DELIVERED"
+            ]
+        },
+        "CancellationReason": {
+            "name": "CancellationReason",
+            "values": [
+                "CHANGED_MIND",
+                "WRONG_ADDRESS",
+                "WRONG_ORDER",
+                "TOO_EXPENSIVE",
+                "TOO_LONG_TO_WAIT",
+                "NO_LONGER_NEEDED",
+                "COURIER_DELAY",
+                "COURIER_REQUEST",
+                "SYSTEM_ERROR",
+                "OTHER"
+            ]
+        },
+        "CancellationStatus": {
+            "name": "CancellationStatus",
+            "values": [
+                "NONE",
+                "REQUESTED",
+                "PROCESSING",
+                "COMPLETED",
+                "FAILED",
+                "REJECTED"
+            ]
+        },
         "OrderStatus": {
             "name": "OrderStatus",
             "values": [
                 "BIDDING",
+                "AWAITING_PAYMENT",
                 "READY_FOR_PICKUP",
                 "ACCEPTED",
                 "ARRIVED_PICKUP",
@@ -3673,6 +4304,65 @@ export const schema = {
                 }
             }
         },
+        "ChargeAtuaPaymentMethodResult": {
+            "name": "ChargeAtuaPaymentMethodResult",
+            "fields": {
+                "success": {
+                    "name": "success",
+                    "isArray": false,
+                    "type": "Boolean",
+                    "isRequired": true,
+                    "attributes": []
+                },
+                "message": {
+                    "name": "message",
+                    "isArray": false,
+                    "type": "String",
+                    "isRequired": true,
+                    "attributes": []
+                },
+                "reference": {
+                    "name": "reference",
+                    "isArray": false,
+                    "type": "String",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "orderId": {
+                    "name": "orderId",
+                    "isArray": false,
+                    "type": "ID",
+                    "isRequired": false,
+                    "attributes": []
+                }
+            }
+        },
+        "DeleteSavedPaymentMethodResult": {
+            "name": "DeleteSavedPaymentMethodResult",
+            "fields": {
+                "success": {
+                    "name": "success",
+                    "isArray": false,
+                    "type": "Boolean",
+                    "isRequired": true,
+                    "attributes": []
+                },
+                "message": {
+                    "name": "message",
+                    "isArray": false,
+                    "type": "String",
+                    "isRequired": true,
+                    "attributes": []
+                },
+                "paymentMethodId": {
+                    "name": "paymentMethodId",
+                    "isArray": false,
+                    "type": "ID",
+                    "isRequired": false,
+                    "attributes": []
+                }
+            }
+        },
         "ProcessPayoutsResponse": {
             "name": "ProcessPayoutsResponse",
             "fields": {
@@ -3766,5 +4456,5 @@ export const schema = {
         }
     },
     "codegenVersion": "3.4.4",
-    "version": "5bc2d62cdf096e1eeb07240299c0c863"
+    "version": "fc63533082b46055b88e99e374098561"
 };

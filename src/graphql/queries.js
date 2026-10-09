@@ -230,6 +230,219 @@ export const syncCourierCompanies = /* GraphQL */ `
     }
   }
 `;
+export const getPaymentMethod = /* GraphQL */ `
+  query GetPaymentMethod($id: ID!) {
+    getPaymentMethod(id: $id) {
+      id
+      owner
+      userID
+      paystackEnvironment
+      provider
+      authorizationCode
+      signature
+      cardType
+      last4
+      expMonth
+      expYear
+      bank
+      countryCode
+      channel
+      reusable
+      email
+      isDefault
+      status
+      deactivatedAt
+      createdAt
+      updatedAt
+      _version
+      _deleted
+      _lastChangedAt
+      __typename
+    }
+  }
+`;
+export const listPaymentMethods = /* GraphQL */ `
+  query ListPaymentMethods(
+    $filter: ModelPaymentMethodFilterInput
+    $limit: Int
+    $nextToken: String
+  ) {
+    listPaymentMethods(filter: $filter, limit: $limit, nextToken: $nextToken) {
+      items {
+        id
+        owner
+        userID
+        paystackEnvironment
+        provider
+        authorizationCode
+        signature
+        cardType
+        last4
+        expMonth
+        expYear
+        bank
+        countryCode
+        channel
+        reusable
+        email
+        isDefault
+        status
+        deactivatedAt
+        createdAt
+        updatedAt
+        _version
+        _deleted
+        _lastChangedAt
+        __typename
+      }
+      nextToken
+      startedAt
+      __typename
+    }
+  }
+`;
+export const syncPaymentMethods = /* GraphQL */ `
+  query SyncPaymentMethods(
+    $filter: ModelPaymentMethodFilterInput
+    $limit: Int
+    $nextToken: String
+    $lastSync: AWSTimestamp
+  ) {
+    syncPaymentMethods(
+      filter: $filter
+      limit: $limit
+      nextToken: $nextToken
+      lastSync: $lastSync
+    ) {
+      items {
+        id
+        owner
+        userID
+        paystackEnvironment
+        provider
+        authorizationCode
+        signature
+        cardType
+        last4
+        expMonth
+        expYear
+        bank
+        countryCode
+        channel
+        reusable
+        email
+        isDefault
+        status
+        deactivatedAt
+        createdAt
+        updatedAt
+        _version
+        _deleted
+        _lastChangedAt
+        __typename
+      }
+      nextToken
+      startedAt
+      __typename
+    }
+  }
+`;
+export const paymentMethodsByOwner = /* GraphQL */ `
+  query PaymentMethodsByOwner(
+    $owner: String!
+    $sortDirection: ModelSortDirection
+    $filter: ModelPaymentMethodFilterInput
+    $limit: Int
+    $nextToken: String
+  ) {
+    paymentMethodsByOwner(
+      owner: $owner
+      sortDirection: $sortDirection
+      filter: $filter
+      limit: $limit
+      nextToken: $nextToken
+    ) {
+      items {
+        id
+        owner
+        userID
+        paystackEnvironment
+        provider
+        authorizationCode
+        signature
+        cardType
+        last4
+        expMonth
+        expYear
+        bank
+        countryCode
+        channel
+        reusable
+        email
+        isDefault
+        status
+        deactivatedAt
+        createdAt
+        updatedAt
+        _version
+        _deleted
+        _lastChangedAt
+        __typename
+      }
+      nextToken
+      startedAt
+      __typename
+    }
+  }
+`;
+export const paymentMethodsByUser = /* GraphQL */ `
+  query PaymentMethodsByUser(
+    $userID: ID!
+    $sortDirection: ModelSortDirection
+    $filter: ModelPaymentMethodFilterInput
+    $limit: Int
+    $nextToken: String
+  ) {
+    paymentMethodsByUser(
+      userID: $userID
+      sortDirection: $sortDirection
+      filter: $filter
+      limit: $limit
+      nextToken: $nextToken
+    ) {
+      items {
+        id
+        owner
+        userID
+        paystackEnvironment
+        provider
+        authorizationCode
+        signature
+        cardType
+        last4
+        expMonth
+        expYear
+        bank
+        countryCode
+        channel
+        reusable
+        email
+        isDefault
+        status
+        deactivatedAt
+        createdAt
+        updatedAt
+        _version
+        _deleted
+        _lastChangedAt
+        __typename
+      }
+      nextToken
+      startedAt
+      __typename
+    }
+  }
+`;
 export const getPayout = /* GraphQL */ `
   query GetPayout($id: ID!) {
     getPayout(id: $id) {
@@ -832,6 +1045,18 @@ export const getPayment = /* GraphQL */ `
         transportationType
         vehicleClass
         status
+        cancellationStatus
+        refundStatus
+        cancellationFee
+        refundAmount
+        cancellationReason
+        cancellationReasonNote
+        cancellationStage
+        cancellationRequestedAt
+        cancellationProcessedAt
+        refundReference
+        refundRequestedAt
+        refundedAt
         hasNewOffer
         lastOfferAt
         lastOfferSenderType
@@ -1171,6 +1396,18 @@ export const getOffer = /* GraphQL */ `
         transportationType
         vehicleClass
         status
+        cancellationStatus
+        refundStatus
+        cancellationFee
+        refundAmount
+        cancellationReason
+        cancellationReasonNote
+        cancellationStage
+        cancellationRequestedAt
+        cancellationProcessedAt
+        refundReference
+        refundRequestedAt
+        refundedAt
         hasNewOffer
         lastOfferAt
         lastOfferSenderType
@@ -1477,6 +1714,243 @@ export const offersByCourierID = /* GraphQL */ `
     }
   }
 `;
+export const getOrderCancellation = /* GraphQL */ `
+  query GetOrderCancellation($id: ID!) {
+    getOrderCancellation(id: $id) {
+      id
+      orderID
+      userID
+      courierID
+      status
+      stage
+      reason
+      reasonNote
+      originalAmount
+      cancellationFee
+      refundAmount
+      refundStatus
+      refundReference
+      paymentReference
+      cancellationRequestedAt
+      cancellationProcessedAt
+      refundRequestedAt
+      refundedAt
+      courierReversed
+      courierEarningsReversed
+      walletReversed
+      assignmentReversed
+      errorMessage
+      createdAt
+      updatedAt
+      _version
+      _deleted
+      _lastChangedAt
+      __typename
+    }
+  }
+`;
+export const listOrderCancellations = /* GraphQL */ `
+  query ListOrderCancellations(
+    $filter: ModelOrderCancellationFilterInput
+    $limit: Int
+    $nextToken: String
+  ) {
+    listOrderCancellations(
+      filter: $filter
+      limit: $limit
+      nextToken: $nextToken
+    ) {
+      items {
+        id
+        orderID
+        userID
+        courierID
+        status
+        stage
+        reason
+        reasonNote
+        originalAmount
+        cancellationFee
+        refundAmount
+        refundStatus
+        refundReference
+        paymentReference
+        cancellationRequestedAt
+        cancellationProcessedAt
+        refundRequestedAt
+        refundedAt
+        courierReversed
+        courierEarningsReversed
+        walletReversed
+        assignmentReversed
+        errorMessage
+        createdAt
+        updatedAt
+        _version
+        _deleted
+        _lastChangedAt
+        __typename
+      }
+      nextToken
+      startedAt
+      __typename
+    }
+  }
+`;
+export const syncOrderCancellations = /* GraphQL */ `
+  query SyncOrderCancellations(
+    $filter: ModelOrderCancellationFilterInput
+    $limit: Int
+    $nextToken: String
+    $lastSync: AWSTimestamp
+  ) {
+    syncOrderCancellations(
+      filter: $filter
+      limit: $limit
+      nextToken: $nextToken
+      lastSync: $lastSync
+    ) {
+      items {
+        id
+        orderID
+        userID
+        courierID
+        status
+        stage
+        reason
+        reasonNote
+        originalAmount
+        cancellationFee
+        refundAmount
+        refundStatus
+        refundReference
+        paymentReference
+        cancellationRequestedAt
+        cancellationProcessedAt
+        refundRequestedAt
+        refundedAt
+        courierReversed
+        courierEarningsReversed
+        walletReversed
+        assignmentReversed
+        errorMessage
+        createdAt
+        updatedAt
+        _version
+        _deleted
+        _lastChangedAt
+        __typename
+      }
+      nextToken
+      startedAt
+      __typename
+    }
+  }
+`;
+export const orderCancellationsByOrderID = /* GraphQL */ `
+  query OrderCancellationsByOrderID(
+    $orderID: ID!
+    $sortDirection: ModelSortDirection
+    $filter: ModelOrderCancellationFilterInput
+    $limit: Int
+    $nextToken: String
+  ) {
+    orderCancellationsByOrderID(
+      orderID: $orderID
+      sortDirection: $sortDirection
+      filter: $filter
+      limit: $limit
+      nextToken: $nextToken
+    ) {
+      items {
+        id
+        orderID
+        userID
+        courierID
+        status
+        stage
+        reason
+        reasonNote
+        originalAmount
+        cancellationFee
+        refundAmount
+        refundStatus
+        refundReference
+        paymentReference
+        cancellationRequestedAt
+        cancellationProcessedAt
+        refundRequestedAt
+        refundedAt
+        courierReversed
+        courierEarningsReversed
+        walletReversed
+        assignmentReversed
+        errorMessage
+        createdAt
+        updatedAt
+        _version
+        _deleted
+        _lastChangedAt
+        __typename
+      }
+      nextToken
+      startedAt
+      __typename
+    }
+  }
+`;
+export const orderCancellationsByPaymentReference = /* GraphQL */ `
+  query OrderCancellationsByPaymentReference(
+    $paymentReference: String!
+    $sortDirection: ModelSortDirection
+    $filter: ModelOrderCancellationFilterInput
+    $limit: Int
+    $nextToken: String
+  ) {
+    orderCancellationsByPaymentReference(
+      paymentReference: $paymentReference
+      sortDirection: $sortDirection
+      filter: $filter
+      limit: $limit
+      nextToken: $nextToken
+    ) {
+      items {
+        id
+        orderID
+        userID
+        courierID
+        status
+        stage
+        reason
+        reasonNote
+        originalAmount
+        cancellationFee
+        refundAmount
+        refundStatus
+        refundReference
+        paymentReference
+        cancellationRequestedAt
+        cancellationProcessedAt
+        refundRequestedAt
+        refundedAt
+        courierReversed
+        courierEarningsReversed
+        walletReversed
+        assignmentReversed
+        errorMessage
+        createdAt
+        updatedAt
+        _version
+        _deleted
+        _lastChangedAt
+        __typename
+      }
+      nextToken
+      startedAt
+      __typename
+    }
+  }
+`;
 export const getOrder = /* GraphQL */ `
   query GetOrder($id: ID!) {
     getOrder(id: $id) {
@@ -1498,6 +1972,18 @@ export const getOrder = /* GraphQL */ `
       transportationType
       vehicleClass
       status
+      cancellationStatus
+      refundStatus
+      cancellationFee
+      refundAmount
+      cancellationReason
+      cancellationReasonNote
+      cancellationStage
+      cancellationRequestedAt
+      cancellationProcessedAt
+      refundReference
+      refundRequestedAt
+      refundedAt
       hasNewOffer
       lastOfferAt
       lastOfferSenderType
@@ -1709,6 +2195,18 @@ export const listOrders = /* GraphQL */ `
         transportationType
         vehicleClass
         status
+        cancellationStatus
+        refundStatus
+        cancellationFee
+        refundAmount
+        cancellationReason
+        cancellationReasonNote
+        cancellationStage
+        cancellationRequestedAt
+        cancellationProcessedAt
+        refundReference
+        refundRequestedAt
+        refundedAt
         hasNewOffer
         lastOfferAt
         lastOfferSenderType
@@ -1852,6 +2350,18 @@ export const syncOrders = /* GraphQL */ `
         transportationType
         vehicleClass
         status
+        cancellationStatus
+        refundStatus
+        cancellationFee
+        refundAmount
+        cancellationReason
+        cancellationReasonNote
+        cancellationStage
+        cancellationRequestedAt
+        cancellationProcessedAt
+        refundReference
+        refundRequestedAt
+        refundedAt
         hasNewOffer
         lastOfferAt
         lastOfferSenderType
@@ -1997,6 +2507,18 @@ export const ordersByAssignedCourierId = /* GraphQL */ `
         transportationType
         vehicleClass
         status
+        cancellationStatus
+        refundStatus
+        cancellationFee
+        refundAmount
+        cancellationReason
+        cancellationReasonNote
+        cancellationStage
+        cancellationRequestedAt
+        cancellationProcessedAt
+        refundReference
+        refundRequestedAt
+        refundedAt
         hasNewOffer
         lastOfferAt
         lastOfferSenderType
@@ -2144,6 +2666,18 @@ export const ordersByAssignmentStatusAndAssignmentExpiresAt = /* GraphQL */ `
         transportationType
         vehicleClass
         status
+        cancellationStatus
+        refundStatus
+        cancellationFee
+        refundAmount
+        cancellationReason
+        cancellationReasonNote
+        cancellationStage
+        cancellationRequestedAt
+        cancellationProcessedAt
+        refundReference
+        refundRequestedAt
+        refundedAt
         hasNewOffer
         lastOfferAt
         lastOfferSenderType
@@ -2289,6 +2823,18 @@ export const ordersByRecipientTrackingToken = /* GraphQL */ `
         transportationType
         vehicleClass
         status
+        cancellationStatus
+        refundStatus
+        cancellationFee
+        refundAmount
+        cancellationReason
+        cancellationReasonNote
+        cancellationStage
+        cancellationRequestedAt
+        cancellationProcessedAt
+        refundReference
+        refundRequestedAt
+        refundedAt
         hasNewOffer
         lastOfferAt
         lastOfferSenderType
@@ -2434,6 +2980,18 @@ export const ordersByUserID = /* GraphQL */ `
         transportationType
         vehicleClass
         status
+        cancellationStatus
+        refundStatus
+        cancellationFee
+        refundAmount
+        cancellationReason
+        cancellationReasonNote
+        cancellationStage
+        cancellationRequestedAt
+        cancellationProcessedAt
+        refundReference
+        refundRequestedAt
+        refundedAt
         hasNewOffer
         lastOfferAt
         lastOfferSenderType
@@ -2650,6 +3208,18 @@ export const getCourierReport = /* GraphQL */ `
         transportationType
         vehicleClass
         status
+        cancellationStatus
+        refundStatus
+        cancellationFee
+        refundAmount
+        cancellationReason
+        cancellationReasonNote
+        cancellationStage
+        cancellationRequestedAt
+        cancellationProcessedAt
+        refundReference
+        refundRequestedAt
+        refundedAt
         hasNewOffer
         lastOfferAt
         lastOfferSenderType
@@ -3060,6 +3630,18 @@ export const getCourierReview = /* GraphQL */ `
         transportationType
         vehicleClass
         status
+        cancellationStatus
+        refundStatus
+        cancellationFee
+        refundAmount
+        cancellationReason
+        cancellationReasonNote
+        cancellationStage
+        cancellationRequestedAt
+        cancellationProcessedAt
+        refundReference
+        refundRequestedAt
+        refundedAt
         hasNewOffer
         lastOfferAt
         lastOfferSenderType
@@ -4027,6 +4609,11 @@ export const getUser = /* GraphQL */ `
         __typename
       }
       payments {
+        nextToken
+        startedAt
+        __typename
+      }
+      paymentMethods {
         nextToken
         startedAt
         __typename

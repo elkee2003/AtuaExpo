@@ -172,10 +172,6 @@ const MaxiBiddingSheet = ({
       >
         Order History
       </Text>
-
-      <Text style={styles.cancelText} onPress={onCancel}>
-        Cancel Order
-      </Text>
     </View>
   );
 };

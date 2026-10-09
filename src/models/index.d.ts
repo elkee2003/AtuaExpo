@@ -2,9 +2,21 @@ import { ModelInit, MutableModel, __modelMeta__, ManagedIdentifier } from "@aws-
 // @ts-ignore
 import { LazyLoading, LazyLoadingDisabled, AsyncCollection, AsyncItem } from "@aws-amplify/datastore";
 
+export enum PaystackEnvironment {
+  TEST = "TEST",
+  LIVE = "LIVE"
+}
+
 export enum OrderEnvironment {
   PRODUCTION = "PRODUCTION",
   TEST = "TEST"
+}
+
+export enum PaymentMethodStatus {
+  ACTIVE = "ACTIVE",
+  INACTIVE = "INACTIVE",
+  EXPIRED = "EXPIRED",
+  FAILED = "FAILED"
 }
 
 export enum EarningsAllocationStatus {
@@ -72,7 +84,8 @@ export enum OwnerType {
 export enum OfferStatus {
   ACTIVE = "ACTIVE",
   ACCEPTED = "ACCEPTED",
-  REJECTED = "REJECTED"
+  REJECTED = "REJECTED",
+  CANCELLED = "CANCELLED"
 }
 
 export enum CourierPreTransferUploadStatus {
@@ -103,8 +116,50 @@ export enum MediaUploadStatus {
   FAILED = "FAILED"
 }
 
+export enum RefundStatus {
+  NONE = "NONE",
+  PENDING = "PENDING",
+  PROCESSING = "PROCESSING",
+  NEEDS_ATTENTION = "NEEDS_ATTENTION",
+  PROCESSED = "PROCESSED",
+  FAILED = "FAILED"
+}
+
+export enum CancellationStage {
+  BEFORE_ACCEPTANCE = "BEFORE_ACCEPTANCE",
+  ACCEPTED = "ACCEPTED",
+  COURIER_ARRIVED = "COURIER_ARRIVED",
+  PICKUP_STARTED = "PICKUP_STARTED",
+  PICKED_UP = "PICKED_UP",
+  IN_TRANSIT = "IN_TRANSIT",
+  DELIVERED = "DELIVERED"
+}
+
+export enum CancellationReason {
+  CHANGED_MIND = "CHANGED_MIND",
+  WRONG_ADDRESS = "WRONG_ADDRESS",
+  WRONG_ORDER = "WRONG_ORDER",
+  TOO_EXPENSIVE = "TOO_EXPENSIVE",
+  TOO_LONG_TO_WAIT = "TOO_LONG_TO_WAIT",
+  NO_LONGER_NEEDED = "NO_LONGER_NEEDED",
+  COURIER_DELAY = "COURIER_DELAY",
+  COURIER_REQUEST = "COURIER_REQUEST",
+  SYSTEM_ERROR = "SYSTEM_ERROR",
+  OTHER = "OTHER"
+}
+
+export enum CancellationStatus {
+  NONE = "NONE",
+  REQUESTED = "REQUESTED",
+  PROCESSING = "PROCESSING",
+  COMPLETED = "COMPLETED",
+  FAILED = "FAILED",
+  REJECTED = "REJECTED"
+}
+
 export enum OrderStatus {
   BIDDING = "BIDDING",
+  AWAITING_PAYMENT = "AWAITING_PAYMENT",
   READY_FOR_PICKUP = "READY_FOR_PICKUP",
   ACCEPTED = "ACCEPTED",
   ARRIVED_PICKUP = "ARRIVED_PICKUP",
@@ -172,6 +227,40 @@ type LazyVerifiedPaymentDetails = {
 export declare type VerifiedPaymentDetails = LazyLoading extends LazyLoadingDisabled ? EagerVerifiedPaymentDetails : LazyVerifiedPaymentDetails
 
 export declare const VerifiedPaymentDetails: (new (init: ModelInit<VerifiedPaymentDetails>) => VerifiedPaymentDetails)
+
+type EagerChargeAtuaPaymentMethodResult = {
+  readonly success: boolean;
+  readonly message: string;
+  readonly reference?: string | null;
+  readonly orderId?: string | null;
+}
+
+type LazyChargeAtuaPaymentMethodResult = {
+  readonly success: boolean;
+  readonly message: string;
+  readonly reference?: string | null;
+  readonly orderId?: string | null;
+}
+
+export declare type ChargeAtuaPaymentMethodResult = LazyLoading extends LazyLoadingDisabled ? EagerChargeAtuaPaymentMethodResult : LazyChargeAtuaPaymentMethodResult
+
+export declare const ChargeAtuaPaymentMethodResult: (new (init: ModelInit<ChargeAtuaPaymentMethodResult>) => ChargeAtuaPaymentMethodResult)
+
+type EagerDeleteSavedPaymentMethodResult = {
+  readonly success: boolean;
+  readonly message: string;
+  readonly paymentMethodId?: string | null;
+}
+
+type LazyDeleteSavedPaymentMethodResult = {
+  readonly success: boolean;
+  readonly message: string;
+  readonly paymentMethodId?: string | null;
+}
+
+export declare type DeleteSavedPaymentMethodResult = LazyLoading extends LazyLoadingDisabled ? EagerDeleteSavedPaymentMethodResult : LazyDeleteSavedPaymentMethodResult
+
+export declare const DeleteSavedPaymentMethodResult: (new (init: ModelInit<DeleteSavedPaymentMethodResult>) => DeleteSavedPaymentMethodResult)
 
 type EagerProcessPayoutsResponse = {
   readonly statusCode: number;
@@ -307,6 +396,66 @@ export declare type CourierCompany = LazyLoading extends LazyLoadingDisabled ? E
 
 export declare const CourierCompany: (new (init: ModelInit<CourierCompany>) => CourierCompany) & {
   copyOf(source: CourierCompany, mutator: (draft: MutableModel<CourierCompany>) => MutableModel<CourierCompany> | void): CourierCompany;
+}
+
+type EagerPaymentMethod = {
+  readonly [__modelMeta__]: {
+    identifier: ManagedIdentifier<PaymentMethod, 'id'>;
+  };
+  readonly id: string;
+  readonly owner: string;
+  readonly userID: string;
+  readonly paystackEnvironment?: PaystackEnvironment | keyof typeof PaystackEnvironment | null;
+  readonly provider: string;
+  readonly authorizationCode: string;
+  readonly signature: string;
+  readonly cardType?: string | null;
+  readonly last4?: string | null;
+  readonly expMonth?: string | null;
+  readonly expYear?: string | null;
+  readonly bank?: string | null;
+  readonly countryCode?: string | null;
+  readonly channel?: string | null;
+  readonly reusable: boolean;
+  readonly email: string;
+  readonly isDefault: boolean;
+  readonly status: PaymentMethodStatus | keyof typeof PaymentMethodStatus;
+  readonly deactivatedAt?: string | null;
+  readonly createdAt?: string | null;
+  readonly updatedAt?: string | null;
+}
+
+type LazyPaymentMethod = {
+  readonly [__modelMeta__]: {
+    identifier: ManagedIdentifier<PaymentMethod, 'id'>;
+  };
+  readonly id: string;
+  readonly owner: string;
+  readonly userID: string;
+  readonly paystackEnvironment?: PaystackEnvironment | keyof typeof PaystackEnvironment | null;
+  readonly provider: string;
+  readonly authorizationCode: string;
+  readonly signature: string;
+  readonly cardType?: string | null;
+  readonly last4?: string | null;
+  readonly expMonth?: string | null;
+  readonly expYear?: string | null;
+  readonly bank?: string | null;
+  readonly countryCode?: string | null;
+  readonly channel?: string | null;
+  readonly reusable: boolean;
+  readonly email: string;
+  readonly isDefault: boolean;
+  readonly status: PaymentMethodStatus | keyof typeof PaymentMethodStatus;
+  readonly deactivatedAt?: string | null;
+  readonly createdAt?: string | null;
+  readonly updatedAt?: string | null;
+}
+
+export declare type PaymentMethod = LazyLoading extends LazyLoadingDisabled ? EagerPaymentMethod : LazyPaymentMethod
+
+export declare const PaymentMethod: (new (init: ModelInit<PaymentMethod>) => PaymentMethod) & {
+  copyOf(source: PaymentMethod, mutator: (draft: MutableModel<PaymentMethod>) => MutableModel<PaymentMethod> | void): PaymentMethod;
 }
 
 type EagerPayout = {
@@ -533,6 +682,74 @@ export declare const Offer: (new (init: ModelInit<Offer>) => Offer) & {
   copyOf(source: Offer, mutator: (draft: MutableModel<Offer>) => MutableModel<Offer> | void): Offer;
 }
 
+type EagerOrderCancellation = {
+  readonly [__modelMeta__]: {
+    identifier: ManagedIdentifier<OrderCancellation, 'id'>;
+  };
+  readonly id: string;
+  readonly orderID: string;
+  readonly userID: string;
+  readonly courierID?: string | null;
+  readonly status: CancellationStatus | keyof typeof CancellationStatus;
+  readonly stage: CancellationStage | keyof typeof CancellationStage;
+  readonly reason?: CancellationReason | keyof typeof CancellationReason | null;
+  readonly reasonNote?: string | null;
+  readonly originalAmount: number;
+  readonly cancellationFee: number;
+  readonly refundAmount: number;
+  readonly refundStatus: RefundStatus | keyof typeof RefundStatus;
+  readonly refundReference?: string | null;
+  readonly paymentReference?: string | null;
+  readonly cancellationRequestedAt: string;
+  readonly cancellationProcessedAt?: string | null;
+  readonly refundRequestedAt?: string | null;
+  readonly refundedAt?: string | null;
+  readonly courierReversed: boolean;
+  readonly courierEarningsReversed: boolean;
+  readonly walletReversed: boolean;
+  readonly assignmentReversed: boolean;
+  readonly errorMessage?: string | null;
+  readonly createdAt?: string | null;
+  readonly updatedAt?: string | null;
+}
+
+type LazyOrderCancellation = {
+  readonly [__modelMeta__]: {
+    identifier: ManagedIdentifier<OrderCancellation, 'id'>;
+  };
+  readonly id: string;
+  readonly orderID: string;
+  readonly userID: string;
+  readonly courierID?: string | null;
+  readonly status: CancellationStatus | keyof typeof CancellationStatus;
+  readonly stage: CancellationStage | keyof typeof CancellationStage;
+  readonly reason?: CancellationReason | keyof typeof CancellationReason | null;
+  readonly reasonNote?: string | null;
+  readonly originalAmount: number;
+  readonly cancellationFee: number;
+  readonly refundAmount: number;
+  readonly refundStatus: RefundStatus | keyof typeof RefundStatus;
+  readonly refundReference?: string | null;
+  readonly paymentReference?: string | null;
+  readonly cancellationRequestedAt: string;
+  readonly cancellationProcessedAt?: string | null;
+  readonly refundRequestedAt?: string | null;
+  readonly refundedAt?: string | null;
+  readonly courierReversed: boolean;
+  readonly courierEarningsReversed: boolean;
+  readonly walletReversed: boolean;
+  readonly assignmentReversed: boolean;
+  readonly errorMessage?: string | null;
+  readonly createdAt?: string | null;
+  readonly updatedAt?: string | null;
+}
+
+export declare type OrderCancellation = LazyLoading extends LazyLoadingDisabled ? EagerOrderCancellation : LazyOrderCancellation
+
+export declare const OrderCancellation: (new (init: ModelInit<OrderCancellation>) => OrderCancellation) & {
+  copyOf(source: OrderCancellation, mutator: (draft: MutableModel<OrderCancellation>) => MutableModel<OrderCancellation> | void): OrderCancellation;
+}
+
 type EagerOrder = {
   readonly [__modelMeta__]: {
     identifier: ManagedIdentifier<Order, 'id'>;
@@ -556,6 +773,18 @@ type EagerOrder = {
   readonly transportationType?: string | null;
   readonly vehicleClass?: string | null;
   readonly status?: OrderStatus | keyof typeof OrderStatus | null;
+  readonly cancellationStatus?: CancellationStatus | keyof typeof CancellationStatus | null;
+  readonly refundStatus?: RefundStatus | keyof typeof RefundStatus | null;
+  readonly cancellationFee?: number | null;
+  readonly refundAmount?: number | null;
+  readonly cancellationReason?: CancellationReason | keyof typeof CancellationReason | null;
+  readonly cancellationReasonNote?: string | null;
+  readonly cancellationStage?: CancellationStage | keyof typeof CancellationStage | null;
+  readonly cancellationRequestedAt?: string | null;
+  readonly cancellationProcessedAt?: string | null;
+  readonly refundReference?: string | null;
+  readonly refundRequestedAt?: string | null;
+  readonly refundedAt?: string | null;
   readonly hasNewOffer?: boolean | null;
   readonly lastOfferAt?: string | null;
   readonly lastOfferSenderType?: string | null;
@@ -686,6 +915,18 @@ type LazyOrder = {
   readonly transportationType?: string | null;
   readonly vehicleClass?: string | null;
   readonly status?: OrderStatus | keyof typeof OrderStatus | null;
+  readonly cancellationStatus?: CancellationStatus | keyof typeof CancellationStatus | null;
+  readonly refundStatus?: RefundStatus | keyof typeof RefundStatus | null;
+  readonly cancellationFee?: number | null;
+  readonly refundAmount?: number | null;
+  readonly cancellationReason?: CancellationReason | keyof typeof CancellationReason | null;
+  readonly cancellationReasonNote?: string | null;
+  readonly cancellationStage?: CancellationStage | keyof typeof CancellationStage | null;
+  readonly cancellationRequestedAt?: string | null;
+  readonly cancellationProcessedAt?: string | null;
+  readonly refundReference?: string | null;
+  readonly refundRequestedAt?: string | null;
+  readonly refundedAt?: string | null;
   readonly hasNewOffer?: boolean | null;
   readonly lastOfferAt?: string | null;
   readonly lastOfferSenderType?: string | null;
@@ -1159,6 +1400,7 @@ type EagerUser = {
   readonly courierReports?: (CourierReport | null)[] | null;
   readonly Orders?: (Order | null)[] | null;
   readonly payments?: (Payment | null)[] | null;
+  readonly paymentMethods?: (PaymentMethod | null)[] | null;
   readonly createdAt?: string | null;
   readonly updatedAt?: string | null;
 }
@@ -1185,6 +1427,7 @@ type LazyUser = {
   readonly courierReports: AsyncCollection<CourierReport>;
   readonly Orders: AsyncCollection<Order>;
   readonly payments: AsyncCollection<Payment>;
+  readonly paymentMethods: AsyncCollection<PaymentMethod>;
   readonly createdAt?: string | null;
   readonly updatedAt?: string | null;
 }

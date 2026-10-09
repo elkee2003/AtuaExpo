@@ -10,6 +10,13 @@ const { SSMClient, GetParameterCommand } = require("@aws-sdk/client-ssm");
 const https = require("https");
 const crypto = require("crypto");
 
+const { SignatureV4 } = require("@aws-sdk/signature-v4");
+const { HttpRequest } = require("@aws-sdk/protocol-http");
+const { defaultProvider } = require("@aws-sdk/credential-provider-node");
+const { Sha256 } = require("@aws-crypto/sha256-js");
+
+const { saveReusablePaymentMethod } = require("./paymentMethodHelper");
+
 /* ==========================================================
    CONFIGURATION
 ========================================================== */
@@ -146,6 +153,827 @@ const graphqlRequest = async (
     request.write(body);
     request.end();
   });
+};
+
+/* ==========================================================
+   IAM/SIGV4 GRAPHQL REQUEST
+========================================================== */
+
+/*
+ * IMPORTANT:
+ *
+ * Most of this webhook currently uses the AppSync API key.
+ *
+ * OrderCancellation is different.
+ *
+ * Its schema allows backend access through:
+ *
+ *   allow: private
+ *   provider: iam
+ *
+ * Therefore refund webhook operations against
+ * OrderCancellation MUST use IAM/SigV4.
+ *
+ * We keep this separate from graphqlRequest() so that
+ * existing payment and payout behaviour is not changed.
+ */
+
+const graphqlRequestIAM = async (
+  query,
+  variables = {},
+  operationName = "GraphQL IAM operation",
+) => {
+  if (!GRAPHQL_ENDPOINT) {
+    throw new Error("Atua GraphQL endpoint is not configured.");
+  }
+
+  if (!REGION) {
+    throw new Error("AWS region is not configured.");
+  }
+
+  const endpoint = new URL(GRAPHQL_ENDPOINT);
+
+  const body = JSON.stringify({
+    query,
+    variables,
+  });
+
+  const request = new HttpRequest({
+    method: "POST",
+
+    protocol: endpoint.protocol,
+
+    hostname: endpoint.hostname,
+
+    path: endpoint.pathname || "/graphql",
+
+    headers: {
+      host: endpoint.hostname,
+
+      "content-type": "application/json",
+
+      "content-length": String(Buffer.byteLength(body)),
+    },
+
+    body,
+  });
+
+  /*
+   * Sign the AppSync request using the Lambda's
+   * IAM execution role.
+   */
+  const signer = new SignatureV4({
+    credentials: defaultProvider(),
+
+    region: REGION,
+
+    service: "appsync",
+
+    sha256: Sha256,
+  });
+
+  const signedRequest = await signer.sign(request);
+
+  return new Promise((resolve, reject) => {
+    const options = {
+      hostname: signedRequest.hostname,
+
+      port: signedRequest.port,
+
+      path: signedRequest.path,
+
+      method: signedRequest.method,
+
+      headers: signedRequest.headers,
+    };
+
+    const requestObject = https.request(options, (response) => {
+      let data = "";
+
+      response.on("data", (chunk) => {
+        data += chunk;
+      });
+
+      response.on("end", () => {
+        let parsed;
+
+        try {
+          parsed = data ? JSON.parse(data) : {};
+        } catch (error) {
+          console.error(`${operationName} INVALID JSON:`, {
+            statusCode: response.statusCode,
+            body: data,
+          });
+
+          return reject(new Error(`${operationName} returned invalid JSON.`));
+        }
+
+        if (response.statusCode < 200 || response.statusCode >= 300) {
+          console.error(`${operationName} HTTP ERROR:`, {
+            statusCode: response.statusCode,
+            body: parsed,
+          });
+
+          return reject(
+            new Error(`${operationName} returned HTTP ${response.statusCode}.`),
+          );
+        }
+
+        if (parsed?.errors?.length) {
+          console.error(
+            `${operationName} GRAPHQL ERRORS:`,
+            JSON.stringify(parsed.errors),
+          );
+
+          return reject(
+            new Error(
+              parsed.errors
+                .map((item) => item?.message)
+                .filter(Boolean)
+                .join(" | ") || `${operationName} failed.`,
+            ),
+          );
+        }
+
+        resolve(parsed?.data || null);
+      });
+    });
+
+    requestObject.on("error", (error) => {
+      console.error(`${operationName} REQUEST ERROR:`, error);
+
+      reject(error);
+    });
+
+    requestObject.end();
+  });
+};
+
+/* ==========================================================
+   GET ORDER CANCELLATION BY PAYMENT REFERENCE
+========================================================== */
+
+/*
+ * Paystack refund webhooks contain the original transaction
+ * reference.
+ *
+ * We use that reference to find the OrderCancellation record
+ * that belongs to the refund.
+ *
+ * OrderCancellation is protected by IAM, so this MUST use
+ * graphqlRequestIAM().
+ */
+const getOrderCancellationByPaymentReference = async (paymentReference) => {
+  if (!paymentReference) {
+    throw new Error("Payment reference is required to find OrderCancellation.");
+  }
+
+  const query = `
+    query ListOrderCancellations(
+      $filter: ModelOrderCancellationFilterInput
+    ) {
+      listOrderCancellations(
+        filter: $filter
+        limit: 10
+      ) {
+        items {
+          id
+
+          orderID
+          userID
+          courierID
+
+          status
+          stage
+
+          reason
+          reasonNote
+
+          originalAmount
+          cancellationFee
+          refundAmount
+
+          refundStatus
+          refundReference
+          paymentReference
+
+          cancellationRequestedAt
+          cancellationProcessedAt
+
+          refundRequestedAt
+          refundedAt
+
+          courierReversed
+          courierEarningsReversed
+          walletReversed
+          assignmentReversed
+
+          errorMessage
+
+          createdAt
+          updatedAt
+
+          _version
+          _lastChangedAt
+          _deleted
+        }
+      }
+    }
+  `;
+
+  const data = await graphqlRequestIAM(
+    query,
+    {
+      filter: {
+        paymentReference: {
+          eq: paymentReference,
+        },
+      },
+    },
+    "GetOrderCancellationByPaymentReference",
+  );
+
+  const cancellation =
+    data?.listOrderCancellations?.items?.find((item) => !item?._deleted) ||
+    null;
+
+  return cancellation;
+};
+
+/* ==========================================================
+   UPDATE ORDER CANCELLATION REFUND STATUS
+========================================================== */
+
+/*
+ * Updates the OrderCancellation record when Paystack sends
+ * refund lifecycle events.
+ *
+ * This uses IAM because OrderCancellation allows backend
+ * access through the IAM authorization rule.
+ */
+const updateOrderCancellationRefund = async ({
+  cancellation,
+  refundStatus,
+  status,
+  refundReference,
+  refundedAt,
+  cancellationProcessedAt,
+  errorMessage,
+}) => {
+  if (!cancellation?.id) {
+    throw new Error("OrderCancellation is required for refund update.");
+  }
+
+  const mutation = `
+    mutation UpdateOrderCancellation(
+      $input: UpdateOrderCancellationInput!
+    ) {
+      updateOrderCancellation(
+        input: $input
+      ) {
+        id
+
+        orderID
+        userID
+        courierID
+
+        status
+        stage
+
+        originalAmount
+        cancellationFee
+        refundAmount
+
+        refundStatus
+        refundReference
+        paymentReference
+
+        cancellationRequestedAt
+        cancellationProcessedAt
+
+        refundRequestedAt
+        refundedAt
+
+        courierReversed
+        courierEarningsReversed
+        walletReversed
+        assignmentReversed
+
+        errorMessage
+
+        createdAt
+        updatedAt
+
+        _version
+        _lastChangedAt
+        _deleted
+      }
+    }
+  `;
+
+  const input = {
+    id: cancellation.id,
+    refundStatus,
+    status,
+  };
+
+  /*
+   * Preserve the existing Paystack refund reference if the
+   * current webhook does not provide one.
+   */
+  if (refundReference) {
+    input.refundReference = refundReference;
+  }
+
+  if (refundedAt) {
+    input.refundedAt = refundedAt;
+  }
+
+  if (cancellationProcessedAt) {
+    input.cancellationProcessedAt = cancellationProcessedAt;
+  }
+
+  if (errorMessage !== undefined) {
+    input.errorMessage = errorMessage;
+  }
+
+  /*
+   * AppSync/DataStore conflict version.
+   *
+   * Your current webhook already works with _version on
+   * DataStore-backed models, so preserve it when available.
+   */
+  if (Number.isInteger(cancellation._version)) {
+    input._version = cancellation._version;
+  }
+
+  console.log("UPDATING ORDER CANCELLATION REFUND:", {
+    cancellationID: cancellation.id,
+    orderID: cancellation.orderID,
+    refundStatus,
+    status,
+    refundReference,
+    refundedAt,
+    cancellationProcessedAt,
+    errorMessage,
+    version: cancellation._version,
+  });
+
+  const data = await graphqlRequestIAM(
+    mutation,
+    {
+      input,
+    },
+    "UpdateOrderCancellationRefund",
+  );
+
+  const updatedCancellation = data?.updateOrderCancellation || null;
+
+  if (!updatedCancellation) {
+    throw new Error(
+      `OrderCancellation ${cancellation.id} was not returned after refund update.`,
+    );
+  }
+
+  return updatedCancellation;
+};
+
+/* ==========================================================
+   UPDATE ORDER REFUND STATUS
+========================================================== */
+
+/*
+ * Order is currently handled by the existing AppSync API-key
+ * path in your webhook.
+ *
+ * We therefore keep Order updates on graphqlRequest()
+ * rather than changing the existing authorization model.
+ */
+const updateOrderRefundStatus = async ({
+  orderID,
+  refundStatus,
+  cancellationStatus,
+  refundReference,
+  refundedAt,
+  cancellationProcessedAt,
+}) => {
+  if (!orderID) {
+    throw new Error("Order ID is required for refund status update.");
+  }
+
+  const mutation = `
+    mutation UpdateOrderRefundStatus(
+      $input: UpdateOrderInput!
+    ) {
+      updateOrder(
+        input: $input
+      ) {
+        id
+
+        status
+
+        cancellationStatus
+        refundStatus
+
+        refundReference
+        refundRequestedAt
+        refundedAt
+
+        cancellationProcessedAt
+
+        _version
+        _lastChangedAt
+        _deleted
+      }
+    }
+  `;
+
+  const input = {
+    id: orderID,
+    refundStatus,
+    cancellationStatus,
+  };
+
+  if (refundReference) {
+    input.refundReference = refundReference;
+  }
+
+  if (refundedAt) {
+    input.refundedAt = refundedAt;
+  }
+
+  if (cancellationProcessedAt) {
+    input.cancellationProcessedAt = cancellationProcessedAt;
+  }
+
+  console.log("UPDATING ORDER REFUND STATUS:", {
+    orderID,
+    refundStatus,
+    cancellationStatus,
+    refundReference,
+    refundedAt,
+    cancellationProcessedAt,
+  });
+
+  const data = await graphqlRequest(
+    mutation,
+    {
+      input,
+    },
+    "UpdateOrderRefundStatus",
+  );
+
+  const updatedOrder = data?.updateOrder || null;
+
+  if (!updatedOrder) {
+    throw new Error(
+      `Order ${orderID} was not returned after refund status update.`,
+    );
+  }
+
+  return updatedOrder;
+};
+
+/* ==========================================================
+   PROCESS PAYSTACK REFUND WEBHOOK
+========================================================== */
+
+/*
+ * Paystack refund lifecycle:
+ *
+ * refund.pending
+ * refund.processing
+ * refund.needs-attention
+ * refund.failed
+ * refund.processed
+ *
+ * IMPORTANT:
+ *
+ * The refund API request being accepted does NOT mean that
+ * the customer has received the money.
+ *
+ * The financial refund is only considered completed when
+ * Paystack sends:
+ *
+ *     refund.processed
+ *
+ * This function is also deliberately idempotent because
+ * Paystack may send the same webhook more than once.
+ */
+const processPaystackRefundWebhook = async ({ event, refund }) => {
+  if (!event) {
+    throw new Error("Refund webhook event is required.");
+  }
+
+  if (!refund) {
+    throw new Error("Refund webhook data is required.");
+  }
+
+  const paymentReference =
+    refund.transaction_reference || refund.transaction?.reference || null;
+
+  if (!paymentReference) {
+    throw new Error(
+      `Paystack ${event} refund does not contain transaction_reference.`,
+    );
+  }
+
+  const currency = String(refund.currency || "NGN").toUpperCase();
+
+  if (currency !== "NGN") {
+    throw new Error(
+      `Unsupported refund currency: ${currency}. Atua expects NGN refunds.`,
+    );
+  }
+
+  /*
+   * Paystack amounts are in kobo.
+   */
+  const refundAmountKobo = Number(refund.amount);
+
+  if (!Number.isFinite(refundAmountKobo) || refundAmountKobo < 0) {
+    throw new Error(`Invalid Paystack refund amount: ${refund.amount}`);
+  }
+
+  console.log("PROCESSING PAYSTACK REFUND:", {
+    event,
+    paymentReference,
+    refundID: refund.id || null,
+    amountKobo: refundAmountKobo,
+    currency,
+    status: refund.status || null,
+  });
+
+  /* ========================================================
+     FIND ORDER CANCELLATION
+  ======================================================== */
+
+  const cancellation =
+    await getOrderCancellationByPaymentReference(paymentReference);
+
+  if (!cancellation) {
+    throw new Error(
+      `No OrderCancellation found for Paystack refund transaction reference ${paymentReference}.`,
+    );
+  }
+
+  if (cancellation._deleted) {
+    throw new Error(`OrderCancellation ${cancellation.id} has been deleted.`);
+  }
+
+  /* ========================================================
+     VALIDATE REFUND AMOUNT
+  ======================================================== */
+
+  const expectedRefundKobo = Math.round(
+    Number(cancellation.refundAmount || 0) * 100,
+  );
+
+  if (refundAmountKobo !== expectedRefundKobo) {
+    throw new Error(
+      `Refund amount mismatch for ${paymentReference}. ` +
+        `Expected ${expectedRefundKobo} kobo but Paystack sent ${refundAmountKobo} kobo.`,
+    );
+  }
+
+  /*
+   * Use Paystack's refund ID/reference when available.
+   */
+  const refundReference =
+    refund.reference || (refund.id != null ? String(refund.id) : null);
+
+  const now = new Date().toISOString();
+
+  /* ========================================================
+     IDEMPOTENCY
+  ======================================================== */
+
+  /*
+   * If the refund has already reached PROCESSED and the
+   * cancellation has already completed, there is nothing
+   * more to do.
+   */
+  if (
+    event === "refund.processed" &&
+    cancellation.refundStatus === "PROCESSED" &&
+    cancellation.status === "COMPLETED"
+  ) {
+    console.log("REFUND ALREADY COMPLETED - IGNORING DUPLICATE WEBHOOK:", {
+      cancellationID: cancellation.id,
+      orderID: cancellation.orderID,
+      paymentReference,
+      refundReference,
+    });
+
+    return {
+      handled: true,
+      alreadyProcessed: true,
+      status: "PROCESSED",
+      paymentReference,
+      refundReference,
+      cancellationID: cancellation.id,
+      orderID: cancellation.orderID,
+    };
+  }
+
+  /* ========================================================
+     REFUND.PENDING
+  ======================================================== */
+
+  if (event === "refund.pending") {
+    const updatedCancellation = await updateOrderCancellationRefund({
+      cancellation,
+      refundStatus: "PENDING",
+      status: "PROCESSING",
+      refundReference,
+    });
+
+    const updatedOrder = await updateOrderRefundStatus({
+      orderID: cancellation.orderID,
+      refundStatus: "PENDING",
+      cancellationStatus: "PROCESSING",
+      refundReference,
+    });
+
+    return {
+      handled: true,
+      alreadyProcessed: false,
+      status: "PENDING",
+      paymentReference,
+      refundReference,
+      cancellationID: updatedCancellation.id,
+      orderID: updatedOrder.id,
+    };
+  }
+
+  /* ========================================================
+     REFUND.PROCESSING
+  ======================================================== */
+
+  if (event === "refund.processing") {
+    const updatedCancellation = await updateOrderCancellationRefund({
+      cancellation,
+      refundStatus: "PROCESSING",
+      status: "PROCESSING",
+      refundReference,
+    });
+
+    const updatedOrder = await updateOrderRefundStatus({
+      orderID: cancellation.orderID,
+      refundStatus: "PROCESSING",
+      cancellationStatus: "PROCESSING",
+      refundReference,
+    });
+
+    return {
+      handled: true,
+      alreadyProcessed: false,
+      status: "PROCESSING",
+      paymentReference,
+      refundReference,
+      cancellationID: updatedCancellation.id,
+      orderID: updatedOrder.id,
+    };
+  }
+
+  /* ========================================================
+     REFUND.NEEDS-ATTENTION
+  ======================================================== */
+
+  if (event === "refund.needs-attention") {
+    const attentionMessage =
+      refund.message ||
+      refund.reason ||
+      "Paystack requires additional customer information to complete the refund.";
+
+    const updatedCancellation = await updateOrderCancellationRefund({
+      cancellation,
+      refundStatus: "NEEDS_ATTENTION",
+      status: "PROCESSING",
+      refundReference,
+      errorMessage: attentionMessage,
+    });
+
+    const updatedOrder = await updateOrderRefundStatus({
+      orderID: cancellation.orderID,
+      refundStatus: "NEEDS_ATTENTION",
+      cancellationStatus: "PROCESSING",
+      refundReference,
+    });
+
+    console.warn("REFUND NEEDS CUSTOMER ATTENTION:", {
+      cancellationID: cancellation.id,
+      orderID: cancellation.orderID,
+      paymentReference,
+      message: attentionMessage,
+    });
+
+    return {
+      handled: true,
+      alreadyProcessed: false,
+      status: "NEEDS_ATTENTION",
+      paymentReference,
+      refundReference,
+      cancellationID: updatedCancellation.id,
+      orderID: updatedOrder.id,
+      message: attentionMessage,
+    };
+  }
+
+  /* ========================================================
+     REFUND.FAILED
+  ======================================================== */
+
+  if (event === "refund.failed") {
+    const failureMessage =
+      refund.message ||
+      refund.reason ||
+      refund.failure_reason ||
+      "Paystack refund failed.";
+
+    const updatedCancellation = await updateOrderCancellationRefund({
+      cancellation,
+      refundStatus: "FAILED",
+      status: "FAILED",
+      refundReference,
+      errorMessage: failureMessage,
+    });
+
+    const updatedOrder = await updateOrderRefundStatus({
+      orderID: cancellation.orderID,
+      refundStatus: "FAILED",
+      cancellationStatus: "FAILED",
+      refundReference,
+    });
+
+    console.error("PAYSTACK REFUND FAILED:", {
+      cancellationID: cancellation.id,
+      orderID: cancellation.orderID,
+      paymentReference,
+      refundReference,
+      reason: failureMessage,
+    });
+
+    return {
+      handled: true,
+      alreadyProcessed: false,
+      status: "FAILED",
+      paymentReference,
+      refundReference,
+      cancellationID: updatedCancellation.id,
+      orderID: updatedOrder.id,
+      message: failureMessage,
+    };
+  }
+
+  /* ========================================================
+     REFUND.PROCESSED
+  ======================================================== */
+
+  if (event === "refund.processed") {
+    const updatedCancellation = await updateOrderCancellationRefund({
+      cancellation,
+      refundStatus: "PROCESSED",
+      status: "COMPLETED",
+      refundReference,
+      refundedAt: now,
+      cancellationProcessedAt: now,
+      errorMessage: null,
+    });
+
+    const updatedOrder = await updateOrderRefundStatus({
+      orderID: cancellation.orderID,
+      refundStatus: "PROCESSED",
+      cancellationStatus: "COMPLETED",
+      refundReference,
+      refundedAt: now,
+      cancellationProcessedAt: now,
+    });
+
+    console.log("PAYSTACK REFUND PROCESSED SUCCESSFULLY:", {
+      cancellationID: cancellation.id,
+      orderID: cancellation.orderID,
+      paymentReference,
+      refundReference,
+      refundedAt: now,
+    });
+
+    return {
+      handled: true,
+      alreadyProcessed: false,
+      status: "PROCESSED",
+      paymentReference,
+      refundReference,
+      cancellationID: updatedCancellation.id,
+      orderID: updatedOrder.id,
+      refundedAt: now,
+    };
+  }
+
+  /*
+   * Defensive fallback.
+   */
+  throw new Error(`Unsupported Paystack refund event: ${event}`);
 };
 
 /* ==========================================================
@@ -821,12 +1649,19 @@ const finalizePaidOrder = async ({ order, payment, transaction }) => {
    * again.
    */
 
+  const expectedPostPaymentStatus =
+    order.transportationType === "MAXI" ? "ACCEPTED" : "READY_FOR_PICKUP";
+
   if (
     order.paymentStatus === "PAID" &&
     order.paymentID === payment.id &&
-    order.paymentReference === transaction.reference
+    order.paymentReference === transaction.reference &&
+    order.status === expectedPostPaymentStatus &&
+    order.deliveryVerificationCode &&
+    order.recipientTrackingToken &&
+    order.recipientTrackingEnabled === true
   ) {
-    console.log("ORDER ALREADY FINALIZED AS PAID:", {
+    console.log("ORDER ALREADY FULLY FINALIZED:", {
       orderID: order.id,
       paymentID: payment.id,
       reference: transaction.reference,
@@ -871,6 +1706,9 @@ const finalizePaidOrder = async ({ order, payment, transaction }) => {
     }
   `;
 
+  const paymentFinalizedStatus =
+    order.transportationType === "MAXI" ? "ACCEPTED" : "READY_FOR_PICKUP";
+
   const input = {
     id: order.id,
 
@@ -879,6 +1717,8 @@ const finalizePaidOrder = async ({ order, payment, transaction }) => {
     paymentID: payment.id,
 
     paymentReference: transaction.reference,
+
+    status: paymentFinalizedStatus,
 
     fundsStatus: "HELD",
 
@@ -914,6 +1754,12 @@ const finalizePaidOrder = async ({ order, payment, transaction }) => {
     orderID: order.id,
     paymentID: payment.id,
     reference: transaction.reference,
+
+    previousStatus: order.status,
+    newStatus: paymentFinalizedStatus,
+
+    transportationType: order.transportationType,
+
     paymentStatus: input.paymentStatus,
     fundsStatus: input.fundsStatus,
     earningsAllocationStatus: input.earningsAllocationStatus,
@@ -940,6 +1786,7 @@ const finalizePaidOrder = async ({ order, payment, transaction }) => {
     paymentStatus: updatedOrder.paymentStatus,
     paymentID: updatedOrder.paymentID,
     paymentReference: updatedOrder.paymentReference,
+    status: updatedOrder.status,
     fundsStatus: updatedOrder.fundsStatus,
     earningsAllocationStatus: updatedOrder.earningsAllocationStatus,
     orderEnvironment: updatedOrder.orderEnvironment,
@@ -1033,56 +1880,86 @@ const parseWebhookBody = (event) => {
   };
 };
 
-/* ==========================================================
-   EXTRACT ORDER ID
-========================================================== */
-
-/*
- * Paystack references used by Atua can contain the Order ID.
+/**
+ * Extract the actual Atua Order ID from a Paystack transaction.
  *
- * This helper keeps the extraction logic in one place.
+ * Priority:
+ *
+ * 1. Paystack metadata.orderId / orderID / order_id
+ * 2. Normal payment reference:
+ *      atua_<orderId>_<timestamp>
+ * 3. Saved-card payment reference:
+ *      atua-saved-<orderId>-<timestamp>-<random>
+ *
+ * IMPORTANT:
+ * Never return the complete Paystack reference as the Order ID.
  */
-
 const extractOrderId = (transaction) => {
-  if (!transaction) {
+  // ---------------------------------------------------------
+  // 1. Read Paystack metadata
+  // ---------------------------------------------------------
+  let metadata = transaction?.metadata || {};
+
+  // Paystack metadata may arrive as an object OR as a JSON string.
+  if (typeof metadata === "string") {
+    try {
+      metadata = JSON.parse(metadata);
+    } catch (error) {
+      console.warn("PAYSTACK METADATA COULD NOT BE PARSED.");
+      metadata = {};
+    }
+  }
+
+  // ---------------------------------------------------------
+  // 2. Prefer the actual Order ID from metadata
+  // ---------------------------------------------------------
+  const metadataOrderId =
+    metadata?.orderId || metadata?.orderID || metadata?.order_id || null;
+
+  if (metadataOrderId) {
+    return String(metadataOrderId);
+  }
+
+  // ---------------------------------------------------------
+  // 3. Fall back to parsing the Paystack reference
+  // ---------------------------------------------------------
+  const reference = String(transaction?.reference || "").trim();
+
+  if (!reference) {
     return null;
   }
 
-  /*
-   * Metadata is the preferred source where available.
-   */
-  const metadata = transaction.metadata;
+  // ---------------------------------------------------------
+  // Normal new-card payment:
+  //
+  // atua_<orderId>_<timestamp>
+  //
+  // Example:
+  // atua_f7d1431a-655f-4ac7-9445-04ec90cf21e9_1791483241146
+  // ---------------------------------------------------------
+  const normalPaymentMatch = reference.match(/^atua_(.+)_\d+$/);
 
-  if (metadata && typeof metadata === "object") {
-    if (typeof metadata.orderID === "string" && metadata.orderID) {
-      return metadata.orderID;
-    }
-
-    if (typeof metadata.orderId === "string" && metadata.orderId) {
-      return metadata.orderId;
-    }
-
-    if (typeof metadata.order_id === "string" && metadata.order_id) {
-      return metadata.order_id;
-    }
+  if (normalPaymentMatch?.[1]) {
+    return normalPaymentMatch[1];
   }
 
-  /*
-   * Also support the existing reference format.
-   *
-   * The original webhook uses the reference as a
-   * fallback source for locating the Order.
-   */
-  const reference = transaction.reference;
+  // ---------------------------------------------------------
+  // Saved-card payment:
+  //
+  // atua-saved-<orderId>-<timestamp>-<random>
+  //
+  // Example:
+  // atua-saved-f7d1431a-655f-4ac7-9445-04ec90cf21e9-1791483241146-a1b2c3d4
+  // ---------------------------------------------------------
+  const savedPaymentMatch = reference.match(/^atua-saved-(.+)-\d+-[a-f0-9]+$/i);
 
-  if (typeof reference === "string" && reference) {
-    /*
-     * If the reference itself is an Order ID,
-     * return it.
-     */
-    return reference;
+  if (savedPaymentMatch?.[1]) {
+    return savedPaymentMatch[1];
   }
 
+  // ---------------------------------------------------------
+  // NEVER return the full Paystack reference.
+  // ---------------------------------------------------------
   return null;
 };
 
@@ -2379,6 +3256,54 @@ exports.handler = async (event) => {
     console.log("PAYSTACK WEBHOOK EVENT:", eventName);
 
     /* ======================================================
+   PAYSTACK REFUND EVENTS
+====================================================== */
+
+    /*
+     * These events belong to customer order refunds.
+     *
+     * They are completely separate from:
+     *
+     * - charge.success
+     * - transfer.success
+     * - transfer.failed
+     * - transfer.reversed
+     *
+     * Refund processing is handled by
+     * processPaystackRefundWebhook().
+     */
+
+    if (
+      eventName === "refund.pending" ||
+      eventName === "refund.processing" ||
+      eventName === "refund.needs-attention" ||
+      eventName === "refund.failed" ||
+      eventName === "refund.processed"
+    ) {
+      const refund = payload?.data;
+
+      if (!refund) {
+        throw new Error(
+          `Paystack ${eventName} webhook does not contain refund data.`,
+        );
+      }
+
+      const result = await processPaystackRefundWebhook({
+        event: eventName,
+
+        refund,
+      });
+
+      return httpResponse(200, {
+        success: true,
+
+        message: "Paystack refund webhook processed.",
+
+        result,
+      });
+    }
+
+    /* ======================================================
        PAYSTACK TRANSFER EVENTS
     ====================================================== */
 
@@ -2602,6 +3527,132 @@ exports.handler = async (event) => {
      */
 
     order = await incrementMaxiCourierCount(order);
+
+    /* ======================================================
+       SAVE REUSABLE PAYSTACK CARD
+    ====================================================== */
+
+    /**
+     * IMPORTANT:
+     *
+     * At this point the payment has already been:
+     *
+     * 1. Verified by Paystack
+     * 2. Created/located in Atua
+     * 3. Finalized on the Order
+     * 4. Confirmed as PAID
+     * 5. Passed all payment validation checks
+     *
+     * Saving the card is therefore an additional operation.
+     *
+     * If saving the card fails, we DO NOT fail the payment
+     * webhook because the customer's payment was already
+     * successful.
+     */
+
+    try {
+      const authorization = transaction?.authorization;
+
+      /**
+       * Only save cards that Paystack explicitly marks as
+       * reusable.
+       */
+      if (
+        authorization &&
+        authorization.reusable === true &&
+        authorization.authorization_code &&
+        authorization.signature
+      ) {
+        /**
+         * Paystack normally provides the customer email here.
+         *
+         * We check a few possible locations so that a minor
+         * Paystack payload variation does not prevent saving
+         * an otherwise valid reusable authorization.
+         */
+        const customerEmail =
+          transaction?.customer?.email ||
+          transaction?.customer?.customer_email ||
+          transaction?.email ||
+          null;
+
+        if (customerEmail) {
+          const result = await saveReusablePaymentMethod({
+            endpoint: GRAPHQL_ENDPOINT,
+            region: REGION,
+
+            userID: order.userID,
+
+            authorization,
+
+            email: customerEmail,
+
+            /**
+             * IMPORTANT:
+             *
+             * This must be the actual Paystack secret key being
+             * used by this Lambda.
+             *
+             * paymentMethodHelper.js will determine:
+             *
+             * sk_test_... -> TEST
+             * sk_live_... -> LIVE
+             *
+             * Do NOT use order.orderEnvironment here.
+             *
+             * order.orderEnvironment is Atua's operational
+             * TEST/PRODUCTION order environment, which is
+             * completely separate from Paystack TEST/LIVE.
+             */
+            paystackSecretKey: secretKey,
+          });
+
+          console.log("PAYMENT METHOD SAVE RESULT:", {
+            orderId: order.id,
+            userID: order.userID,
+            saved: result?.saved,
+            created: result?.created,
+            reactivated: result?.reactivated || false,
+            paymentMethodId: result?.paymentMethod?.id || null,
+            last4: result?.paymentMethod?.last4 || null,
+          });
+        } else {
+          console.log(
+            "PAYMENT METHOD NOT SAVED: Paystack customer email unavailable.",
+            {
+              orderId: order.id,
+            },
+          );
+        }
+      } else {
+        console.log(
+          "PAYMENT METHOD NOT SAVED: No reusable Paystack authorization.",
+          {
+            orderId: order.id,
+            hasAuthorization: !!authorization,
+            reusable: authorization?.reusable,
+            hasAuthorizationCode: !!authorization?.authorization_code,
+            hasSignature: !!authorization?.signature,
+          },
+        );
+      }
+    } catch (paymentMethodError) {
+      /**
+       * IMPORTANT:
+       *
+       * The payment has already succeeded.
+       *
+       * Therefore an error while saving the reusable card
+       * must NOT cause the Paystack webhook to return 500.
+       *
+       * The customer must still receive a successful payment.
+       */
+      console.error("SAVE PAYMENT METHOD ERROR:", {
+        orderId: order.id,
+        userID: order.userID,
+        error: paymentMethodError?.message || paymentMethodError,
+      });
+    }
 
     /* ======================================================
        SUCCESS

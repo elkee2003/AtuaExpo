@@ -1,7 +1,10 @@
 import { useAuthContext } from "@/providers/AuthProvider";
 import { useLocationContext } from "@/providers/LocationProvider";
 import { useOrderContext } from "@/providers/OrderProvider";
-import { verifyAtuaPayment } from "@/src/graphql/mutations";
+import {
+  chargeAtuaPaymentMethod,
+  verifyAtuaPayment,
+} from "@/src/graphql/mutations";
 import { Order } from "@/src/models";
 
 import Ionicons from "@expo/vector-icons/Ionicons";
@@ -23,6 +26,7 @@ import {
 import { usePaystack } from "react-native-paystack-webview";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import SavedPaymentMethods from "./SavedPaymentMethods";
 import styles from "./styles";
 
 //==================================================
@@ -501,6 +505,300 @@ const Payment = () => {
   };
 
   //================================================
+  // SAVED PAYMENT METHOD
+  //================================================
+
+  const handlePayWithSavedCard = async (paymentMethod) => {
+    //-------------------------------------
+    // Prevent Multiple Presses
+    //-------------------------------------
+
+    if (paymentLoading) {
+      return;
+    }
+
+    //-------------------------------------
+    // Validate Order
+    //-------------------------------------
+
+    if (!order?.id) {
+      Alert.alert(
+        "Order Unavailable",
+        "We could not find the order you are trying to pay for.",
+      );
+
+      return;
+    }
+
+    //-------------------------------------
+    // Validate Payment Method
+    //-------------------------------------
+
+    if (!paymentMethod?.id) {
+      Alert.alert(
+        "Payment Method Unavailable",
+        "Please select a saved card and try again.",
+      );
+
+      return;
+    }
+
+    //-------------------------------------
+    // Already Paid
+    //-------------------------------------
+
+    if (order.paymentStatus === "PAID") {
+      if (order.deliveryVerificationCode) {
+        Alert.alert(
+          "Payment Already Confirmed",
+          `This order has already been paid.\n\nDelivery Verification Code: ${order.deliveryVerificationCode}\n\nKeep this code safe. It will be required to complete your delivery.`,
+          [
+            {
+              text: "Continue",
+              onPress: () => completePaymentFlow(order.id),
+            },
+          ],
+        );
+      } else {
+        Alert.alert(
+          "Payment Already Confirmed",
+          "This order has already been paid. You can continue to your order.",
+          [
+            {
+              text: "Continue",
+              onPress: () => completePaymentFlow(order.id),
+            },
+          ],
+        );
+      }
+
+      return;
+    }
+
+    //-------------------------------------
+    // Start Loading
+    //-------------------------------------
+
+    setPaymentLoading(true);
+
+    try {
+      //-------------------------------------
+      // Charge Saved Payment Method
+      //-------------------------------------
+
+      console.log("CHARGING SAVED PAYMENT METHOD:", {
+        orderId: order.id,
+        paymentMethodId: paymentMethod.id,
+      });
+
+      const result = await client.graphql({
+        query: chargeAtuaPaymentMethod,
+
+        // IMPORTANT:
+        // This mutation must use the authenticated
+        // Cognito User Pool session.
+        //
+        // The Lambda uses the Cognito sub to verify:
+        //
+        //     signed-in user
+        //          ↓
+        //     owns PaymentMethod
+        //          ↓
+        //     owns Order
+        //
+        authMode: "userPool",
+
+        variables: {
+          orderId: order.id,
+          paymentMethodId: paymentMethod.id,
+        },
+      });
+
+      console.log("SAVED PAYMENT METHOD RESPONSE:", result);
+
+      //-------------------------------------
+      // Extract Result
+      //-------------------------------------
+
+      const chargeResult = result?.data?.chargeAtuaPaymentMethod;
+
+      if (!chargeResult) {
+        throw new Error(
+          "The saved-card payment service returned an invalid response.",
+        );
+      }
+
+      //-------------------------------------
+      // Backend Rejected Charge
+      //-------------------------------------
+
+      if (!chargeResult.success) {
+        throw new Error(
+          chargeResult.message || "The saved card could not be charged.",
+        );
+      }
+
+      //-------------------------------------
+      // IMPORTANT
+      //
+      // The response above does NOT mean that
+      // the Order is finally paid.
+      //
+      // Paystack charge_authorization must be
+      // followed by the Paystack webhook.
+      //
+      // The webhook updates the Order.
+      // DataStore then synchronizes the Order.
+      //-------------------------------------
+
+      console.log("SAVED CARD CHARGE ACCEPTED:", {
+        orderId: order.id,
+        paymentMethodId: paymentMethod.id,
+        reference: chargeResult.reference || null,
+      });
+
+      //-------------------------------------
+      // Wait For Order To Become PAID
+      //-------------------------------------
+
+      console.log("WAITING FOR SAVED CARD PAYMENT TO SYNC...");
+
+      let syncedOrder;
+
+      try {
+        syncedOrder = await waitForOrderSync(order.id, 30000);
+
+        console.log("SAVED CARD ORDER SUCCESSFULLY SYNCED:", {
+          id: syncedOrder.id,
+          paymentStatus: syncedOrder.paymentStatus,
+          paymentID: syncedOrder.paymentID,
+          status: syncedOrder.status,
+          fundsStatus: syncedOrder.fundsStatus,
+          deliveryVerificationCode: syncedOrder.deliveryVerificationCode,
+        });
+      } catch (syncError) {
+        console.error("SAVED CARD ORDER DATASTORE SYNC FAILED:", syncError);
+
+        //-------------------------------------
+        // IMPORTANT:
+        //
+        // Do NOT tell the customer to pay again.
+        //
+        // The saved card charge may already have
+        // succeeded and the webhook may simply
+        // still be processing/synchronizing.
+        //-------------------------------------
+
+        Alert.alert(
+          "Payment Processing",
+          "Your saved card payment was submitted successfully, but we're still confirming your order. Please do not make another payment yet.",
+          [
+            {
+              text: "OK",
+            },
+          ],
+        );
+
+        return;
+      }
+
+      //-------------------------------------
+      // Final Confirmation
+      //-------------------------------------
+
+      const verificationCode = syncedOrder.deliveryVerificationCode;
+
+      if (!verificationCode) {
+        Alert.alert(
+          "Payment Confirmed",
+          "Your payment was confirmed, but your delivery verification code is still being synchronized. Please continue to your order.",
+          [
+            {
+              text: "Continue",
+              onPress: () => completePaymentFlow(order.id),
+            },
+          ],
+        );
+
+        return;
+      }
+
+      //-------------------------------------
+      // Payment Successful
+      //-------------------------------------
+
+      Alert.alert(
+        "Payment Successful",
+        `Your payment has been confirmed successfully.\n\nDelivery Verification Code: ${verificationCode}\n\nKeep this code safe. It will be required to complete your delivery.`,
+        [
+          {
+            text: "Continue",
+            onPress: () => completePaymentFlow(order.id),
+          },
+        ],
+      );
+    } catch (error) {
+      console.log("SAVED PAYMENT METHOD ERROR:", error);
+
+      //-------------------------------------
+      // GraphQL Error
+      //-------------------------------------
+
+      const graphQLError = error?.errors?.[0]?.message;
+
+      const message =
+        graphQLError ||
+        error?.message ||
+        "We could not process the saved card payment.";
+
+      //-------------------------------------
+      // IMPORTANT:
+      //
+      // Do not tell the customer to simply
+      // pay again.
+      //-------------------------------------
+
+      Alert.alert(
+        "Saved Card Payment",
+        `${message}\n\nIf you were charged, do not make another payment yet.`,
+      );
+    } finally {
+      setPaymentLoading(false);
+    }
+  };
+
+  //================================================
+  // USE NEW CARD
+  //================================================
+
+  const handleUseNewCard = () => {
+    //-------------------------------------
+    // Prevent Action During Payment
+    //-------------------------------------
+
+    if (paymentLoading) {
+      return;
+    }
+
+    //-------------------------------------
+    // Start Normal Paystack Checkout
+    //-------------------------------------
+    //
+    // The existing handlePay() already:
+    //
+    // 1. Validates the order
+    // 2. Validates the email
+    // 3. Validates the amount
+    // 4. Checks whether the order is already paid
+    // 5. Opens Paystack checkout
+    //
+    // Therefore we simply reuse it.
+    //-------------------------------------
+
+    handlePay();
+  };
+
+  //================================================
   // PAYSTACK CANCEL
   //================================================
 
@@ -670,41 +968,27 @@ const Payment = () => {
     try {
       popup.checkout({
         email: dbUser.email,
-
         amount,
-
         reference,
-
         currency: "NGN",
 
-        channels: ["card"],
-
-        //---------------------------------
-        // Add Order ID To Paystack
-        //---------------------------------
+        // Do NOT specify channels here.
+        // Paystack will show the payment channels
+        // available for this transaction/account.
 
         metadata: {
           custom_fields: [
             {
               display_name: "Atua Order ID",
-
               variable_name: "order_id",
-
               value: order.id,
             },
           ],
         },
 
-        //---------------------------------
-        // Callbacks
-        //---------------------------------
-
         onSuccess: handleSuccess,
-
         onCancel: handleCancel,
-
         onLoad: handlePaystackLoad,
-
         onError: handlePaystackError,
       });
     } catch (error) {
@@ -872,6 +1156,15 @@ const Payment = () => {
             <Text style={styles.totalValue}>₦{formattedAmount}</Text>
           </View>
         </View>
+
+        {/* =================================
+            SAVED PAYMENT METHODS
+        ================================= */}
+        <SavedPaymentMethods
+          onPayWithSavedCard={handlePayWithSavedCard}
+          onUseNewCard={handleUseNewCard}
+          paymentLoading={paymentLoading}
+        />
 
         {/* =================================
             SECURITY

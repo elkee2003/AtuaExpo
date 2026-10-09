@@ -2,6 +2,7 @@ import ProfileProvider from "@/providers/ProfileProvider";
 import { resumePendingUploads } from "@/utils/resumePendingUploads";
 import { uploadEvidence } from "@/utils/uploadEvidence";
 
+import { AuthModeStrategyType, DataStore } from "@aws-amplify/datastore";
 import { Amplify } from "aws-amplify";
 import { Stack } from "expo-router";
 import React, { useEffect } from "react";
@@ -22,6 +23,14 @@ import amplifyconfig from "../src/amplifyconfiguration.json";
 //-----------------------------------------
 
 Amplify.configure(amplifyconfig);
+
+//-----------------------------------------
+// DataStore Multi-Auth Configuration
+//-----------------------------------------
+
+DataStore.configure({
+  authModeStrategyType: AuthModeStrategyType.MULTI_AUTH,
+});
 
 //-----------------------------------------
 // Paystack Public Key

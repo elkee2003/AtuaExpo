@@ -86,12 +86,32 @@ const DefaultTrackingSheet = ({
         Order History
       </Text>
 
-      {/* CANCEL */}
-      {order.status === "READY_FOR_PICKUP" && (
-        <TouchableOpacity style={styles.cancelBtn} onPress={onCancel}>
-          <Text style={styles.cancelText}>Cancel Order</Text>
-        </TouchableOpacity>
-      )}
+      {/* ==================================================
+          CANCEL ORDER
+      ================================================== */}
+
+      {
+        // Payment must already be confirmed.
+        // -----------------------------------------------
+        ((order.status === "READY_FOR_PICKUP" &&
+          order.paymentStatus === "PAID") ||
+          // -----------------------------------------------
+          // MAXI
+          //
+          // MAXI can only be cancelled AFTER:
+          // 1. Courier has accepted
+          // 2. User has paid
+          // At this point the courier's MAXI count has
+          // already been increased.
+          // -----------------------------------------------
+          (order.transportationType === "MAXI" &&
+            order.status === "ACCEPTED" &&
+            order.paymentStatus === "PAID")) && (
+          <TouchableOpacity style={styles.cancelBtn} onPress={onCancel}>
+            <Text style={styles.cancelText}>Cancel Order</Text>
+          </TouchableOpacity>
+        )
+      }
 
       {/* DRIVER CARD */}
       {showDriverCard && (

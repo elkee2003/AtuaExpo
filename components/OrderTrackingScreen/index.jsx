@@ -48,6 +48,7 @@ import { Courier, CourierLiveLocation, Offer, Order } from "@/src/models";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import BottomSheet, { BottomSheetView } from "@gorhom/bottom-sheet";
 
+import { generateClient } from "aws-amplify/api";
 import { DataStore } from "aws-amplify/datastore";
 import { getUrl } from "aws-amplify/storage";
 
@@ -76,6 +77,24 @@ import MaxiBiddingSheet from "./Maxi";
 import RetryUploadBanner from "./Maxi/RetryUploadBanner";
 
 import styles from "./styles";
+
+// ==================================================
+// AMPLIFY GRAPHQL CLIENT
+// ==================================================
+//
+// Used for the authenticated cancelOrder mutation.
+//
+// The cancelOrder schema uses:
+//
+// @auth(rules: [{ allow: private, provider: userPools }])
+//
+// Therefore we explicitly use:
+//
+// authMode: "userPool"
+//
+// ==================================================
+
+const client = generateClient();
 
 // ==================================================
 // COORDINATE HELPERS
@@ -269,6 +288,8 @@ const OrderTrackingScreen = ({ orderId }) => {
 
   const [isMapReady, setIsMapReady] = useState(false);
 
+  const [cancellationLoading, setCancellationLoading] = useState(false);
+
   const [isFollowingCourier, setIsFollowingCourier] = useState(true);
 
   // NEW:
@@ -359,6 +380,381 @@ const OrderTrackingScreen = ({ orderId }) => {
     },
     [orderId],
   );
+
+  // ==================================================
+  // CANCEL ORDER
+  // ==================================================
+  //
+  // This is the SINGLE cancellation handler used by:
+  //
+  // 1. DefaultTrackingSheet
+  // 2. MaxiBiddingSheet
+  //
+  // The UI does NOT directly update the Order.
+  //
+  // Instead:
+  //
+  // User
+  //   ↓
+  // Confirmation
+  //   ↓
+  // cancelOrder GraphQL mutation
+  //   ↓
+  // cancelOrder Lambda
+  //   ↓
+  // Backend validates cancellation eligibility
+  //   ↓
+  // Micro / Moto:
+  //      Paystack refund initiated
+  //      Order cancelled
+  //
+  // Maxi:
+  //      ACCEPTED + PAID
+  //      Paystack refund initiated
+  //      Order cancelled
+  //      Courier MAXI count will be reversed
+  //
+  // The Paystack webhook is responsible for completing
+  // the refund lifecycle.
+  //
+  // The Paystack webhook is responsible for completing
+  // the refund lifecycle for paid Micro/Moto orders.
+  //
+  // ==================================================
+
+  const handleCancelOrder = useCallback(() => {
+    // --------------------------------------------------
+    // SAFETY CHECK
+    // --------------------------------------------------
+    //
+    // We cannot cancel without an Order.
+    //
+    // --------------------------------------------------
+
+    if (!order?.id) {
+      Alert.alert(
+        "Unable to Cancel",
+        "The order information is not available yet.",
+      );
+
+      return;
+    }
+
+    // --------------------------------------------------
+    // PREVENT DUPLICATE REQUESTS
+    // --------------------------------------------------
+    //
+    // If a cancellation request is already being sent,
+    // do nothing.
+    //
+    // --------------------------------------------------
+
+    if (cancellationLoading) {
+      return;
+    }
+
+    // --------------------------------------------------
+    // CHECK THE CLIENT-SIDE ELIGIBILITY
+    // --------------------------------------------------
+    //
+    // This mirrors the backend cancellation rules.
+    //
+    // IMPORTANT:
+    //
+    // The backend Lambda remains the final authority.
+    // This check is only for protecting the UI.
+    //
+    // --------------------------------------------------
+
+    const isMaxi = order.transportationType === "MAXI";
+
+    const isPaidMaxi =
+      isMaxi && order.status === "ACCEPTED" && order.paymentStatus === "PAID";
+
+    const isPaidMicroOrMoto =
+      !isMaxi &&
+      order.status === "READY_FOR_PICKUP" &&
+      order.paymentStatus === "PAID";
+
+    const canCancel = isPaidMaxi || isPaidMicroOrMoto;
+
+    if (!canCancel) {
+      Alert.alert(
+        "Cannot Cancel Order",
+        "This order can no longer be cancelled.",
+      );
+
+      return;
+    }
+
+    // --------------------------------------------------
+    // DETERMINE REFUND TYPE
+    // --------------------------------------------------
+    //
+    // Both of the currently cancellable cases are PAID:
+    //
+    // 1. Micro / Moto
+    //    READY_FOR_PICKUP + PAID
+    //
+    // 2. MAXI
+    //    ACCEPTED + PAID
+    //
+    // Therefore both require a refund.
+    //
+    // --------------------------------------------------
+
+    const requiresRefund = isPaidMaxi || isPaidMicroOrMoto;
+
+    // --------------------------------------------------
+    // CONFIRMATION MESSAGE
+    // --------------------------------------------------
+
+    const confirmationMessage = requiresRefund
+      ? isPaidMaxi
+        ? `Are you sure you want to cancel this Maxi delivery?\n\nYour payment of ₦${Number(
+            order.totalPrice || 0,
+          ).toLocaleString(
+            "en-NG",
+          )} will be refunded to your original payment method.`
+        : `Are you sure you want to cancel this order?\n\nYour payment of ₦${Number(
+            order.totalPrice || 0,
+          ).toLocaleString(
+            "en-NG",
+          )} will be refunded to your original payment method.`
+      : "Are you sure you want to cancel this order?";
+
+    // --------------------------------------------------
+    // ASK FOR CONFIRMATION
+    // --------------------------------------------------
+
+    Alert.alert(
+      "Cancel Order",
+      confirmationMessage,
+      [
+        {
+          text: "Keep Order",
+          style: "cancel",
+        },
+        {
+          text: "Cancel Order",
+          style: "destructive",
+
+          onPress: async () => {
+            try {
+              // ------------------------------------------------
+              // START LOADING
+              // ------------------------------------------------
+
+              setCancellationLoading(true);
+
+              console.log("CANCEL ORDER REQUEST STARTED:", {
+                orderId: order.id,
+                transportationType: order.transportationType,
+                status: order.status,
+                paymentStatus: order.paymentStatus,
+                paymentReference: order.paymentReference,
+                orderEnvironment: order.orderEnvironment,
+              });
+
+              // ------------------------------------------------
+              // CANCEL ORDER MUTATION
+              // ------------------------------------------------
+              //
+              // We intentionally use an inline mutation here
+              // rather than depending on a generated mutation
+              // file.
+              //
+              // This also makes it very clear which fields
+              // the mobile app expects from the Lambda.
+              //
+              // ------------------------------------------------
+
+              const mutation = /* GraphQL */ `
+                mutation CancelOrder(
+                  $orderID: ID!
+                  $reason: CancellationReason
+                  $reasonNote: String
+                ) {
+                  cancelOrder(
+                    orderID: $orderID
+                    reason: $reason
+                    reasonNote: $reasonNote
+                  ) {
+                    id
+                    orderID
+                    userID
+                    status
+                    stage
+                    reason
+                    reasonNote
+                    originalAmount
+                    cancellationFee
+                    refundAmount
+                    refundStatus
+                    refundReference
+                    paymentReference
+                    cancellationRequestedAt
+                    cancellationProcessedAt
+                    refundRequestedAt
+                    refundedAt
+                    courierReversed
+                    courierEarningsReversed
+                    walletReversed
+                    assignmentReversed
+                    errorMessage
+                    createdAt
+                    updatedAt
+                  }
+                }
+              `;
+
+              // ------------------------------------------------
+              // CALL BACKEND
+              // ------------------------------------------------
+              //
+              // cancelOrder is protected by Cognito user-pool
+              // authentication.
+              //
+              // Therefore we explicitly use:
+              //
+              // authMode: "userPool"
+              //
+              // ------------------------------------------------
+
+              const result = await client.graphql({
+                query: mutation,
+                authMode: "userPool",
+                variables: {
+                  orderID: order.id,
+
+                  // We are not forcing a reason here because
+                  // your current Cancel Order buttons do not
+                  // ask the user for a cancellation reason.
+                  //
+                  // The backend schema allows this field to
+                  // be optional.
+                  reason: null,
+
+                  reasonNote: null,
+                },
+              });
+
+              // ------------------------------------------------
+              // GET CANCELLATION RESULT
+              // ------------------------------------------------
+
+              const cancellation = result?.data?.cancelOrder;
+
+              console.log("CANCEL ORDER RESPONSE:", cancellation);
+
+              // ------------------------------------------------
+              // VALIDATE BACKEND RESPONSE
+              // ------------------------------------------------
+
+              if (!cancellation?.id) {
+                throw new Error(
+                  "The cancellation request did not return a valid cancellation record.",
+                );
+              }
+
+              // ------------------------------------------------
+              // REFRESH ORDER FROM DATASTORE
+              // ------------------------------------------------
+              //
+              // Do not manually manufacture a new Order object.
+              //
+              // The Lambda has already updated the backend.
+              //
+              // DataStore will synchronize the actual Order.
+              //
+              // We perform an immediate query as an additional
+              // synchronization check.
+              //
+              // ------------------------------------------------
+
+              await refreshOrder({
+                reason: "ORDER_CANCELLED",
+                log: true,
+              });
+
+              bottomSheetRef.current?.close();
+
+              // --------------------------------------------------
+              // SHOW CANCELLATION RESULT
+              // --------------------------------------------------
+              //
+              // At this stage, both Micro/Moto and paid MAXI have
+              // made a payment.
+              //
+              // Therefore both follow the refund path.
+              //
+              // IMPORTANT:
+              //
+              // "Refund initiated" does NOT mean the money has
+              // already returned to the customer's bank/card.
+              //
+              // Paystack's refund webhook will later confirm the
+              // actual refund lifecycle.
+              //
+              // --------------------------------------------------
+
+              const refundAmount = Number(
+                cancellation.refundAmount || order.totalPrice || 0,
+              );
+
+              Alert.alert(
+                "Order Cancelled",
+                refundAmount > 0
+                  ? `Your order has been cancelled successfully.\n\nA refund of ₦${refundAmount.toLocaleString(
+                      "en-NG",
+                    )} has been initiated to your original payment method.`
+                  : "Your order has been cancelled successfully.",
+                [
+                  {
+                    text: "OK",
+                    onPress: () => router.back(),
+                  },
+                ],
+                {
+                  cancelable: false,
+                },
+              );
+            } catch (error) {
+              // ------------------------------------------------
+              // LOG FULL ERROR
+              // ------------------------------------------------
+
+              console.log("CANCEL ORDER ERROR:", error);
+
+              // ------------------------------------------------
+              // EXTRACT A USEFUL MESSAGE
+              // ------------------------------------------------
+
+              const errorMessage =
+                error?.errors?.[0]?.message ||
+                error?.message ||
+                "Something went wrong while cancelling your order.";
+
+              // ------------------------------------------------
+              // SHOW ERROR
+              // ------------------------------------------------
+
+              Alert.alert("Cancellation Failed", errorMessage);
+            } finally {
+              // ------------------------------------------------
+              // ALWAYS STOP LOADING
+              // ------------------------------------------------
+
+              setCancellationLoading(false);
+            }
+          },
+        },
+      ],
+      {
+        cancelable: true,
+      },
+    );
+  }, [order, cancellationLoading, refreshOrder]);
 
   // =================================================
   // INITIAL ORDER LOAD + ORDER SUBSCRIPTION
@@ -1924,7 +2320,7 @@ const OrderTrackingScreen = ({ orderId }) => {
               bottomSheetRef={bottomSheetRef}
               onAcceptOffer={handleAcceptOffer}
               onCounterOffer={handleCounterOffer}
-              onCancel={() => router.back()}
+              onCancel={handleCancelOrder}
             />
           ) : (
             /* =================================
@@ -1936,7 +2332,7 @@ const OrderTrackingScreen = ({ orderId }) => {
               courier={courier}
               courierImageUrl={courierImageUrl}
               driverCardAnim={driverCardAnim}
-              onCancel={() => router.back()}
+              onCancel={handleCancelOrder}
             />
           )}
         </BottomSheetView>

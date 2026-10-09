@@ -1,23 +1,31 @@
 {
   "api": {
     "Atua": {
-      "dependsOn": [],
+      "dependsOn": [
+        {
+          "attributes": [
+            "UserPoolId"
+          ],
+          "category": "auth",
+          "resourceName": "atuac06ab999c06ab999"
+        }
+      ],
       "output": {
         "authConfig": {
           "additionalAuthenticationProviders": [
-            {
-              "authenticationType": "AWS_IAM"
-            },
             {
               "authenticationType": "AMAZON_COGNITO_USER_POOLS",
               "userPoolConfig": {
                 "userPoolId": "authatuac06ab999c06ab999"
               }
+            },
+            {
+              "authenticationType": "AWS_IAM"
             }
           ],
           "defaultAuthentication": {
             "apiKeyConfig": {
-              "apiKeyExpirationDate": "2027-06-11T07:16:26.610Z",
+              "apiKeyExpirationDate": "2027-10-08T13:34:11.243Z",
               "apiKeyExpirationDays": 365,
               "description": "2026/2027 API Key"
             },
@@ -117,6 +125,38 @@
       "providerPlugin": "awscloudformation",
       "service": "Lambda"
     },
+    "cancelOrder": {
+      "build": true,
+      "dependsOn": [
+        {
+          "attributes": [
+            "GraphQLAPIIdOutput",
+            "GraphQLAPIEndpointOutput",
+            "GraphQLAPIKeyOutput"
+          ],
+          "category": "api",
+          "resourceName": "Atua"
+        }
+      ],
+      "providerPlugin": "awscloudformation",
+      "service": "Lambda"
+    },
+    "chargeAtuaPaymentMethod": {
+      "build": true,
+      "dependsOn": [
+        {
+          "attributes": [
+            "GraphQLAPIIdOutput",
+            "GraphQLAPIEndpointOutput",
+            "GraphQLAPIKeyOutput"
+          ],
+          "category": "api",
+          "resourceName": "Atua"
+        }
+      ],
+      "providerPlugin": "awscloudformation",
+      "service": "Lambda"
+    },
     "checkUserGroup": {
       "build": true,
       "dependsOn": [
@@ -126,6 +166,38 @@
           ],
           "category": "auth",
           "resourceName": "atuac06ab999c06ab999"
+        }
+      ],
+      "providerPlugin": "awscloudformation",
+      "service": "Lambda"
+    },
+    "deleteOrder": {
+      "build": true,
+      "dependsOn": [
+        {
+          "attributes": [
+            "GraphQLAPIIdOutput",
+            "GraphQLAPIEndpointOutput",
+            "GraphQLAPIKeyOutput"
+          ],
+          "category": "api",
+          "resourceName": "Atua"
+        }
+      ],
+      "providerPlugin": "awscloudformation",
+      "service": "Lambda"
+    },
+    "deletePaymentMethod": {
+      "build": true,
+      "dependsOn": [
+        {
+          "attributes": [
+            "GraphQLAPIIdOutput",
+            "GraphQLAPIEndpointOutput",
+            "GraphQLAPIKeyOutput"
+          ],
+          "category": "api",
+          "resourceName": "Atua"
         }
       ],
       "providerPlugin": "awscloudformation",
@@ -347,6 +419,54 @@
         }
       ]
     },
+    "AMPLIFY_function_cancelOrder_deploymentBucketName": {
+      "usedBy": [
+        {
+          "category": "function",
+          "resourceName": "cancelOrder"
+        }
+      ]
+    },
+    "AMPLIFY_function_cancelOrder_s3Key": {
+      "usedBy": [
+        {
+          "category": "function",
+          "resourceName": "cancelOrder"
+        }
+      ]
+    },
+    "AMPLIFY_function_cancelOrder_secretsPathAmplifyAppId": {
+      "usedBy": [
+        {
+          "category": "function",
+          "resourceName": "cancelOrder"
+        }
+      ]
+    },
+    "AMPLIFY_function_chargeAtuaPaymentMethod_deploymentBucketName": {
+      "usedBy": [
+        {
+          "category": "function",
+          "resourceName": "chargeAtuaPaymentMethod"
+        }
+      ]
+    },
+    "AMPLIFY_function_chargeAtuaPaymentMethod_s3Key": {
+      "usedBy": [
+        {
+          "category": "function",
+          "resourceName": "chargeAtuaPaymentMethod"
+        }
+      ]
+    },
+    "AMPLIFY_function_chargeAtuaPaymentMethod_secretsPathAmplifyAppId": {
+      "usedBy": [
+        {
+          "category": "function",
+          "resourceName": "chargeAtuaPaymentMethod"
+        }
+      ]
+    },
     "AMPLIFY_function_checkUserGroup_deploymentBucketName": {
       "usedBy": [
         {
@@ -360,6 +480,46 @@
         {
           "category": "function",
           "resourceName": "checkUserGroup"
+        }
+      ]
+    },
+    "AMPLIFY_function_deleteOrder_deploymentBucketName": {
+      "usedBy": [
+        {
+          "category": "function",
+          "resourceName": "deleteOrder"
+        }
+      ]
+    },
+    "AMPLIFY_function_deleteOrder_s3Key": {
+      "usedBy": [
+        {
+          "category": "function",
+          "resourceName": "deleteOrder"
+        }
+      ]
+    },
+    "AMPLIFY_function_deletePaymentMethod_deploymentBucketName": {
+      "usedBy": [
+        {
+          "category": "function",
+          "resourceName": "deletePaymentMethod"
+        }
+      ]
+    },
+    "AMPLIFY_function_deletePaymentMethod_s3Key": {
+      "usedBy": [
+        {
+          "category": "function",
+          "resourceName": "deletePaymentMethod"
+        }
+      ]
+    },
+    "AMPLIFY_function_deletePaymentMethod_secretsPathAmplifyAppId": {
+      "usedBy": [
+        {
+          "category": "function",
+          "resourceName": "deletePaymentMethod"
         }
       ]
     },

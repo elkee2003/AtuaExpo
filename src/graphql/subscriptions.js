@@ -166,6 +166,108 @@ export const onDeleteCourierCompany = /* GraphQL */ `
     }
   }
 `;
+export const onCreatePaymentMethod = /* GraphQL */ `
+  subscription OnCreatePaymentMethod(
+    $filter: ModelSubscriptionPaymentMethodFilterInput
+    $owner: String
+  ) {
+    onCreatePaymentMethod(filter: $filter, owner: $owner) {
+      id
+      owner
+      userID
+      paystackEnvironment
+      provider
+      authorizationCode
+      signature
+      cardType
+      last4
+      expMonth
+      expYear
+      bank
+      countryCode
+      channel
+      reusable
+      email
+      isDefault
+      status
+      deactivatedAt
+      createdAt
+      updatedAt
+      _version
+      _deleted
+      _lastChangedAt
+      __typename
+    }
+  }
+`;
+export const onUpdatePaymentMethod = /* GraphQL */ `
+  subscription OnUpdatePaymentMethod(
+    $filter: ModelSubscriptionPaymentMethodFilterInput
+    $owner: String
+  ) {
+    onUpdatePaymentMethod(filter: $filter, owner: $owner) {
+      id
+      owner
+      userID
+      paystackEnvironment
+      provider
+      authorizationCode
+      signature
+      cardType
+      last4
+      expMonth
+      expYear
+      bank
+      countryCode
+      channel
+      reusable
+      email
+      isDefault
+      status
+      deactivatedAt
+      createdAt
+      updatedAt
+      _version
+      _deleted
+      _lastChangedAt
+      __typename
+    }
+  }
+`;
+export const onDeletePaymentMethod = /* GraphQL */ `
+  subscription OnDeletePaymentMethod(
+    $filter: ModelSubscriptionPaymentMethodFilterInput
+    $owner: String
+  ) {
+    onDeletePaymentMethod(filter: $filter, owner: $owner) {
+      id
+      owner
+      userID
+      paystackEnvironment
+      provider
+      authorizationCode
+      signature
+      cardType
+      last4
+      expMonth
+      expYear
+      bank
+      countryCode
+      channel
+      reusable
+      email
+      isDefault
+      status
+      deactivatedAt
+      createdAt
+      updatedAt
+      _version
+      _deleted
+      _lastChangedAt
+      __typename
+    }
+  }
+`;
 export const onCreatePayout = /* GraphQL */ `
   subscription OnCreatePayout($filter: ModelSubscriptionPayoutFilterInput) {
     onCreatePayout(filter: $filter) {
@@ -422,6 +524,18 @@ export const onCreatePayment = /* GraphQL */ `
         transportationType
         vehicleClass
         status
+        cancellationStatus
+        refundStatus
+        cancellationFee
+        refundAmount
+        cancellationReason
+        cancellationReasonNote
+        cancellationStage
+        cancellationRequestedAt
+        cancellationProcessedAt
+        refundReference
+        refundRequestedAt
+        refundedAt
         hasNewOffer
         lastOfferAt
         lastOfferSenderType
@@ -588,6 +702,18 @@ export const onUpdatePayment = /* GraphQL */ `
         transportationType
         vehicleClass
         status
+        cancellationStatus
+        refundStatus
+        cancellationFee
+        refundAmount
+        cancellationReason
+        cancellationReasonNote
+        cancellationStage
+        cancellationRequestedAt
+        cancellationProcessedAt
+        refundReference
+        refundRequestedAt
+        refundedAt
         hasNewOffer
         lastOfferAt
         lastOfferSenderType
@@ -754,6 +880,18 @@ export const onDeletePayment = /* GraphQL */ `
         transportationType
         vehicleClass
         status
+        cancellationStatus
+        refundStatus
+        cancellationFee
+        refundAmount
+        cancellationReason
+        cancellationReasonNote
+        cancellationStage
+        cancellationRequestedAt
+        cancellationProcessedAt
+        refundReference
+        refundRequestedAt
+        refundedAt
         hasNewOffer
         lastOfferAt
         lastOfferSenderType
@@ -913,6 +1051,18 @@ export const onCreateOffer = /* GraphQL */ `
         transportationType
         vehicleClass
         status
+        cancellationStatus
+        refundStatus
+        cancellationFee
+        refundAmount
+        cancellationReason
+        cancellationReasonNote
+        cancellationStage
+        cancellationRequestedAt
+        cancellationProcessedAt
+        refundReference
+        refundRequestedAt
+        refundedAt
         hasNewOffer
         lastOfferAt
         lastOfferSenderType
@@ -1113,6 +1263,18 @@ export const onUpdateOffer = /* GraphQL */ `
         transportationType
         vehicleClass
         status
+        cancellationStatus
+        refundStatus
+        cancellationFee
+        refundAmount
+        cancellationReason
+        cancellationReasonNote
+        cancellationStage
+        cancellationRequestedAt
+        cancellationProcessedAt
+        refundReference
+        refundRequestedAt
+        refundedAt
         hasNewOffer
         lastOfferAt
         lastOfferSenderType
@@ -1313,6 +1475,18 @@ export const onDeleteOffer = /* GraphQL */ `
         transportationType
         vehicleClass
         status
+        cancellationStatus
+        refundStatus
+        cancellationFee
+        refundAmount
+        cancellationReason
+        cancellationReasonNote
+        cancellationStage
+        cancellationRequestedAt
+        cancellationProcessedAt
+        refundReference
+        refundRequestedAt
+        refundedAt
         hasNewOffer
         lastOfferAt
         lastOfferSenderType
@@ -1489,6 +1663,120 @@ export const onDeleteOffer = /* GraphQL */ `
     }
   }
 `;
+export const onCreateOrderCancellation = /* GraphQL */ `
+  subscription OnCreateOrderCancellation(
+    $filter: ModelSubscriptionOrderCancellationFilterInput
+    $userID: String
+  ) {
+    onCreateOrderCancellation(filter: $filter, userID: $userID) {
+      id
+      orderID
+      userID
+      courierID
+      status
+      stage
+      reason
+      reasonNote
+      originalAmount
+      cancellationFee
+      refundAmount
+      refundStatus
+      refundReference
+      paymentReference
+      cancellationRequestedAt
+      cancellationProcessedAt
+      refundRequestedAt
+      refundedAt
+      courierReversed
+      courierEarningsReversed
+      walletReversed
+      assignmentReversed
+      errorMessage
+      createdAt
+      updatedAt
+      _version
+      _deleted
+      _lastChangedAt
+      __typename
+    }
+  }
+`;
+export const onUpdateOrderCancellation = /* GraphQL */ `
+  subscription OnUpdateOrderCancellation(
+    $filter: ModelSubscriptionOrderCancellationFilterInput
+    $userID: String
+  ) {
+    onUpdateOrderCancellation(filter: $filter, userID: $userID) {
+      id
+      orderID
+      userID
+      courierID
+      status
+      stage
+      reason
+      reasonNote
+      originalAmount
+      cancellationFee
+      refundAmount
+      refundStatus
+      refundReference
+      paymentReference
+      cancellationRequestedAt
+      cancellationProcessedAt
+      refundRequestedAt
+      refundedAt
+      courierReversed
+      courierEarningsReversed
+      walletReversed
+      assignmentReversed
+      errorMessage
+      createdAt
+      updatedAt
+      _version
+      _deleted
+      _lastChangedAt
+      __typename
+    }
+  }
+`;
+export const onDeleteOrderCancellation = /* GraphQL */ `
+  subscription OnDeleteOrderCancellation(
+    $filter: ModelSubscriptionOrderCancellationFilterInput
+    $userID: String
+  ) {
+    onDeleteOrderCancellation(filter: $filter, userID: $userID) {
+      id
+      orderID
+      userID
+      courierID
+      status
+      stage
+      reason
+      reasonNote
+      originalAmount
+      cancellationFee
+      refundAmount
+      refundStatus
+      refundReference
+      paymentReference
+      cancellationRequestedAt
+      cancellationProcessedAt
+      refundRequestedAt
+      refundedAt
+      courierReversed
+      courierEarningsReversed
+      walletReversed
+      assignmentReversed
+      errorMessage
+      createdAt
+      updatedAt
+      _version
+      _deleted
+      _lastChangedAt
+      __typename
+    }
+  }
+`;
 export const onCreateOrder = /* GraphQL */ `
   subscription OnCreateOrder($filter: ModelSubscriptionOrderFilterInput) {
     onCreateOrder(filter: $filter) {
@@ -1510,6 +1798,18 @@ export const onCreateOrder = /* GraphQL */ `
       transportationType
       vehicleClass
       status
+      cancellationStatus
+      refundStatus
+      cancellationFee
+      refundAmount
+      cancellationReason
+      cancellationReasonNote
+      cancellationStage
+      cancellationRequestedAt
+      cancellationProcessedAt
+      refundReference
+      refundRequestedAt
+      refundedAt
       hasNewOffer
       lastOfferAt
       lastOfferSenderType
@@ -1716,6 +2016,18 @@ export const onUpdateOrder = /* GraphQL */ `
       transportationType
       vehicleClass
       status
+      cancellationStatus
+      refundStatus
+      cancellationFee
+      refundAmount
+      cancellationReason
+      cancellationReasonNote
+      cancellationStage
+      cancellationRequestedAt
+      cancellationProcessedAt
+      refundReference
+      refundRequestedAt
+      refundedAt
       hasNewOffer
       lastOfferAt
       lastOfferSenderType
@@ -1922,6 +2234,18 @@ export const onDeleteOrder = /* GraphQL */ `
       transportationType
       vehicleClass
       status
+      cancellationStatus
+      refundStatus
+      cancellationFee
+      refundAmount
+      cancellationReason
+      cancellationReasonNote
+      cancellationStage
+      cancellationRequestedAt
+      cancellationProcessedAt
+      refundReference
+      refundRequestedAt
+      refundedAt
       hasNewOffer
       lastOfferAt
       lastOfferSenderType
@@ -2214,6 +2538,18 @@ export const onCreateCourierReport = /* GraphQL */ `
         transportationType
         vehicleClass
         status
+        cancellationStatus
+        refundStatus
+        cancellationFee
+        refundAmount
+        cancellationReason
+        cancellationReasonNote
+        cancellationStage
+        cancellationRequestedAt
+        cancellationProcessedAt
+        refundReference
+        refundRequestedAt
+        refundedAt
         hasNewOffer
         lastOfferAt
         lastOfferSenderType
@@ -2441,6 +2777,18 @@ export const onUpdateCourierReport = /* GraphQL */ `
         transportationType
         vehicleClass
         status
+        cancellationStatus
+        refundStatus
+        cancellationFee
+        refundAmount
+        cancellationReason
+        cancellationReasonNote
+        cancellationStage
+        cancellationRequestedAt
+        cancellationProcessedAt
+        refundReference
+        refundRequestedAt
+        refundedAt
         hasNewOffer
         lastOfferAt
         lastOfferSenderType
@@ -2668,6 +3016,18 @@ export const onDeleteCourierReport = /* GraphQL */ `
         transportationType
         vehicleClass
         status
+        cancellationStatus
+        refundStatus
+        cancellationFee
+        refundAmount
+        cancellationReason
+        cancellationReasonNote
+        cancellationStage
+        cancellationRequestedAt
+        cancellationProcessedAt
+        refundReference
+        refundRequestedAt
+        refundedAt
         hasNewOffer
         lastOfferAt
         lastOfferSenderType
@@ -2895,6 +3255,18 @@ export const onCreateCourierReview = /* GraphQL */ `
         transportationType
         vehicleClass
         status
+        cancellationStatus
+        refundStatus
+        cancellationFee
+        refundAmount
+        cancellationReason
+        cancellationReasonNote
+        cancellationStage
+        cancellationRequestedAt
+        cancellationProcessedAt
+        refundReference
+        refundRequestedAt
+        refundedAt
         hasNewOffer
         lastOfferAt
         lastOfferSenderType
@@ -3118,6 +3490,18 @@ export const onUpdateCourierReview = /* GraphQL */ `
         transportationType
         vehicleClass
         status
+        cancellationStatus
+        refundStatus
+        cancellationFee
+        refundAmount
+        cancellationReason
+        cancellationReasonNote
+        cancellationStage
+        cancellationRequestedAt
+        cancellationProcessedAt
+        refundReference
+        refundRequestedAt
+        refundedAt
         hasNewOffer
         lastOfferAt
         lastOfferSenderType
@@ -3341,6 +3725,18 @@ export const onDeleteCourierReview = /* GraphQL */ `
         transportationType
         vehicleClass
         status
+        cancellationStatus
+        refundStatus
+        cancellationFee
+        refundAmount
+        cancellationReason
+        cancellationReasonNote
+        cancellationStage
+        cancellationRequestedAt
+        cancellationProcessedAt
+        refundReference
+        refundRequestedAt
+        refundedAt
         hasNewOffer
         lastOfferAt
         lastOfferSenderType
@@ -4186,6 +4582,11 @@ export const onCreateUser = /* GraphQL */ `
         startedAt
         __typename
       }
+      paymentMethods {
+        nextToken
+        startedAt
+        __typename
+      }
       createdAt
       updatedAt
       _version
@@ -4231,6 +4632,11 @@ export const onUpdateUser = /* GraphQL */ `
         startedAt
         __typename
       }
+      paymentMethods {
+        nextToken
+        startedAt
+        __typename
+      }
       createdAt
       updatedAt
       _version
@@ -4272,6 +4678,11 @@ export const onDeleteUser = /* GraphQL */ `
         __typename
       }
       payments {
+        nextToken
+        startedAt
+        __typename
+      }
+      paymentMethods {
         nextToken
         startedAt
         __typename

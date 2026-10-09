@@ -13,6 +13,8 @@ const { SSMClient, GetParameterCommand } = require("@aws-sdk/client-ssm");
 const https = require("https");
 const crypto = require("crypto");
 
+const { saveReusablePaymentMethod } = require("./paymentMethodHelper");
+
 /* ==========================================================
    CONFIGURATION
 ========================================================== */
@@ -1092,6 +1094,105 @@ const buildPaymentDetails = ({
     paidAt: paidAt || null,
   };
 };
+
+/**
+ * ---------------------------------------------------------
+ * SAVE REUSABLE PAYSTACK PAYMENT METHOD
+ * ---------------------------------------------------------
+ *
+ * This helper is intentionally NON-FATAL.
+ *
+ * The payment has already been confirmed successfully.
+ * Therefore, if saving the card fails, we must NOT turn
+ * the successful payment into a failed payment.
+ *
+ * This is also safe to call multiple times because
+ * paymentMethodHelper.js uses the Paystack card signature
+ * to make the operation idempotent.
+ * ---------------------------------------------------------
+ */
+async function savePaymentMethodIfReusable({
+  order,
+  transaction,
+  paystackSecretKey,
+}) {
+  try {
+    const authorization = transaction?.authorization;
+
+    // Only save reusable Paystack authorizations.
+    if (
+      !authorization ||
+      authorization.reusable !== true ||
+      !authorization.authorization_code ||
+      !authorization.signature
+    ) {
+      console.log(
+        "PAYMENT METHOD NOT SAVED: Transaction has no reusable authorization.",
+        {
+          orderId: order?.id,
+          hasAuthorization: !!authorization,
+          reusable: authorization?.reusable,
+          hasAuthorizationCode: !!authorization?.authorization_code,
+          hasSignature: !!authorization?.signature,
+        },
+      );
+
+      return;
+    }
+
+    // Paystack normally provides the customer's email here.
+    const customerEmail =
+      transaction?.customer?.email ||
+      transaction?.customer?.customer_email ||
+      transaction?.email ||
+      null;
+
+    if (!customerEmail) {
+      console.log("PAYMENT METHOD NOT SAVED: Customer email unavailable.", {
+        orderId: order?.id,
+      });
+
+      return;
+    }
+
+    if (!order?.userID) {
+      console.log("PAYMENT METHOD NOT SAVED: Order has no userID.", {
+        orderId: order?.id,
+      });
+
+      return;
+    }
+
+    const result = await saveReusablePaymentMethod({
+      endpoint: GRAPHQL_ENDPOINT,
+      region: REGION,
+      userID: order.userID,
+      authorization,
+      email: customerEmail,
+      paystackSecretKey,
+    });
+
+    console.log("PAYMENT METHOD SAVE RESULT:", {
+      orderId: order.id,
+      userID: order.userID,
+      saved: result?.saved,
+      created: result?.created,
+      reactivated: result?.reactivated || false,
+      paymentMethodId: result?.paymentMethod?.id || null,
+      last4: result?.paymentMethod?.last4 || null,
+    });
+  } catch (error) {
+    // VERY IMPORTANT:
+    // Never fail an already-successful payment because the
+    // saved-card operation failed.
+    console.error("SAVE PAYMENT METHOD ERROR:", {
+      orderId: order?.id,
+      userID: order?.userID,
+      error: error?.message || error,
+    });
+  }
+}
+
 /* ==========================================================
    VERIFY ATUA PAYMENT
 ========================================================== */
@@ -1699,6 +1800,11 @@ exports.handler = async (event) => {
        */
       const countUpdatedOrder = await incrementMaxiCourierCount(order);
 
+      await savePaymentMethodIfReusable({
+        order: countUpdatedOrder,
+        transaction,
+        paystackSecretKey: secretKey,
+      });
       console.log("==========================================");
 
       console.log("WEBHOOK ALREADY COMPLETED PAYMENT.");
@@ -1844,6 +1950,12 @@ exports.handler = async (event) => {
           "Tracking repair completed but recipient tracking is not enabled.",
         );
       }
+
+      await savePaymentMethodIfReusable({
+        order: countUpdatedOrder,
+        transaction,
+        paystackSecretKey: secretKey,
+      });
 
       console.log("==========================================");
 
@@ -2086,6 +2198,12 @@ exports.handler = async (event) => {
     ) {
       throw new Error("MAXI courier count was not marked as incremented.");
     }
+
+    await savePaymentMethodIfReusable({
+      order: countUpdatedOrder,
+      transaction,
+      paystackSecretKey: secretKey,
+    });
 
     /* ======================================================
        20. SUCCESS

@@ -163,6 +163,39 @@ const styles = StyleSheet.create({
     color: "#EA580C",
     fontWeight: "600",
   },
+
+  paymentNotice: {
+    backgroundColor: "#FFF7ED",
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 14,
+  },
+
+  paymentNoticeTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#9A3412",
+    marginBottom: 4,
+  },
+
+  paymentNoticeText: {
+    fontSize: 12,
+    lineHeight: 18,
+    color: "#7C2D12",
+  },
+
+  payButton: {
+    marginTop: 12,
+    backgroundColor: "#16A34A",
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignItems: "center",
+  },
+
+  payButtonText: {
+    color: "#FFFFFF",
+    fontWeight: "700",
+  },
 });
 
 export default styles;

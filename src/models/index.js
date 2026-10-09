@@ -2,9 +2,21 @@
 import { initSchema } from '@aws-amplify/datastore';
 import { schema } from './schema';
 
+const PaystackEnvironment = {
+  "TEST": "TEST",
+  "LIVE": "LIVE"
+};
+
 const OrderEnvironment = {
   "PRODUCTION": "PRODUCTION",
   "TEST": "TEST"
+};
+
+const PaymentMethodStatus = {
+  "ACTIVE": "ACTIVE",
+  "INACTIVE": "INACTIVE",
+  "EXPIRED": "EXPIRED",
+  "FAILED": "FAILED"
 };
 
 const EarningsAllocationStatus = {
@@ -72,7 +84,8 @@ const OwnerType = {
 const OfferStatus = {
   "ACTIVE": "ACTIVE",
   "ACCEPTED": "ACCEPTED",
-  "REJECTED": "REJECTED"
+  "REJECTED": "REJECTED",
+  "CANCELLED": "CANCELLED"
 };
 
 const CourierPreTransferUploadStatus = {
@@ -103,8 +116,50 @@ const MediaUploadStatus = {
   "FAILED": "FAILED"
 };
 
+const RefundStatus = {
+  "NONE": "NONE",
+  "PENDING": "PENDING",
+  "PROCESSING": "PROCESSING",
+  "NEEDS_ATTENTION": "NEEDS_ATTENTION",
+  "PROCESSED": "PROCESSED",
+  "FAILED": "FAILED"
+};
+
+const CancellationStage = {
+  "BEFORE_ACCEPTANCE": "BEFORE_ACCEPTANCE",
+  "ACCEPTED": "ACCEPTED",
+  "COURIER_ARRIVED": "COURIER_ARRIVED",
+  "PICKUP_STARTED": "PICKUP_STARTED",
+  "PICKED_UP": "PICKED_UP",
+  "IN_TRANSIT": "IN_TRANSIT",
+  "DELIVERED": "DELIVERED"
+};
+
+const CancellationReason = {
+  "CHANGED_MIND": "CHANGED_MIND",
+  "WRONG_ADDRESS": "WRONG_ADDRESS",
+  "WRONG_ORDER": "WRONG_ORDER",
+  "TOO_EXPENSIVE": "TOO_EXPENSIVE",
+  "TOO_LONG_TO_WAIT": "TOO_LONG_TO_WAIT",
+  "NO_LONGER_NEEDED": "NO_LONGER_NEEDED",
+  "COURIER_DELAY": "COURIER_DELAY",
+  "COURIER_REQUEST": "COURIER_REQUEST",
+  "SYSTEM_ERROR": "SYSTEM_ERROR",
+  "OTHER": "OTHER"
+};
+
+const CancellationStatus = {
+  "NONE": "NONE",
+  "REQUESTED": "REQUESTED",
+  "PROCESSING": "PROCESSING",
+  "COMPLETED": "COMPLETED",
+  "FAILED": "FAILED",
+  "REJECTED": "REJECTED"
+};
+
 const OrderStatus = {
   "BIDDING": "BIDDING",
+  "AWAITING_PAYMENT": "AWAITING_PAYMENT",
   "READY_FOR_PICKUP": "READY_FOR_PICKUP",
   "ACCEPTED": "ACCEPTED",
   "ARRIVED_PICKUP": "ARRIVED_PICKUP",
@@ -127,16 +182,18 @@ const CourierReportStatus = {
   "DISMISSED": "DISMISSED"
 };
 
-const { CompanyVehicle, CourierCompany, Payout, Transaction, Wallet, Payment, Offer, Order, CourierReport, CourierReview, AdminAlert, CourierLiveLocation, Courier, User, VerifyAtuaPaymentResult, VerifiedPaymentDetails, ProcessPayoutsResponse, ReversePayoutResponse } = initSchema(schema);
+const { CompanyVehicle, CourierCompany, PaymentMethod, Payout, Transaction, Wallet, Payment, Offer, OrderCancellation, Order, CourierReport, CourierReview, AdminAlert, CourierLiveLocation, Courier, User, VerifyAtuaPaymentResult, VerifiedPaymentDetails, ChargeAtuaPaymentMethodResult, DeleteSavedPaymentMethodResult, ProcessPayoutsResponse, ReversePayoutResponse } = initSchema(schema);
 
 export {
   CompanyVehicle,
   CourierCompany,
+  PaymentMethod,
   Payout,
   Transaction,
   Wallet,
   Payment,
   Offer,
+  OrderCancellation,
   Order,
   CourierReport,
   CourierReview,
@@ -144,7 +201,9 @@ export {
   CourierLiveLocation,
   Courier,
   User,
+  PaystackEnvironment,
   OrderEnvironment,
+  PaymentMethodStatus,
   EarningsAllocationStatus,
   FundsStatus,
   OrderPayoutStatus,
@@ -160,10 +219,16 @@ export {
   CourierPostLoadingUploadStatus,
   DropoffUploadStatus,
   MediaUploadStatus,
+  RefundStatus,
+  CancellationStage,
+  CancellationReason,
+  CancellationStatus,
   OrderStatus,
   CourierReportStatus,
   VerifyAtuaPaymentResult,
   VerifiedPaymentDetails,
+  ChargeAtuaPaymentMethodResult,
+  DeleteSavedPaymentMethodResult,
   ProcessPayoutsResponse,
   ReversePayoutResponse
 };

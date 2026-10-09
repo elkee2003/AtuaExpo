@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "api": {
+      "Atua": [
+        "Query",
+        "Mutation"
+      ]
+    }
+  },
+  "lambdaLayers": []
+}
