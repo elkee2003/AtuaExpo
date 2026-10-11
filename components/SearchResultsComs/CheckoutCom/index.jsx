@@ -209,8 +209,8 @@ const Checkout = () => {
 
           // REAL customer orders must be PRODUCTION.
           // TEST orders should explicitly use TEST.
-          // orderEnvironment: "PRODUCTION",
-          orderEnvironment: "TEST",
+          orderEnvironment: "PRODUCTION",
+          // orderEnvironment: "TEST",
 
           //---------------------------------
           // Recipient

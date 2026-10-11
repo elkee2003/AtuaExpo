@@ -86,6 +86,12 @@ const MaxiBiddingSheet = ({
             isLatest={item.offer.id === latestOfferId}
             isAcceptDisabled={isAcceptDisabled}
             onAccept={() => {
+              console.log("MAXI ACCEPT PRESSED:", {
+                clickedOfferId: item.offer.id,
+                latestOfferId,
+                sameOffer: item.offer.id === latestOfferId,
+              });
+
               if (item.offer.id !== latestOfferId) return;
               onAcceptOffer(item.offer);
             }}

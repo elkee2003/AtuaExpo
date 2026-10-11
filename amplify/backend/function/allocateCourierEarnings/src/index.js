@@ -48,7 +48,7 @@
  *
  *     availableBalance = unchanged
  *     pendingBalance   = pendingBalance + earnings
- *     lifetimeEarnings = lifetimeEarnings + earnings
+ *      lifetimeEarnings = unchanged
  *
  * Later:
  *
@@ -2063,6 +2063,7 @@ exports.handler = async (event) => {
     }
 
     // ========================================================
+    // ========================================================
     // CALCULATE NEW WALLET BALANCES
     // ========================================================
     //
@@ -2072,7 +2073,9 @@ exports.handler = async (event) => {
     //
     // pendingBalance increases by earnings.
     //
-    // lifetimeEarnings increases by earnings.
+    // lifetimeEarnings does NOT change during allocation.
+    // Lifetime earnings increase only when the earnings
+    // are actually released to the courier.
     //
     // ========================================================
 
@@ -2080,7 +2083,9 @@ exports.handler = async (event) => {
 
     const newPending = normalizeMoney(currentPending + earnings);
 
-    const newLifetime = normalizeMoney(currentLifetime + earnings);
+    // lifetimeEarnings does NOT increase during allocation.
+    // The courier has only earned pending funds at this point.
+    const newLifetime = currentLifetime;
 
     console.log("Calculated wallet balances:", {
       availableBalance: newAvailable,

@@ -1,9 +1,11 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { signOut } from "aws-amplify/auth";
+import { getUrl } from "aws-amplify/storage";
 import * as ImagePicker from "expo-image-picker";
 import { router } from "expo-router";
-import React from "react";
+import React, { useEffect, useState } from "react";
+
 import {
   Alert,
   Image,
@@ -46,6 +48,54 @@ const EditProfile = ({ onRefresh, refreshing }) => {
     errorMessage,
     onValidateInput,
   } = useProfileContext();
+
+  const [resolvedProfilePic, setResolvedProfilePic] = useState(null);
+
+  useEffect(() => {
+    const resolveProfilePic = async () => {
+      if (!profilePic) {
+        setResolvedProfilePic(null);
+        return;
+      }
+
+      // Local image selected from camera/gallery
+      if (
+        profilePic.startsWith("file://") ||
+        profilePic.startsWith("content://") ||
+        profilePic.startsWith("data:")
+      ) {
+        setResolvedProfilePic(profilePic);
+        return;
+      }
+
+      // Already a normal URL
+      if (profilePic.startsWith("http")) {
+        setResolvedProfilePic(profilePic);
+        return;
+      }
+
+      // Existing image stored in S3
+      try {
+        const result = await getUrl({
+          path: profilePic,
+          options: {
+            validateObjectExistence: true,
+          },
+        });
+
+        setResolvedProfilePic(result.url.toString());
+      } catch (error) {
+        console.log(
+          "Error fetching profile image from storage:",
+          profilePic,
+          error,
+        );
+        setResolvedProfilePic(null);
+      }
+    };
+
+    resolveProfilePic();
+  }, [profilePic]);
 
   // ============================================================
   // PROFILE IMAGE OPTIONS
@@ -322,10 +372,10 @@ const EditProfile = ({ onRefresh, refreshing }) => {
                     Existing profile photo
                 ------------------------------------------------ */}
 
-                {profilePic ? (
+                {resolvedProfilePic ? (
                   <Image
                     source={{
-                      uri: profilePic,
+                      uri: resolvedProfilePic,
                     }}
                     style={styles.img}
                   />

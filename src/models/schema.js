@@ -513,6 +513,20 @@ export const schema = {
                     "isRequired": true,
                     "attributes": []
                 },
+                "payoutFee": {
+                    "name": "payoutFee",
+                    "isArray": false,
+                    "type": "Float",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "totalWalletDebit": {
+                    "name": "totalWalletDebit",
+                    "isArray": false,
+                    "type": "Float",
+                    "isRequired": false,
+                    "attributes": []
+                },
                 "status": {
                     "name": "status",
                     "isArray": false,
@@ -694,6 +708,13 @@ export const schema = {
                     "isRequired": true,
                     "attributes": []
                 },
+                "payoutID": {
+                    "name": "payoutID",
+                    "isArray": false,
+                    "type": "ID",
+                    "isRequired": false,
+                    "attributes": []
+                },
                 "type": {
                     "name": "type",
                     "isArray": false,
@@ -777,6 +798,15 @@ export const schema = {
                         "name": "byWallet",
                         "fields": [
                             "walletID"
+                        ]
+                    }
+                },
+                {
+                    "type": "key",
+                    "properties": {
+                        "name": "byPayout",
+                        "fields": [
+                            "payoutID"
                         ]
                     }
                 },
@@ -4456,5 +4486,5 @@ export const schema = {
         }
     },
     "codegenVersion": "3.4.4",
-    "version": "fc63533082b46055b88e99e374098561"
+    "version": "12d70129f949b8093f6882bb1d8a6ac0"
 };

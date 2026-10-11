@@ -450,6 +450,8 @@ export const getPayout = /* GraphQL */ `
       courierID
       walletID
       amount
+      payoutFee
+      totalWalletDebit
       status
       bankName
       accountNumber
@@ -484,6 +486,8 @@ export const listPayouts = /* GraphQL */ `
         courierID
         walletID
         amount
+        payoutFee
+        totalWalletDebit
         status
         bankName
         accountNumber
@@ -528,6 +532,8 @@ export const syncPayouts = /* GraphQL */ `
         courierID
         walletID
         amount
+        payoutFee
+        totalWalletDebit
         status
         bankName
         accountNumber
@@ -574,6 +580,8 @@ export const payoutsByCourierID = /* GraphQL */ `
         courierID
         walletID
         amount
+        payoutFee
+        totalWalletDebit
         status
         bankName
         accountNumber
@@ -620,6 +628,8 @@ export const payoutsByWalletID = /* GraphQL */ `
         courierID
         walletID
         amount
+        payoutFee
+        totalWalletDebit
         status
         bankName
         accountNumber
@@ -666,6 +676,8 @@ export const payoutsByReference = /* GraphQL */ `
         courierID
         walletID
         amount
+        payoutFee
+        totalWalletDebit
         status
         bankName
         accountNumber
@@ -697,6 +709,7 @@ export const getTransaction = /* GraphQL */ `
     getTransaction(id: $id) {
       id
       walletID
+      payoutID
       type
       amount
       description
@@ -723,6 +736,7 @@ export const listTransactions = /* GraphQL */ `
       items {
         id
         walletID
+        payoutID
         type
         amount
         description
@@ -759,6 +773,7 @@ export const syncTransactions = /* GraphQL */ `
       items {
         id
         walletID
+        payoutID
         type
         amount
         description
@@ -797,6 +812,46 @@ export const transactionsByWalletID = /* GraphQL */ `
       items {
         id
         walletID
+        payoutID
+        type
+        amount
+        description
+        orderID
+        paymentID
+        reference
+        status
+        createdAt
+        updatedAt
+        _version
+        _deleted
+        _lastChangedAt
+        __typename
+      }
+      nextToken
+      startedAt
+      __typename
+    }
+  }
+`;
+export const transactionsByPayoutID = /* GraphQL */ `
+  query TransactionsByPayoutID(
+    $payoutID: ID!
+    $sortDirection: ModelSortDirection
+    $filter: ModelTransactionFilterInput
+    $limit: Int
+    $nextToken: String
+  ) {
+    transactionsByPayoutID(
+      payoutID: $payoutID
+      sortDirection: $sortDirection
+      filter: $filter
+      limit: $limit
+      nextToken: $nextToken
+    ) {
+      items {
+        id
+        walletID
+        payoutID
         type
         amount
         description
@@ -835,6 +890,7 @@ export const transactionsByOrderID = /* GraphQL */ `
       items {
         id
         walletID
+        payoutID
         type
         amount
         description
@@ -873,6 +929,7 @@ export const transactionsByPaymentID = /* GraphQL */ `
       items {
         id
         walletID
+        payoutID
         type
         amount
         description
@@ -911,6 +968,7 @@ export const transactionsByReference = /* GraphQL */ `
       items {
         id
         walletID
+        payoutID
         type
         amount
         description

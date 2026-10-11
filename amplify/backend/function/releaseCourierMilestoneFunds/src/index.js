@@ -31,7 +31,7 @@ This Lambda:
 - ONLY processes MAXI orders
 - Does NOT process customer payments
 - Does NOT allocate courier earnings
-- Does NOT increase lifetimeEarnings
+- Increases lifetimeEarnings when funds are released
 - Does NOT process Paystack payouts
 - Does NOT send bank transfers
 - Respects admin funds holds
@@ -586,6 +586,10 @@ async function processMaxiPickup({
     availableBalance + firstReleaseAmount,
   );
 
+  const newLifetimeEarnings = normalizeMoney(
+    lifetimeEarnings + firstReleaseAmount,
+  );
+
   /*
   ==========================================================
   11. SAVE ORIGINAL WALLET STATE
@@ -612,6 +616,7 @@ async function processMaxiPickup({
       wallet,
       availableBalance: newAvailableBalance,
       pendingBalance: newPendingBalance,
+      lifetimeEarnings: newLifetimeEarnings,
     });
 
     walletUpdated = true;
@@ -657,7 +662,7 @@ async function processMaxiPickup({
       fundsReleasedAmount: firstReleaseAmount,
       remainingPendingBalance: newPendingBalance,
       availableBalance: newAvailableBalance,
-      lifetimeEarnings,
+      lifetimeEarnings: newLifetimeEarnings,
       fundsStatus: "PARTIALLY_RELEASED",
       pickupFundsReleasedAt: timestamp,
       releaseType: "MAXI_PICKUP",
@@ -677,6 +682,7 @@ async function processMaxiPickup({
           wallet: updatedWallet,
           availableBalance: originalWalletState.availableBalance,
           pendingBalance: originalWalletState.pendingBalance,
+          lifetimeEarnings: originalWalletState.lifetimeEarnings,
         });
 
         console.log(`Pickup wallet rollback successful for ${orderID}`);
@@ -905,6 +911,10 @@ async function processMaxiDelivery({
     availableBalance + remainingAmount,
   );
 
+  const newLifetimeEarnings = normalizeMoney(
+    lifetimeEarnings + remainingAmount,
+  );
+
   /*
   ==========================================================
   11. SAVE ORIGINAL WALLET STATE
@@ -931,6 +941,7 @@ async function processMaxiDelivery({
       wallet,
       availableBalance: newAvailableBalance,
       pendingBalance: newPendingBalance,
+      lifetimeEarnings: newLifetimeEarnings,
     });
 
     walletUpdated = true;
@@ -976,7 +987,7 @@ async function processMaxiDelivery({
       fundsReleasedAmount: earnings,
       remainingPendingBalance: newPendingBalance,
       availableBalance: newAvailableBalance,
-      lifetimeEarnings,
+      lifetimeEarnings: newLifetimeEarnings,
       fundsStatus: "RELEASED",
       fundsReleasedAt: timestamp,
       releaseType: "MAXI_DELIVERY",
@@ -996,6 +1007,7 @@ async function processMaxiDelivery({
           wallet: updatedWallet,
           availableBalance: originalWalletState.availableBalance,
           pendingBalance: originalWalletState.pendingBalance,
+          lifetimeEarnings: originalWalletState.lifetimeEarnings,
         });
 
         console.log(`Delivery wallet rollback successful for ${orderID}`);
@@ -1379,11 +1391,17 @@ Moves:
           ↓
     availableBalance
 
-Does NOT modify lifetimeEarnings.
+Also increases lifetimeEarnings by the released amount.
+
 ============================================================
 */
 
-async function updateWallet({ wallet, availableBalance, pendingBalance }) {
+async function updateWallet({
+  wallet,
+  availableBalance,
+  pendingBalance,
+  lifetimeEarnings,
+}) {
   const mutation = `
     mutation UpdateWallet(
       $input: UpdateWalletInput!
@@ -1406,6 +1424,7 @@ async function updateWallet({ wallet, availableBalance, pendingBalance }) {
     id: wallet.id,
     availableBalance: normalizeMoney(availableBalance),
     pendingBalance: normalizeMoney(pendingBalance),
+    lifetimeEarnings: normalizeMoney(lifetimeEarnings),
   };
 
   /*
@@ -1453,14 +1472,17 @@ Restores:
 
     availableBalance
     pendingBalance
-
-Does NOT modify:
-
     lifetimeEarnings
+
 ============================================================
 */
 
-async function rollbackWallet({ wallet, availableBalance, pendingBalance }) {
+async function rollbackWallet({
+  wallet,
+  availableBalance,
+  pendingBalance,
+  lifetimeEarnings,
+}) {
   console.warn(`Rolling back wallet ${wallet.id}`);
 
   const mutation = `
@@ -1485,6 +1507,7 @@ async function rollbackWallet({ wallet, availableBalance, pendingBalance }) {
     id: wallet.id,
     availableBalance: normalizeMoney(availableBalance),
     pendingBalance: normalizeMoney(pendingBalance),
+    lifetimeEarnings: normalizeMoney(lifetimeEarnings),
   };
 
   /*
@@ -1645,8 +1668,7 @@ async function updateOrder({
       },
     };
   } else if (fundsStatus === "RELEASED") {
-
-  /*
+    /*
   ==========================================================
   DELIVERY
 
@@ -1664,8 +1686,7 @@ async function updateOrder({
       },
     };
   } else {
-
-  /*
+    /*
   ==========================================================
   INVALID TRANSITION
   ==========================================================

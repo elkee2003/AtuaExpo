@@ -275,6 +275,8 @@ export const onCreatePayout = /* GraphQL */ `
       courierID
       walletID
       amount
+      payoutFee
+      totalWalletDebit
       status
       bankName
       accountNumber
@@ -304,6 +306,8 @@ export const onUpdatePayout = /* GraphQL */ `
       courierID
       walletID
       amount
+      payoutFee
+      totalWalletDebit
       status
       bankName
       accountNumber
@@ -333,6 +337,8 @@ export const onDeletePayout = /* GraphQL */ `
       courierID
       walletID
       amount
+      payoutFee
+      totalWalletDebit
       status
       bankName
       accountNumber
@@ -362,6 +368,7 @@ export const onCreateTransaction = /* GraphQL */ `
     onCreateTransaction(filter: $filter) {
       id
       walletID
+      payoutID
       type
       amount
       description
@@ -385,6 +392,7 @@ export const onUpdateTransaction = /* GraphQL */ `
     onUpdateTransaction(filter: $filter) {
       id
       walletID
+      payoutID
       type
       amount
       description
@@ -408,6 +416,7 @@ export const onDeleteTransaction = /* GraphQL */ `
     onDeleteTransaction(filter: $filter) {
       id
       walletID
+      payoutID
       type
       amount
       description

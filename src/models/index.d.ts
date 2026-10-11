@@ -467,6 +467,8 @@ type EagerPayout = {
   readonly courierID: string;
   readonly walletID?: string | null;
   readonly amount: number;
+  readonly payoutFee?: number | null;
+  readonly totalWalletDebit?: number | null;
   readonly status?: PayoutStatus | keyof typeof PayoutStatus | null;
   readonly bankName?: string | null;
   readonly accountNumber?: string | null;
@@ -493,6 +495,8 @@ type LazyPayout = {
   readonly courierID: string;
   readonly walletID?: string | null;
   readonly amount: number;
+  readonly payoutFee?: number | null;
+  readonly totalWalletDebit?: number | null;
   readonly status?: PayoutStatus | keyof typeof PayoutStatus | null;
   readonly bankName?: string | null;
   readonly accountNumber?: string | null;
@@ -523,6 +527,7 @@ type EagerTransaction = {
   };
   readonly id: string;
   readonly walletID: string;
+  readonly payoutID?: string | null;
   readonly type?: TransactionType | keyof typeof TransactionType | null;
   readonly amount: number;
   readonly description?: string | null;
@@ -541,6 +546,7 @@ type LazyTransaction = {
   };
   readonly id: string;
   readonly walletID: string;
+  readonly payoutID?: string | null;
   readonly type?: TransactionType | keyof typeof TransactionType | null;
   readonly amount: number;
   readonly description?: string | null;

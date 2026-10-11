@@ -65,13 +65,18 @@ IMPORTANT FINANCIAL RULES
 
 2. Courier earnings are NOT allocated here.
 
-3. lifetimeEarnings is NOT increased here.
+3. lifetimeEarnings IS increased here when
+   Micro/Moto earnings are actually released.
 
-4. This Lambda ONLY moves:
+4. This Lambda moves:
 
        pendingBalance
-              ↓
+            ↓
        availableBalance
+
+   AND increases:
+
+       lifetimeEarnings
 
 5. The EARNINGS-${orderID} transaction created by
    allocateCourierEarnings is used as the ledger proof.
@@ -90,7 +95,16 @@ IMPORTANT FINANCIAL RULES
 
        HELD → RELEASED
 
-11. lifetimeEarnings MUST NOT change during release.
+11. lifetimeEarnings increases by the amount
+    actually released to the courier.
+
+    For Micro/Moto:
+        100% of courier earnings are released
+        at delivery.
+
+    Therefore:
+
+        lifetimeEarnings += earnings
 
 12. If the wallet changes but the Order cannot be finalized,
     this Lambda attempts a compensating wallet rollback.
@@ -199,10 +213,12 @@ exports.handler = async (event) => {
      * allocateCourierEarnings must already have:
      *
      * - calculated courier earnings
-     * - increased lifetimeEarnings
      * - increased pendingBalance
      * - created EARNINGS-${orderID}
      * - marked earningsAllocationStatus = ALLOCATED
+     *
+     * lifetimeEarnings is NOT increased during allocation.
+     * It increases here when the earnings are actually released.
      */
 
     if (order.earningsAllocationStatus !== "ALLOCATED") {
@@ -536,22 +552,23 @@ exports.handler = async (event) => {
 
     walletBeforeRelease = {
       availableBalance: currentAvailableBalance,
-
       pendingBalance: currentPendingBalance,
-
       lifetimeEarnings: currentLifetimeEarnings,
-
       _version: wallet._version,
     };
 
-    /* ======================================================
-       20. CALCULATE NEW WALLET BALANCES
-    ====================================================== */
+    /* ========================================================
+    20. CALCULATE NEW WALLET BALANCES
+    ======================================================== */
 
     const newPendingBalance = normalizeMoney(currentPendingBalance - earnings);
 
     const newAvailableBalance = normalizeMoney(
       currentAvailableBalance + earnings,
+    );
+
+    const newLifetimeEarnings = normalizeMoney(
+      currentLifetimeEarnings + earnings,
     );
 
     console.log(
@@ -569,7 +586,9 @@ exports.handler = async (event) => {
 
         newAvailableBalance,
 
-        lifetimeEarnings: currentLifetimeEarnings,
+        previousLifetimeEarnings: currentLifetimeEarnings,
+
+        newLifetimeEarnings,
       }),
     );
 
@@ -619,7 +638,7 @@ exports.handler = async (event) => {
 
       newPendingBalance,
 
-      currentLifetimeEarnings,
+      newLifetimeEarnings,
     );
 
     if (!updatedWallet) {
@@ -689,7 +708,7 @@ exports.handler = async (event) => {
 
       availableBalance: newAvailableBalance,
 
-      lifetimeEarnings: currentLifetimeEarnings,
+      lifetimeEarnings: newLifetimeEarnings,
 
       fundsStatus: "RELEASED",
 
@@ -1151,8 +1170,11 @@ function verifyEarningsTransaction({
 //
 //     pendingBalance -= earnings
 //     availableBalance += earnings
+//     lifetimeEarnings += earnings
 //
-// lifetimeEarnings does NOT change.
+// The released earnings are now actually earned
+// by the courier, so lifetimeEarnings increases
+// by the amount released.
 // ============================================================
 
 async function updateWallet(
@@ -1611,10 +1633,15 @@ const getCourierQuery = /* GraphQL */ `
 // Micro/Moto release:
 //
 //     pendingBalance
-//            ↓
+//             ↓
 //     availableBalance
 //
-// lifetimeEarnings is preserved at its existing value.
+//     lifetimeEarnings
+//             ↑
+//        + earnings
+//
+// lifetimeEarnings increases by the amount
+// released to the courier.
 //
 // _version is supplied by updateWallet() when available.
 // ============================================================

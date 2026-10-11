@@ -1,10 +1,10 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { DataStore } from "aws-amplify/datastore";
-import { remove, uploadData } from "aws-amplify/storage";
+import { getUrl, remove, uploadData } from "aws-amplify/storage";
 import * as Crypto from "expo-crypto";
 import * as ImageManipulator from "expo-image-manipulator";
 import { router } from "expo-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -51,6 +51,54 @@ const ReviewUserCom = () => {
 
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [resolvedProfilePic, setResolvedProfilePic] = useState(null);
+
+  useEffect(() => {
+    const resolveProfilePic = async () => {
+      if (!profilePic) {
+        setResolvedProfilePic(null);
+        return;
+      }
+
+      // Local image selected from camera/gallery
+      if (
+        profilePic.startsWith("file://") ||
+        profilePic.startsWith("content://") ||
+        profilePic.startsWith("data:")
+      ) {
+        setResolvedProfilePic(profilePic);
+        return;
+      }
+
+      // Already a normal URL
+      if (profilePic.startsWith("http")) {
+        setResolvedProfilePic(profilePic);
+        return;
+      }
+
+      // Existing image stored in S3
+      try {
+        const result = await getUrl({
+          path: profilePic,
+          options: {
+            validateObjectExistence: true,
+          },
+        });
+
+        setResolvedProfilePic(result.url.toString());
+      } catch (error) {
+        console.log(
+          "Error fetching profile image from storage:",
+          profilePic,
+          error,
+        );
+
+        setResolvedProfilePic(null);
+      }
+    };
+
+    resolveProfilePic();
+  }, [profilePic]);
 
   // ============================================================
   // PROFILE IMAGE UPLOAD
@@ -58,26 +106,19 @@ const ReviewUserCom = () => {
 
   const uploadImage = async () => {
     try {
-      /*
-       * If this is an existing user, remove the previous
-       * profile image before uploading the new one.
-       */
-      if (dbUser?.profilePic) {
-        console.log("Deleting previous profile photo:", dbUser.profilePic);
-
-        await remove({
-          path: dbUser.profilePic,
-        });
-      }
-
-      /*
-       * If there is no profile image, simply return null.
-       *
-       * This allows the user to save their profile without
-       * having a profile photo.
-       */
-      if (!profilePic) {
-        return null;
+      // No new local image selected.
+      // Keep the existing profile photo unchanged.
+      if (
+        !profilePic ||
+        profilePic.startsWith("http") ||
+        (!profilePic.startsWith("file://") &&
+          !profilePic.startsWith("content://") &&
+          !profilePic.startsWith("data:"))
+      ) {
+        return {
+          path: profilePic || null,
+          isNewUpload: false,
+        };
       }
 
       // ----------------------------------------------------------
@@ -104,7 +145,6 @@ const ReviewUserCom = () => {
       // ----------------------------------------------------------
 
       const response = await fetch(manipulatedImage.uri);
-
       const blob = await response.blob();
 
       // ----------------------------------------------------------
@@ -120,7 +160,6 @@ const ReviewUserCom = () => {
       const result = await uploadData({
         path: fileKey,
         data: blob,
-
         options: {
           contentType: "image/jpeg",
 
@@ -138,10 +177,12 @@ const ReviewUserCom = () => {
         },
       }).result;
 
-      return result.path;
+      return {
+        path: result.path,
+        isNewUpload: true,
+      };
     } catch (error) {
       console.log("Error uploading profile image:", error);
-
       throw error;
     }
   };
@@ -161,15 +202,7 @@ const ReviewUserCom = () => {
       const filePath = dbUser.profilePic;
 
       // ----------------------------------------------------------
-      // Delete image from S3.
-      // ----------------------------------------------------------
-
-      await remove({
-        path: filePath,
-      });
-
-      // ----------------------------------------------------------
-      // Remove profile image reference from DataStore.
+      // Remove profile image reference from DataStore first.
       // ----------------------------------------------------------
 
       const updatedUser = await DataStore.save(
@@ -183,8 +216,27 @@ const ReviewUserCom = () => {
       // ----------------------------------------------------------
 
       setDbUser(updatedUser);
-
       setProfilePic(null);
+
+      // ----------------------------------------------------------
+      // Delete old image from S3 after DB update succeeds.
+      // ----------------------------------------------------------
+
+      try {
+        await remove({
+          path: filePath,
+        });
+      } catch (error) {
+        console.log(
+          "Error deleting profile image from storage:",
+          filePath,
+          error,
+        );
+      }
+
+      // ----------------------------------------------------------
+      // Update local auth state.
+      // ----------------------------------------------------------
 
       Alert.alert(
         "Profile Photo Removed",
@@ -279,7 +331,8 @@ const ReviewUserCom = () => {
       // Upload profile image.
       // ----------------------------------------------------------
 
-      const uploadedImagePath = await uploadImage();
+      const uploadedImage = await uploadImage();
+      const uploadedImagePath = uploadedImage.path;
 
       // ----------------------------------------------------------
       // Create new user.
@@ -313,6 +366,10 @@ const ReviewUserCom = () => {
 
       setDbUser(user);
 
+      // ----------------------------------------------------------
+      // Delete old profile image after DB update succeeds.
+      // ----------------------------------------------------------
+
       return true;
     } catch (error) {
       console.log("Error creating user:", error);
@@ -340,6 +397,10 @@ const ReviewUserCom = () => {
     setUploading(true);
     setUploadProgress(0);
 
+    let uploadedImage = null;
+    let uploadedImagePath = null;
+    const oldProfilePic = dbUser.profilePic;
+
     try {
       /*
        * Upload the new image first.
@@ -347,7 +408,9 @@ const ReviewUserCom = () => {
        * If the user has removed their image, uploadImage()
        * returns null.
        */
-      const uploadedImagePath = await uploadImage();
+
+      uploadedImage = await uploadImage();
+      uploadedImagePath = uploadedImage.path;
 
       // ----------------------------------------------------------
       // Update existing user.
@@ -383,9 +446,40 @@ const ReviewUserCom = () => {
 
       setDbUser(user);
 
+      if (oldProfilePic && oldProfilePic !== uploadedImagePath) {
+        try {
+          await remove({
+            path: oldProfilePic,
+          });
+        } catch (error) {
+          console.log(
+            "Error deleting old profile image:",
+            oldProfilePic,
+            error,
+          );
+        }
+      }
+
       return true;
     } catch (error) {
       console.log("Error updating user:", error);
+
+      // If a new image was uploaded but the database update failed,
+      // remove the newly uploaded image so it does not become orphaned.
+
+      if (uploadedImage?.isNewUpload && uploadedImage.path) {
+        try {
+          await remove({
+            path: uploadedImage.path,
+          });
+        } catch (cleanupError) {
+          console.log(
+            "Error cleaning up newly uploaded profile image:",
+            uploadedImage.path,
+            cleanupError,
+          );
+        }
+      }
 
       Alert.alert(
         "Unable to Save Changes",
@@ -598,10 +692,10 @@ const ReviewUserCom = () => {
 
             <View style={styles.photoCardBody}>
               <View style={styles.reviewProfilePicContainer}>
-                {profilePic ? (
+                {resolvedProfilePic ? (
                   <Image
                     source={{
-                      uri: profilePic,
+                      uri: resolvedProfilePic,
                     }}
                     style={styles.img}
                   />

@@ -296,18 +296,16 @@ type Payout @model @auth(rules: [{ allow: public }]) {
 
   walletID: ID @index(name: "byWallet")
 
-  # The amount actually sent to the courier's bank account.
-  # This does NOT include the Atua payout fee.
+  # The amount actually sent to the courier bank.
+  # Does NOT include Atua fee.
   amount: Float!
 
-  # Atua's fee charged for processing this payout.
-  # For COURIER_REQUESTED payouts, the fee is tiered by the requested payout amount.
-  # For ADMIN_MANUAL and SYSTEM payouts, the fee is ₦100.
-  payoutFee: Float!
+  # Atua fee charged for this payout.
+  payoutFee: Float
 
-  # The total amount deducted from the courier's wallet.
-  # Formula: amount + payoutFee
-  totalWalletDebit: Float!
+  # Total amount deducted from the courier wallet.
+  # = amount + payoutFee
+  totalWalletDebit: Float
 
   status: PayoutStatus
 
@@ -348,6 +346,7 @@ type Transaction @model @auth(rules: [{ allow: public }]) {
   id: ID!
 
   walletID: ID! @index(name: "byWallet")
+  payoutID: ID @index(name: "byPayout")
 
   type: TransactionType
   # CREDIT | DEBIT
@@ -357,8 +356,6 @@ type Transaction @model @auth(rules: [{ allow: public }]) {
 
   orderID: ID @index(name: "byOrder")
   paymentID: ID @index(name: "byPayment")
-
-  payoutID: ID @index(name: "byPayout")
 
   reference: String
     @index(

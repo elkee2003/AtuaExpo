@@ -125,8 +125,8 @@ const MaxiSubmit = () => {
 
           // REAL customer orders = PRODUCTION
           // Test orders = TEST
-          // orderEnvironment: "PRODUCTION",
-          orderEnvironment: "TEST",
+          orderEnvironment: "PRODUCTION",
+          // orderEnvironment: "TEST",
 
           recipientName,
           recipientNumber,
