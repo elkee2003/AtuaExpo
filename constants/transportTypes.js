@@ -10,6 +10,14 @@ export const TRANSPORT_TYPES = {
   MEDIUM_VAN: "MEDIUM_VAN",
   LARGE_VAN: "LARGE_VAN",
 
+  // Cars / Passenger Vehicles
+  CAR: "CAR",
+  WAGON: "WAGON",
+  MINIBUS: "MINIBUS",
+
+  // Pickup
+  PICKUP: "PICKUP",
+
   // Trucks
   TRUCK_5T: "TRUCK_5T",
   TRUCK_10T: "TRUCK_10T",

@@ -49,32 +49,54 @@ const REGION = process.env.REGION || process.env.AWS_REGION;
 ========================================================== */
 
 /*
- * Courier-requested payout:
+ * COURIER-REQUESTED PAYOUT FEES
  *
- * Courier pays ₦100 Atua payout fee.
+ * The courier receives the full requested payout amount.
+ * The Atua payout fee is additionally deducted from the wallet.
+ *
+ * ₦3,000 – ₦50,000       → ₦100 fee
+ * ₦50,001 – ₦100,000     → ₦200 fee
+ * ₦100,001 – ₦250,000    → ₦250 fee
+ * ₦250,001+              → ₦300 fee
  */
-const COURIER_REQUESTED_PAYOUT_FEE = 100;
+const getCourierRequestedPayoutFee = (amount) => {
+  const numericAmount = Number(amount);
+
+  if (!Number.isFinite(numericAmount) || numericAmount <= 0) {
+    throw new Error("Invalid courier payout amount.");
+  }
+
+  if (numericAmount <= 50000) {
+    return 100;
+  }
+
+  if (numericAmount <= 100000) {
+    return 200;
+  }
+
+  if (numericAmount <= 250000) {
+    return 250;
+  }
+
+  return 300;
+};
 
 /*
- * Automatic payout reserve.
+ * ADMIN MANUAL PAYOUT
  *
- * IMPORTANT:
- * This is NOT an Atua fee.
- *
- * It is a ₦50 reserve retained from the courier's
- * wallet to cover the possible Paystack transfer fee.
- *
- * Example:
- *
- * Wallet:             ₦7,000
- * Reserve:               ₦50
- * Courier receives:   ₦6,950
- * Wallet debit:       ₦7,000
- *
- * Any unused portion of the ₦50 reserve remains
- * in the courier's wallet.
+ * Flat Atua payout fee.
  */
-const AUTOMATIC_PAYOUT_RESERVE = 50;
+const ADMIN_PAYOUT_FEE = 100;
+
+/*
+ * SYSTEM / AUTOMATIC PAYOUT
+ */
+/*
+ * The automatic payout fee is a flat ₦100.
+ *
+ * This is an Atua payout fee, not the Paystack transfer fee.
+ */
+const SYSTEM_PAYOUT_FEE = 100;
 
 /*
  * Paystack minimum Nigerian transfer amount.
@@ -84,7 +106,7 @@ const PAYSTACK_MIN_NG_TRANSFER_AMOUNT = 50;
 /*
  * Nigerian stamp duty.
  *
- * This is separate from the ₦50 automatic reserve.
+ * This is separate from the ₦100 Atua payout fee.
  */
 const PAYSTACK_NG_STAMP_DUTY = 50;
 
@@ -1529,29 +1551,27 @@ const getArgumentValue = (argumentsData, possibleNames) => {
    NORMALIZE REQUESTED PAYOUT AMOUNT
 ==========================================================
 
-   COURIER_REQUESTED
-   -----------------
-   - Minimum ₦3,000.
-   - ₦100 Atua payout fee.
-   - Amount itself is what the courier receives.
-
-   ADMIN_MANUAL
-   ------------
-   - No ₦3,000 minimum.
-   - No ₦100 fee.
-   - Admin may request any positive amount within
-     available balance.
-   - No amount means pay the full available balance.
-
-   SYSTEM / AUTOMATIC
-   ------------------
-   - ₦50 is reserved.
-   - ₦50 is NOT an Atua fee.
-   - Courier receives wallet balance minus ₦50.
-   - Wallet debit is payout amount + ₦50.
-   - Paystack minimum transfer = ₦50.
-   - Therefore minimum wallet balance = ₦100.
-========================================================== */
+   /*
+ * COURIER_REQUESTED
+ * -----------------
+ * - Minimum ₦3,000.
+ * - Atua payout fee depends on the requested amount:
+ *     ₦3,000 – ₦50,000       → ₦100
+ *     ₦50,001 – ₦100,000     → ₦200
+ *     ₦100,001 – ₦250,000    → ₦250
+ *     ₦250,001+              → ₦300
+ * - The requested amount is what the courier receives.
+ * - The payout fee is additionally deducted from the wallet.
+ *
+ * ADMIN_MANUAL
+ * ------------
+ * - No ₦3,000 minimum.
+ * - Flat ₦100 Atua payout fee.
+ * - Admin may request any positive amount within
+ *   the available balance after the fee is considered.
+ * - No amount means pay the full available balance
+ *   if the wallet can cover the ₦100 fee.
+ */
 
 const normalizeRequestedPayoutAmount = ({
   requestedAmount,
@@ -1575,11 +1595,22 @@ const normalizeRequestedPayoutAmount = ({
 
   if (payoutSource === PAYOUT_SOURCE.ADMIN_MANUAL) {
     /*
-     * No amount means pay the entire available balance.
+     * No amount means pay the maximum amount
+     * the courier can receive while still covering
+     * the ₦100 Atua payout fee.
      */
-
     if (!hasRequestedAmount) {
-      return Number(currentAvailable.toFixed(2));
+      const maximumAdminPayout = Number(
+        (currentAvailable - ADMIN_PAYOUT_FEE).toFixed(2),
+      );
+
+      if (maximumAdminPayout < PAYSTACK_MIN_NG_TRANSFER_AMOUNT) {
+        throw new Error(
+          "Admin payout requires enough available balance to cover the ₦100 Atua payout fee.",
+        );
+      }
+
+      return maximumAdminPayout;
     }
 
     const amount = Number(requestedAmount);
@@ -1590,8 +1621,28 @@ const normalizeRequestedPayoutAmount = ({
 
     const normalizedAmount = Number(amount.toFixed(2));
 
-    if (normalizedAmount > currentAvailable) {
-      throw new Error("Requested payout amount exceeds available balance.");
+    const maximumAdminPayout = Number(
+      (currentAvailable - ADMIN_PAYOUT_FEE).toFixed(2),
+    );
+
+    if (maximumAdminPayout < PAYSTACK_MIN_NG_TRANSFER_AMOUNT) {
+      throw new Error(
+        `Admin payout requires at least ₦${(
+          ADMIN_PAYOUT_FEE + PAYSTACK_MIN_NG_TRANSFER_AMOUNT
+        ).toLocaleString()} available in the wallet.`,
+      );
+    }
+
+    if (normalizedAmount > maximumAdminPayout) {
+      throw new Error(
+        "Requested admin payout amount plus the ₦100 Atua payout fee exceeds the available balance.",
+      );
+    }
+
+    if (normalizedAmount < PAYSTACK_MIN_NG_TRANSFER_AMOUNT) {
+      throw new Error(
+        `Admin payout must be at least ₦${PAYSTACK_MIN_NG_TRANSFER_AMOUNT.toLocaleString()}.`,
+      );
     }
 
     return normalizedAmount;
@@ -1603,20 +1654,53 @@ const normalizeRequestedPayoutAmount = ({
 
   if (payoutSource === PAYOUT_SOURCE.COURIER_REQUESTED) {
     /*
-     * No amount means the courier wants the full
-     * available balance.
+     * No amount means the courier wants the maximum
+     * amount they can withdraw while still covering
+     * the applicable Atua payout fee.
      */
-
     if (!hasRequestedAmount) {
-      const fullBalance = Number(currentAvailable.toFixed(2));
+      const balance = Number(currentAvailable.toFixed(2));
 
-      if (fullBalance < MIN_COURIER_REQUESTED_PAYOUT) {
+      if (balance < MIN_COURIER_REQUESTED_PAYOUT) {
         throw new Error(
           `Minimum courier payout is ₦${MIN_COURIER_REQUESTED_PAYOUT.toLocaleString()}.`,
         );
       }
 
-      return fullBalance;
+      /*
+       * Find the maximum payout amount for which:
+       *
+       * payout amount + applicable payout fee
+       * <= available wallet balance
+       *
+       * We check each fee tier because the fee changes
+       * at ₦50,001, ₦100,001 and ₦250,001.
+       */
+
+      const candidateAmounts = [
+        Number((balance - 100).toFixed(2)),
+        Number((balance - 200).toFixed(2)),
+        Number((balance - 250).toFixed(2)),
+        Number((balance - 300).toFixed(2)),
+      ];
+
+      const validCandidates = candidateAmounts.filter((candidate) => {
+        if (candidate < MIN_COURIER_REQUESTED_PAYOUT) {
+          return false;
+        }
+
+        const fee = getCourierRequestedPayoutFee(candidate);
+
+        return Number((candidate + fee).toFixed(2)) <= balance;
+      });
+
+      if (validCandidates.length === 0) {
+        throw new Error(
+          "Available balance is not enough to cover the minimum courier payout and applicable Atua payout fee.",
+        );
+      }
+
+      return Math.max(...validCandidates);
     }
 
     const amount = Number(requestedAmount);
@@ -1641,14 +1725,15 @@ const normalizeRequestedPayoutAmount = ({
   ======================================================== */
 
   if (payoutSource === PAYOUT_SOURCE.SYSTEM) {
-    const automaticReserve = Number(AUTOMATIC_PAYOUT_RESERVE);
+    const payoutFee = SYSTEM_PAYOUT_FEE;
 
     /*
-     * An explicit automatic payout amount means:
+     * Explicit automatic payout amount:
      *
-     * "Send this exact amount to the courier."
+     * The requested amount is the amount the courier
+     * receives.
      *
-     * The ₦50 reserve is added to the wallet debit later.
+     * The ₦100 Atua fee is added to the wallet debit later.
      */
 
     if (hasRequestedAmount) {
@@ -1661,20 +1746,18 @@ const normalizeRequestedPayoutAmount = ({
       const normalizedAmount = Number(amount.toFixed(2));
 
       const maximumAutomaticPayout = Number(
-        (currentAvailable - automaticReserve).toFixed(2),
+        (currentAvailable - payoutFee).toFixed(2),
       );
 
-      if (maximumAutomaticPayout < PAYSTACK_MIN_NG_TRANSFER_AMOUNT) {
+      if (maximumAutomaticPayout <= 0) {
         throw new Error(
-          `Automatic payout requires at least ₦${(
-            automaticReserve + PAYSTACK_MIN_NG_TRANSFER_AMOUNT
-          ).toLocaleString()} available in the wallet.`,
+          "Automatic payout requires enough available balance to cover the ₦100 Atua payout fee.",
         );
       }
 
       if (normalizedAmount > maximumAutomaticPayout) {
         throw new Error(
-          "Requested automatic payout amount exceeds the available balance after the automatic payout reserve.",
+          "Requested automatic payout amount plus the ₦100 Atua payout fee exceeds the available balance.",
         );
       }
 
@@ -1688,18 +1771,23 @@ const normalizeRequestedPayoutAmount = ({
     }
 
     /*
-     * Normal automatic Friday payout.
+     * Normal automatic payout:
      *
-     * Example:
+     * Wallet:
+     *     ₦7,000
      *
-     *     Wallet             ₦7,000
-     *     Reserve               ₦50
-     *     Courier receives    ₦6,950
+     * Atua fee:
+     *     ₦100
+     *
+     * Courier receives:
+     *     ₦6,900
+     *
+     * Wallet debit:
+     *     ₦7,000
      */
 
-    const minimumAutomaticWalletBalance = Number(
-      (automaticReserve + PAYSTACK_MIN_NG_TRANSFER_AMOUNT).toFixed(2),
-    );
+    const minimumAutomaticWalletBalance =
+      payoutFee + PAYSTACK_MIN_NG_TRANSFER_AMOUNT;
 
     if (currentAvailable < minimumAutomaticWalletBalance) {
       throw new Error(
@@ -1708,7 +1796,7 @@ const normalizeRequestedPayoutAmount = ({
     }
 
     const automaticPayoutAmount = Number(
-      (currentAvailable - automaticReserve).toFixed(2),
+      (currentAvailable - payoutFee).toFixed(2),
     );
 
     if (automaticPayoutAmount < PAYSTACK_MIN_NG_TRANSFER_AMOUNT) {
@@ -1734,29 +1822,33 @@ const calculatePayoutFinancials = ({ payoutAmount, payoutSource }) => {
     throw new Error("Payout amount must be greater than zero.");
   }
 
+  const normalizedAmount = Number(numericPayoutAmount.toFixed(2));
+
   /* ========================================================
      COURIER REQUESTED
   ======================================================== */
 
   if (payoutSource === PAYOUT_SOURCE.COURIER_REQUESTED) {
-    const payoutFee = COURIER_REQUESTED_PAYOUT_FEE;
+    /*
+     * Fee depends on the amount requested by the courier.
+     *
+     * The courier receives the FULL payout amount.
+     *
+     * The fee is additionally deducted from the wallet.
+     */
 
-    const totalWalletDebit = Number(
-      (numericPayoutAmount + payoutFee).toFixed(2),
-    );
+    const payoutFee = getCourierRequestedPayoutFee(normalizedAmount);
+
+    const totalWalletDebit = Number((normalizedAmount + payoutFee).toFixed(2));
 
     return {
-      payoutAmount: Number(numericPayoutAmount.toFixed(2)),
+      payoutAmount: normalizedAmount,
 
       payoutFee,
-
-      automaticPayoutReserve: 0,
 
       actualPaystackTransferFee: 0,
 
       paystackStampDuty: 0,
-
-      automaticReserveRemainder: 0,
 
       totalWalletDebit,
     };
@@ -1767,22 +1859,28 @@ const calculatePayoutFinancials = ({ payoutAmount, payoutSource }) => {
   ======================================================== */
 
   if (payoutSource === PAYOUT_SOURCE.ADMIN_MANUAL) {
-    const payoutFee = 0;
+    /*
+     * Admin payouts have a flat ₦100 Atua payout fee.
+     *
+     * The courier receives the full payout amount.
+     *
+     * Wallet debit:
+     *
+     *     payout amount + ₦100
+     */
 
-    const totalWalletDebit = Number(numericPayoutAmount.toFixed(2));
+    const payoutFee = ADMIN_PAYOUT_FEE;
+
+    const totalWalletDebit = Number((normalizedAmount + payoutFee).toFixed(2));
 
     return {
-      payoutAmount: Number(numericPayoutAmount.toFixed(2)),
+      payoutAmount: normalizedAmount,
 
       payoutFee,
-
-      automaticPayoutReserve: 0,
 
       actualPaystackTransferFee: 0,
 
       paystackStampDuty: 0,
-
-      automaticReserveRemainder: 0,
 
       totalWalletDebit,
     };
@@ -1794,67 +1892,36 @@ const calculatePayoutFinancials = ({ payoutAmount, payoutSource }) => {
 
   if (payoutSource === PAYOUT_SOURCE.SYSTEM) {
     /*
-     * The payout amount is already the amount
-     * that the courier receives.
+     * Automatic/system payouts have a flat ₦100 Atua fee.
      *
-     * Example:
+     * The courier receives payoutAmount.
      *
-     *     Wallet             ₦7,000
-     *     Payout             ₦6,950
-     *     Reserve               ₦50
-     *     Wallet debit       ₦7,000
+     * Wallet debit:
+     *
+     *     payout amount + ₦100
+     *
+     * The Paystack transfer fee is NOT included in
+     * payoutAmount and is NOT deducted from the courier.
      */
 
-    const automaticPayoutReserve = AUTOMATIC_PAYOUT_RESERVE;
+    const payoutFee = SYSTEM_PAYOUT_FEE;
 
     /*
-     * This is NOT an Atua fee.
+     * Calculate the actual Paystack cost separately.
      */
-
-    const payoutFee = 0;
-
-    /*
-     * Calculate the actual Paystack cost.
-     */
-
     const { transferFee, stampDuty } =
-      calculatePaystackTransferCost(numericPayoutAmount);
+      calculatePaystackTransferCost(normalizedAmount);
 
-    /*
-     * Only the transfer fee is covered by
-     * the ₦50 reserve.
-     *
-     * Stamp duty remains a separate Paystack cost.
-     */
-
-    const automaticReserveRemainder = Math.max(
-      0,
-      Number((automaticPayoutReserve - transferFee).toFixed(2)),
-    );
-
-    /*
-     * Full wallet deduction.
-     */
-
-    const totalWalletDebit = Number(
-      (numericPayoutAmount + automaticPayoutReserve).toFixed(2),
-    );
+    const totalWalletDebit = Number((normalizedAmount + payoutFee).toFixed(2));
 
     return {
-      payoutAmount: Number(numericPayoutAmount.toFixed(2)),
+      payoutAmount: normalizedAmount,
 
-      /*
-       * NOT an Atua fee.
-       */
       payoutFee,
-
-      automaticPayoutReserve,
 
       actualPaystackTransferFee: transferFee,
 
       paystackStampDuty: stampDuty,
-
-      automaticReserveRemainder,
 
       totalWalletDebit,
     };
@@ -1887,13 +1954,13 @@ const validatePayoutAgainstWallet = ({
   if (totalWalletDebit > availableBalance) {
     if (payoutSource === PAYOUT_SOURCE.COURIER_REQUESTED) {
       throw new Error(
-        "Payout amount plus the ₦100 payout fee exceeds available balance.",
+        "Payout amount plus the applicable Atua payout fee exceeds available balance.",
       );
     }
 
     if (payoutSource === PAYOUT_SOURCE.SYSTEM) {
       throw new Error(
-        "Automatic payout amount plus the ₦50 automatic payout reserve exceeds available balance.",
+        "Automatic payout amount plus the ₦100 Atua payout fee exceeds available balance.",
       );
     }
 
@@ -2018,12 +2085,12 @@ const prepareAutomaticPayoutPlan = async (wallets) => {
   const plan = [];
 
   const minimumAutomaticWalletBalance = Number(
-    (AUTOMATIC_PAYOUT_RESERVE + PAYSTACK_MIN_NG_TRANSFER_AMOUNT).toFixed(2),
+    (SYSTEM_PAYOUT_FEE + PAYSTACK_MIN_NG_TRANSFER_AMOUNT).toFixed(2),
   );
 
   let totalCourierPayout = 0;
 
-  let totalAutomaticReserve = 0;
+  let totalPayoutFees = 0;
 
   let totalWalletDebit = 0;
 
@@ -2077,9 +2144,9 @@ const prepareAutomaticPayoutPlan = async (wallets) => {
     /*
      * Minimum automatic wallet balance:
      *
-     *     ₦50 reserve
-     *   + ₦50 transfer minimum
-     *   = ₦100
+     *     ₦100 Atua payout fee
+     *   + ₦50 Paystack minimum transfer
+     *   = ₦150
      */
 
     if (availableBalance < minimumAutomaticWalletBalance) {
@@ -2097,12 +2164,24 @@ const prepareAutomaticPayoutPlan = async (wallets) => {
     }
 
     /*
-     * Courier receives everything except
-     * the ₦50 automatic reserve.
+     * Automatic payout:
+     *
+     * The courier receives the available wallet balance
+     * minus the ₦100 Atua payout fee.
+     *
+     * Example:
+     *
+     *     Wallet balance = ₦75,000
+     *     Atua fee       = ₦100
+     *     Courier gets   = ₦74,900
+     *
+     * Wallet debit:
+     *
+     *     ₦74,900 + ₦100 = ₦75,000
      */
 
     const payoutAmount = Number(
-      (availableBalance - AUTOMATIC_PAYOUT_RESERVE).toFixed(2),
+      (availableBalance - SYSTEM_PAYOUT_FEE).toFixed(2),
     );
 
     /*
@@ -2126,20 +2205,29 @@ const prepareAutomaticPayoutPlan = async (wallets) => {
     }
 
     /*
-     * Wallet debit:
+     * Atua payout fee.
      *
-     *     payout amount + ₦50 reserve
+     * This is separate from Paystack's own
+     * transfer fee and stamp duty.
+     */
+
+    const payoutFee = Number(SYSTEM_PAYOUT_FEE.toFixed(2));
+
+    /*
+     * Total amount removed from the courier wallet.
      *
-     * which should equal the original
+     * payoutAmount + payoutFee
+     *
+     * This should equal the original
      * available balance.
      */
 
-    const automaticReserve = Number(AUTOMATIC_PAYOUT_RESERVE.toFixed(2));
-
-    const walletDebit = Number((payoutAmount + automaticReserve).toFixed(2));
+    const walletDebit = Number((payoutAmount + payoutFee).toFixed(2));
 
     /*
-     * Calculate actual Paystack costs.
+     * Calculate actual Paystack costs separately.
+     *
+     * These are NOT deducted from the courier wallet.
      */
 
     const paystackCost = calculatePaystackTransferCost(payoutAmount);
@@ -2151,7 +2239,7 @@ const prepareAutomaticPayoutPlan = async (wallets) => {
     const totalPaystackCost = Number((transferFee + stampDuty).toFixed(2));
 
     /*
-     * Add courier to plan.
+     * Add courier to automatic payout plan.
      */
 
     plan.push({
@@ -2163,7 +2251,7 @@ const prepareAutomaticPayoutPlan = async (wallets) => {
 
       payoutAmount,
 
-      automaticReserve,
+      payoutFee,
 
       walletDebit,
 
@@ -2180,9 +2268,7 @@ const prepareAutomaticPayoutPlan = async (wallets) => {
 
     totalCourierPayout = Number((totalCourierPayout + payoutAmount).toFixed(2));
 
-    totalAutomaticReserve = Number(
-      (totalAutomaticReserve + automaticReserve).toFixed(2),
-    );
+    totalPayoutFees = Number((totalPayoutFees + payoutFee).toFixed(2));
 
     totalWalletDebit = Number((totalWalletDebit + walletDebit).toFixed(2));
 
@@ -2202,10 +2288,11 @@ const prepareAutomaticPayoutPlan = async (wallets) => {
    *   + transfer fees
    *   + stamp duty
    *
-   * We DO NOT add the ₦50 automatic reserves.
+   * The ₦100 Atua payout fee is NOT added
+   * to the Paystack requirement.
    *
-   * Those reserves are already represented by
-   * reducing the courier payout amounts.
+   * The payout fee is charged separately from
+   * the courier wallet.
    */
 
   const totalPaystackRequired = Number(
@@ -2221,7 +2308,7 @@ const prepareAutomaticPayoutPlan = async (wallets) => {
 
     totalCourierPayout,
 
-    totalAutomaticReserve,
+    totalPayoutFees,
 
     totalWalletDebit,
 
@@ -2243,7 +2330,7 @@ const prepareAutomaticPayoutPlan = async (wallets) => {
 
     totalCourierPayout,
 
-    totalAutomaticReserve,
+    totalPayoutFees,
 
     totalWalletDebit,
 
@@ -2300,7 +2387,7 @@ const validateAutomaticPayoutPreflight = ({ payoutPlan, paystackBalance }) => {
   console.log({
     totalCourierPayout: payoutPlan.totalCourierPayout,
 
-    totalAutomaticReserve: payoutPlan.totalAutomaticReserve,
+    totalPayoutFees: payoutPlan.totalPayoutFees,
 
     totalPaystackTransferFees: payoutPlan.totalPaystackTransferFees,
 
@@ -2337,7 +2424,7 @@ const validateAutomaticPayoutPreflight = ({ payoutPlan, paystackBalance }) => {
 
       totalCourierPayout: payoutPlan.totalCourierPayout,
 
-      totalAutomaticReserve: payoutPlan.totalAutomaticReserve,
+      totalPayoutFees: payoutPlan.totalPayoutFees,
 
       totalWalletDebit: payoutPlan.totalWalletDebit,
 
@@ -2377,7 +2464,7 @@ const validateAutomaticPayoutPreflight = ({ payoutPlan, paystackBalance }) => {
 
     totalCourierPayout: payoutPlan.totalCourierPayout,
 
-    totalAutomaticReserve: payoutPlan.totalAutomaticReserve,
+    totalPayoutFees: payoutPlan.totalPayoutFees,
 
     totalWalletDebit: payoutPlan.totalWalletDebit,
 
@@ -2404,6 +2491,8 @@ const createPayout = async ({
   courierID,
   walletID,
   amount,
+  payoutFee,
+  totalWalletDebit,
   payoutMethod,
   payoutSource,
   bankName,
@@ -2439,6 +2528,8 @@ const createPayout = async ({
         walletID
 
         amount
+        payoutFee
+        totalWalletDebit
 
         status
 
@@ -2476,6 +2567,12 @@ const createPayout = async ({
         walletID,
 
         amount: Number(numericAmount.toFixed(2)),
+
+        payoutFee: Number(Number(payoutFee || 0).toFixed(2)),
+
+        totalWalletDebit: Number(
+          Number(totalWalletDebit || numericAmount).toFixed(2),
+        ),
 
         status: "PENDING",
 
@@ -2534,6 +2631,8 @@ const updatePayout = async ({ payout, updates = {} }) => {
         walletID
 
         amount
+        payoutFee
+        totalWalletDebit
 
         status
 
@@ -2907,6 +3006,7 @@ const restorePayoutWallet = async ({ wallet, amountToRestore }) => {
 const createDebitTransaction = async ({
   walletID,
   amount,
+  payoutID,
   reference,
   description,
 }) => {
@@ -2932,6 +3032,7 @@ const createDebitTransaction = async ({
         id
 
         walletID
+        payoutID
 
         type
 
@@ -2963,6 +3064,8 @@ const createDebitTransaction = async ({
     {
       input: {
         walletID,
+
+        payoutID: payoutID || null,
 
         type: "DEBIT",
 
@@ -3577,13 +3680,9 @@ const processCourierPayout = async ({
 
     payoutFee: financials.payoutFee,
 
-    automaticPayoutReserve: financials.automaticPayoutReserve,
-
     actualPaystackTransferFee: financials.actualPaystackTransferFee,
 
     paystackStampDuty: financials.paystackStampDuty,
-
-    automaticReserveRemainder: financials.automaticReserveRemainder,
 
     totalWalletDebit: financials.totalWalletDebit,
 
@@ -3649,10 +3748,6 @@ const processCourierPayout = async ({
       payoutAmount: financials.payoutAmount,
 
       payoutFee: financials.payoutFee,
-
-      automaticPayoutReserve: financials.automaticPayoutReserve,
-
-      automaticReserveRemainder: financials.automaticReserveRemainder,
 
       actualPaystackTransferFee: financials.actualPaystackTransferFee,
 
@@ -4587,10 +4682,10 @@ const processCourierPayout = async ({
 
    Manual admin-all payouts:
 
-       - have NO ₦3,000 courier minimum
-       - have NO ₦100 payout fee
-       - do NOT use the automatic ₦50 reserve
-       - are processed individually
+    - have NO ₦3,000 courier minimum
+    - have a flat ₦100 Atua payout fee
+    - do NOT use an automatic reserve
+    - are processed individually
 
    A failure for one courier does not cause already
    completed payouts to be reversed.
@@ -4657,9 +4752,11 @@ const executeManualAllPayouts = async ({ secretKey }) => {
       continue;
     }
 
-    const amount = Number(wallet?.availableBalance || 0);
+    const availableBalance = Number(wallet?.availableBalance || 0);
 
-    if (!Number.isFinite(amount) || amount <= 0) {
+    const amount = Number((availableBalance - ADMIN_PAYOUT_FEE).toFixed(2));
+
+    if (!Number.isFinite(amount) || amount < PAYSTACK_MIN_NG_TRANSFER_AMOUNT) {
       results.push({
         courierID,
 
@@ -4667,7 +4764,7 @@ const executeManualAllPayouts = async ({ secretKey }) => {
 
         amount: 0,
 
-        message: "Courier does not have a positive available balance.",
+        message: `Wallet balance is below the minimum required for an admin payout of ₦${PAYSTACK_MIN_NG_TRANSFER_AMOUNT.toLocaleString()} plus the ₦${ADMIN_PAYOUT_FEE.toLocaleString()} Atua payout fee.`,
       });
 
       continue;
@@ -5163,7 +5260,7 @@ const runAutomaticPayouts = async ({ secretKey }) => {
 
       totalCourierPayout: 0,
 
-      totalAutomaticReserve: 0,
+      totalPayoutFees: 0,
 
       totalWalletDebit: 0,
 
@@ -5209,7 +5306,7 @@ const runAutomaticPayouts = async ({ secretKey }) => {
 
       totalCourierPayout: 0,
 
-      totalAutomaticReserve: 0,
+      totalPayoutFees: 0,
 
       totalWalletDebit: 0,
 
@@ -5285,7 +5382,7 @@ const runAutomaticPayouts = async ({ secretKey }) => {
 
       totalCourierPayout: plan.totalCourierPayout,
 
-      totalAutomaticReserve: plan.totalAutomaticReserve,
+      totalPayoutFees: plan.totalPayoutFees,
 
       totalWalletDebit: plan.totalWalletDebit,
 
@@ -5359,7 +5456,7 @@ const runAutomaticPayouts = async ({ secretKey }) => {
 
         payoutAmount: item.payoutAmount,
 
-        automaticReserve: item.automaticReserve,
+        payoutFee: item.payoutFee,
 
         walletDebit: item.walletDebit,
 
@@ -5399,8 +5496,6 @@ const runAutomaticPayouts = async ({ secretKey }) => {
         walletID: item.walletID,
 
         payoutAmount: item.payoutAmount,
-
-        automaticReserve: item.automaticReserve,
 
         walletDebit: item.walletDebit,
 
@@ -5449,7 +5544,7 @@ const runAutomaticPayouts = async ({ secretKey }) => {
 
     totalCourierPayout: plan.totalCourierPayout,
 
-    totalAutomaticReserve: plan.totalAutomaticReserve,
+    totalPayoutFees: plan.totalPayoutFees,
 
     totalWalletDebit: plan.totalWalletDebit,
 
@@ -5481,7 +5576,7 @@ const runAutomaticPayouts = async ({ secretKey }) => {
 
     totalCourierPayout: plan.totalCourierPayout,
 
-    totalAutomaticReserve: plan.totalAutomaticReserve,
+    totalPayoutFees: plan.totalPayoutFees,
 
     totalWalletDebit: plan.totalWalletDebit,
 
@@ -5696,9 +5791,11 @@ exports.handler = async (event, context) => {
 
        Rules:
 
-           - NO ₦3,000 minimum
-           - NO ₦100 Atua payout fee
-           - amount must be within available wallet balance
+          - NO ₦3,000 courier minimum
+          - FLAT ₦100 Atua payout fee
+          - NO separate automatic reserve
+          - Paystack minimum transfer of ₦50 still applies
+          - processes eligible couriers sequentially
 
     ====================================================== */
 
@@ -5766,10 +5863,11 @@ exports.handler = async (event, context) => {
 
        Rules:
 
-           - NO ₦3,000 minimum
-           - NO ₦100 courier payout fee
-           - NO automatic ₦50 reserve
-           - processes eligible couriers sequentially
+          - NO ₦3,000 courier minimum
+          - FLAT ₦100 Atua payout fee
+          - NO separate automatic reserve
+          - Paystack minimum transfer of ₦50 still applies
+          - processes eligible couriers sequentially
 
     ====================================================== */
 

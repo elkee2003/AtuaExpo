@@ -4877,6 +4877,45 @@ export const deleteSavedPaymentMethod = /* GraphQL */ `
     }
   }
 `;
+export const cancelOrder = /* GraphQL */ `
+  mutation CancelOrder(
+    $orderID: ID!
+    $reason: CancellationReason
+    $reasonNote: String
+  ) {
+    cancelOrder(orderID: $orderID, reason: $reason, reasonNote: $reasonNote) {
+      id
+      orderID
+      userID
+      courierID
+      status
+      stage
+      reason
+      reasonNote
+      originalAmount
+      cancellationFee
+      refundAmount
+      refundStatus
+      refundReference
+      paymentReference
+      cancellationRequestedAt
+      cancellationProcessedAt
+      refundRequestedAt
+      refundedAt
+      courierReversed
+      courierEarningsReversed
+      walletReversed
+      assignmentReversed
+      errorMessage
+      createdAt
+      updatedAt
+      _version
+      _deleted
+      _lastChangedAt
+      __typename
+    }
+  }
+`;
 export const permanentlyDeleteOrder = /* GraphQL */ `
   mutation PermanentlyDeleteOrder($orderID: ID!) {
     permanentlyDeleteOrder(orderID: $orderID)

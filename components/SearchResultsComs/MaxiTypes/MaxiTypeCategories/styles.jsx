@@ -54,6 +54,7 @@ export default StyleSheet.create({
   buttonRow: {
     flexDirection: "row",
     justifyContent: "space-between",
+    alignItems: "center",
   },
 
   galleryBtn: {
@@ -79,5 +80,35 @@ export default StyleSheet.create({
   selectText: {
     color: "#fff",
     fontWeight: "600",
+  },
+
+  // -----------------------------------
+  // DISABLED SELECT BUTTON
+  // -----------------------------------
+
+  selectBtnDisabled: {
+    backgroundColor: "#e5e7eb",
+  },
+
+  selectTextDisabled: {
+    color: "#9ca3af",
+  },
+
+  // -----------------------------------
+  // LOADING
+  // -----------------------------------
+
+  loadingScreen: {
+    flex: 1,
+    backgroundColor: "#fff",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 20,
+  },
+
+  loadingText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: "#6b7280",
   },
 });

@@ -34,6 +34,7 @@
  *
  * IMPORTANT
  * ---------
+ *
  * The frontend performs the same eligibility checks for UX.
  * However, those checks are NOT trusted for security.
  *
@@ -49,9 +50,43 @@
  *   - verifies that the Order did not change
  *   - deletes the Order using AppSync versioning
  *
- * This protects us against stale Order History screens and
- * prevents a user from deleting an order simply by calling
- * the mutation directly.
+ *
+ * IMPORTANT DATASTORE FIX
+ * ------------------------
+ *
+ * DataStore subscriptions expect the AppSync mutation response
+ * to contain the complete model fields needed to hydrate the
+ * deleted/updated record.
+ *
+ * The previous version only requested:
+ *
+ *   Order:
+ *     id
+ *     _version
+ *     _deleted
+ *
+ *   Offer:
+ *     id
+ *     orderID
+ *     courierID
+ *     senderType
+ *     amount
+ *     status
+ *     _version
+ *     _deleted
+ *
+ * This caused DataStore to receive subscription payloads where
+ * fields such as:
+ *
+ *   userID
+ *   createdAt
+ *   updatedAt
+ *   _lastChangedAt
+ *
+ * appeared as null.
+ *
+ * This version deliberately requests the complete scalar fields
+ * for Order and Offer, including DataStore metadata.
  *
  * ============================================================
  */
@@ -72,8 +107,7 @@ const GRAPHQL_API_KEY = process.env.API_ATUA_GRAPHQLAPIKEYOUTPUT;
 const REGION = process.env.REGION || "us-east-1";
 
 /**
- * REGION is kept here because it is part of the Lambda
- * environment and may be useful for future AWS operations.
+ * REGION is kept because it is part of the Lambda environment.
  *
  * The current AppSync requests use HTTPS + API key directly.
  */
@@ -98,27 +132,11 @@ if (!GRAPHQL_API_KEY) {
  * GraphQL HTTP helper
  * ============================================================
  *
- * Order, User and Offer currently use:
+ * Order, User and Offer use AppSync API-key access.
  *
- *   @auth(rules: [{ allow: public }])
- *
- * Therefore this Lambda can use the AppSync API key for these
- * internal model operations.
- *
- * IMPORTANT:
- *
- * The public auth on the models does NOT make the custom
- * permanentlyDeleteOrder mutation public.
- *
- * The custom mutation is protected by:
- *
- *   @auth(rules: [
- *     { allow: private, provider: userPools }
- *   ])
- *
- * The caller must therefore reach this Lambda through the
- * authenticated GraphQL mutation first.
- *
+ * The custom permanentlyDeleteOrder mutation itself is protected
+ * by Cognito. The Lambda therefore verifies the caller through
+ * event.identity before performing any destructive operation.
  * ============================================================
  */
 
@@ -142,7 +160,6 @@ async function graphqlRequest(query, variables = {}) {
     hostname: endpoint.hostname,
     path: endpoint.pathname,
     method: "POST",
-
     headers: {
       "Content-Type": "application/json",
       "x-api-key": GRAPHQL_API_KEY,
@@ -174,9 +191,6 @@ async function graphqlRequest(query, variables = {}) {
         /**
          * AppSync can return HTTP 200 while still containing
          * GraphQL errors.
-         *
-         * Therefore check parsed.errors before treating the
-         * request as successful.
          */
         if (parsed.errors && parsed.errors.length > 0) {
           console.error(
@@ -189,10 +203,6 @@ async function graphqlRequest(query, variables = {}) {
 
           const error = new Error(message);
 
-          /**
-           * Preserve the complete GraphQL errors so the caller
-           * can inspect them if necessary.
-           */
           error.graphQLErrors = parsed.errors;
 
           return reject(error);
@@ -226,14 +236,6 @@ async function graphqlRequest(query, variables = {}) {
  * ============================================================
  */
 
-/**
- * Normalize strings so comparisons are consistent.
- *
- * Example:
- *
- *   "maxi"       -> "MAXI"
- *   " ACCEPTED " -> "ACCEPTED"
- */
 function normalizeString(value) {
   return String(value || "")
     .trim()
@@ -249,6 +251,9 @@ function isMaxi(order) {
 
 /**
  * Determine whether an Order is Micro or Moto.
+ *
+ * We deliberately support the actual transportationType values
+ * used by Atua.
  */
 function isMicroOrMoto(order) {
   const type = normalizeString(order?.transportationType);
@@ -258,6 +263,8 @@ function isMicroOrMoto(order) {
     "MICRO_BATCH",
     "MOTO_EXPRESS",
     "MOTO_BATCH",
+    "MICRO",
+    "MOTO",
   ].includes(type);
 }
 
@@ -266,13 +273,10 @@ function isMicroOrMoto(order) {
  * Determine whether the latest Order is deletable
  * ============================================================
  *
- * IMPORTANT:
- *
  * This is the backend business rule.
  *
  * The frontend may use the same logic for displaying buttons,
  * but the frontend is NOT trusted.
- *
  * ============================================================
  */
 
@@ -322,8 +326,6 @@ function getDeletionEligibility(order) {
      * has not happened.
      *
      * The order can still be permanently deleted.
-     *
-     * IMPORTANT:
      *
      * We do NOT reverse currentMaxiCount here because the MAXI
      * count is incremented only after payment.
@@ -433,7 +435,6 @@ function getDeletionEligibility(order) {
  * Then compare:
  *
  *   Order.userID === User.id
- *
  * ============================================================
  */
 
@@ -442,9 +443,14 @@ async function getUserByCognitoSub(cognitoSub) {
     return null;
   }
 
-  const query = /* GraphQL */ `
-    query GetUserBySub($filter: ModelUserFilterInput) {
-      listUsers(filter: $filter, limit: 2) {
+  const query = `
+    query GetUserBySub(
+      $filter: ModelUserFilterInput
+    ) {
+      listUsers(
+        filter: $filter
+        limit: 2
+      ) {
         items {
           id
           sub
@@ -486,27 +492,203 @@ async function getUserByCognitoSub(cognitoSub) {
 
 /**
  * ============================================================
+ * Complete Order scalar field selection
+ * ============================================================
+ *
+ * IMPORTANT:
+ *
+ * This list intentionally contains the Order scalar fields
+ * required by the current Atua schema, including DataStore
+ * metadata.
+ *
+ * We do NOT request nested relationships such as:
+ *
+ *   offers
+ *   payments
+ *   assignedCourier
+ *
+ * because those are connections/relationships and are not
+ * necessary for the delete subscription payload.
+ * ============================================================
+ */
+
+const ORDER_FIELDS = `
+  id
+
+  recipientName
+  recipientNumber
+  recipientNumber2
+  orderDetails
+
+  originAddress
+  originState
+  originLat
+  originLng
+
+  destinationAddress
+  destinationState
+  destinationLat
+  destinationLng
+
+  tripType
+  distance
+
+  transportationType
+  vehicleClass
+  orderEnvironment
+
+  status
+
+  hasNewOffer
+  lastOfferAt
+  lastOfferSenderType
+
+  loadCategory
+  isInterState
+
+  estimatedMinPrice
+  estimatedMaxPrice
+  initialOfferPrice
+
+  loadingFee
+  unloadingFee
+  floorSurcharge
+  fragileSurcharge
+  extrasTotal
+
+  totalPrice
+  operationalFare
+
+  courierEarnings
+  commissionAmount
+  platformFee
+  platformServiceRevenue
+  vatAmount
+  platformNetRevenue
+
+  deliveryVerificationCode
+
+  recipientTrackingToken
+  recipientTrackingEnabled
+  recipientTrackingRevokedAt
+
+  declaredWeightBracket
+
+  senderPreTransferPhotos
+  senderPreTransferVideo
+  senderPreTransferRecordedAt
+
+  senderPreTransferLocalPhotos
+  senderPreTransferLocalVideo
+
+  mediaUploadStatus
+
+  courierPreTransferUploadStatus
+  courierPostLoadingUploadStatus
+  dropoffUploadStatus
+
+  courierPreTransferPhotos
+  courierPreTransferVideo
+  courierPreTransferRecordedAt
+
+  courierPreTransferLocalPhotos
+  courierPreTransferLocalVideo
+
+  courierPostLoadingPhotos
+  courierPostLoadingVideo
+
+  courierPostLoadingLocalPhotos
+  courierPostLoadingLocalVideo
+
+  dropoffArrivalPhotos
+  dropoffArrivalVideo
+
+  dropoffArrivalLocalPhotos
+  dropoffArrivalLocalVideo
+
+  postDeliveryPhotos
+  postDeliveryVideo
+
+  pickupLoadingResponsibility
+  pickupFloorLevel
+  pickupFloorLevelPrice
+  pickupHasElevator
+
+  dropoffUnloadingResponsibility
+  dropoffFloorLevel
+  dropoffFloorLevelPrice
+  dropoffHasElevator
+
+  acceptedAt
+  arrivedPickupAt
+  loadingStartedAt
+  tripStartedAt
+  arrivedDropoffAt
+  unloadingCompletedAt
+
+  logisticsCompanyId
+  waybillNumber
+  waybillPhoto
+  logisticsTrackingCode
+  logisticsTrackingStatus
+  handedOverToLogisticsAt
+  logisticsIntakeConfirmedAt
+
+  acceptedOfferID
+
+  paymentStatus
+  paymentID
+  paymentReference
+
+  payoutStatus
+  fundsStatus
+
+  earningsAllocationStatus
+  earningsAllocatedAt
+
+  fundsReleaseBlocked
+  fundsHoldReason
+  fundsHeldBy
+  fundsHeldAt
+  fundsReleasedAmount
+  pickupFundsReleasedAt
+  fundsReleasedAt
+  fundsReleaseType
+
+  assignedCourierId
+  assignmentExpiresAt
+  assignmentAttempts
+  lastAssignedAt
+  rejectedCourierIds
+  assignmentStatus
+
+  maxiCountIncrementedAt
+
+  userID
+
+  createdAt
+  updatedAt
+
+  _version
+  _lastChangedAt
+  _deleted
+`;
+
+/**
+ * ============================================================
  * Get latest Order
  * ============================================================
  */
 
 async function getOrder(orderID) {
-  const query = /* GraphQL */ `
+  if (!orderID) {
+    throw new Error("Order ID is required.");
+  }
+
+  const query = `
     query GetOrder($id: ID!) {
       getOrder(id: $id) {
-        id
-        userID
-        transportationType
-        status
-        paymentStatus
-        paymentReference
-        totalPrice
-        assignedCourierId
-        acceptedOfferID
-        maxiCountIncrementedAt
-        orderEnvironment
-        _version
-        _deleted
+        ${ORDER_FIELDS}
       }
     }
   `;
@@ -523,11 +705,10 @@ async function getOrder(orderID) {
  * Get ALL Offers belonging to an Order
  * ============================================================
  *
- * We use the byOrder index through the orderID filter.
+ * We use the orderID filter.
  *
  * We intentionally paginate because an order may have more
  * offers than the default AppSync page size.
- *
  * ============================================================
  */
 
@@ -537,13 +718,17 @@ async function getOffersForOrder(orderID) {
   let nextToken = null;
 
   do {
-    const query = /* GraphQL */ `
+    const query = `
       query ListOffers(
         $filter: ModelOfferFilterInput
         $limit: Int
         $nextToken: String
       ) {
-        listOffers(filter: $filter, limit: $limit, nextToken: $nextToken) {
+        listOffers(
+          filter: $filter
+          limit: $limit
+          nextToken: $nextToken
+        ) {
           items {
             id
             orderID
@@ -551,9 +736,13 @@ async function getOffersForOrder(orderID) {
             senderType
             amount
             status
+            createdAt
+            updatedAt
             _version
+            _lastChangedAt
             _deleted
           }
+
           nextToken
         }
       }
@@ -595,6 +784,15 @@ async function getOffersForOrder(orderID) {
  *
  * We do NOT blindly overwrite the Offer.
  *
+ * IMPORTANT DATASTORE FIX:
+ *
+ * The mutation response now includes:
+ *
+ *   createdAt
+ *   updatedAt
+ *   _lastChangedAt
+ *
+ * in addition to the normal Offer fields.
  * ============================================================
  */
 
@@ -613,15 +811,17 @@ async function cancelOffer(offer) {
   }
 
   /**
-   * If AppSync tells us the record has already been deleted,
-   * there is nothing more to do.
+   * If AppSync tells us the record has already
+   * been deleted, there is nothing more to do.
    */
   if (offer._deleted === true) {
     return offer;
   }
 
-  const mutation = /* GraphQL */ `
-    mutation UpdateOffer($input: UpdateOfferInput!) {
+  const mutation = `
+    mutation UpdateOffer(
+      $input: UpdateOfferInput!
+    ) {
       updateOffer(input: $input) {
         id
         orderID
@@ -629,6 +829,11 @@ async function cancelOffer(offer) {
         senderType
         amount
         status
+
+        createdAt
+        updatedAt
+        _lastChangedAt
+
         _version
         _deleted
       }
@@ -708,7 +913,7 @@ async function invalidateMaxiOffers(orderID) {
  *
  *   deleteOrder(input: DeleteOrderInput!)
  *
- * This is DIFFERENT from our custom public mutation:
+ * This is DIFFERENT from our custom mutation:
  *
  *   permanentlyDeleteOrder(orderID: ID!)
  *
@@ -717,6 +922,27 @@ async function invalidateMaxiOffers(orderID) {
  * Inside the Lambda, we call the generated model mutation
  * deleteOrder(input: ...).
  *
+ *
+ * IMPORTANT DATASTORE FIX:
+ *
+ * The previous version only returned:
+ *
+ *   id
+ *   _version
+ *   _deleted
+ *
+ * The DataStore subscription expects the complete Order
+ * model payload.
+ *
+ * We therefore request the complete scalar Order fields,
+ * including:
+ *
+ *   userID
+ *   createdAt
+ *   updatedAt
+ *   _lastChangedAt
+ *
+ * and the other model fields.
  * ============================================================
  */
 
@@ -725,12 +951,12 @@ async function deleteOrderRecord(order) {
     throw new Error("Cannot delete an Order without an ID.");
   }
 
-  const mutation = /* GraphQL */ `
-    mutation DeleteOrder($input: DeleteOrderInput!) {
+  const mutation = `
+    mutation DeleteOrder(
+      $input: DeleteOrderInput!
+    ) {
       deleteOrder(input: $input) {
-        id
-        _version
-        _deleted
+        ${ORDER_FIELDS}
       }
     }
   `;
@@ -742,7 +968,8 @@ async function deleteOrderRecord(order) {
   /**
    * Use the exact version we read.
    *
-   * This protects against deleting a stale version of the Order.
+   * This protects against deleting a stale version
+   * of the Order.
    */
   if (order._version != null) {
     input._version = order._version;
@@ -791,7 +1018,7 @@ exports.handler = async (event) => {
      * 2. Verify Cognito authentication
      * --------------------------------------------------------
      *
-     * The GraphQL mutation itself is protected by
+     * The custom GraphQL mutation itself is protected by
      * Cognito user-pool authentication.
      *
      * We still explicitly verify the identity here.
@@ -907,13 +1134,16 @@ exports.handler = async (event) => {
     }
 
     /**
+     * --------------------------------------------------------
      * Save the version that we initially read.
+     * --------------------------------------------------------
      *
      * We will compare this with the fresh Order read later.
      *
      * This is important because MAXI offer invalidation happens
      * before the final Order deletion.
      */
+
     const originalOrderVersion = order._version;
 
     /**
@@ -953,8 +1183,6 @@ exports.handler = async (event) => {
      * 9. IMPORTANT: Re-read the Order
      * --------------------------------------------------------
      *
-     * This is the critical race-condition protection.
-     *
      * We just changed Offer records.
      *
      * During that time, another operation could potentially
@@ -963,13 +1191,13 @@ exports.handler = async (event) => {
      * Example:
      *
      *   User clicks Delete
-     *          ↓
+     *         ↓
      *   Lambda reads BIDDING
-     *          ↓
+     *         ↓
      *   Courier accepts / payment process changes Order
-     *          ↓
+     *         ↓
      *   Lambda cancels old offers
-     *          ↓
+     *         ↓
      *   Lambda tries to delete
      *
      * We MUST NOT delete the Order based only on our original
@@ -999,9 +1227,6 @@ exports.handler = async (event) => {
     /**
      * --------------------------------------------------------
      * 10. Re-check ownership
-     * --------------------------------------------------------
-     *
-     * The Order must still belong to the authenticated user.
      * --------------------------------------------------------
      */
 
@@ -1075,6 +1300,7 @@ exports.handler = async (event) => {
      *
      * If they differ, do NOT delete.
      */
+
     if (
       originalOrderVersion != null &&
       latestOrder._version != null &&
@@ -1120,6 +1346,7 @@ exports.handler = async (event) => {
        *
        * AppSync's version check should reject the stale delete.
        */
+
       throw new Error(
         "The order changed while it was being deleted. Please refresh your orders and try again.",
       );
@@ -1157,6 +1384,7 @@ exports.handler = async (event) => {
      *
      * instead of believing the order was deleted.
      */
+
     throw error;
   }
 };

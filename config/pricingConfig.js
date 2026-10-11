@@ -31,58 +31,76 @@ export const PRICING_CONFIG = {
     platformFee: 350,
   },
 
+  CAR: {
+    baseFare: 800,
+    perKm: 700,
+    minFare: 2000,
+    commissionRate: 0.18,
+    platformFee: 400,
+  },
+
+  WAGON: {
+    baseFare: 1000,
+    perKm: 750,
+    minFare: 2500,
+    commissionRate: 0.18,
+    platformFee: 400,
+  },
+
+  MINIBUS: {
+    baseFare: 1200,
+    perKm: 900,
+    minFare: 3500,
+    commissionRate: 0.18,
+    platformFee: 500,
+  },
+
+  // PICKUP
+  PICKUP: {
+    baseFare: 1500,
+    perKm: 1000,
+    minFare: 3500,
+    commissionRate: 0.18,
+    platformFee: 500,
+  },
+
   // VANS
   SMALL_VAN: {
     baseFare: 3000,
-    perKm: 600,
+    perKm: 300,
     minFare: 8000,
     commissionRate: 0.2,
     platformFee: 800,
-
-    fuelConsumptionPerKm: 0.18,
-    maintenanceCostPerKm: 150,
   },
   MEDIUM_VAN: {
     baseFare: 5000,
-    perKm: 850,
+    perKm: 350,
     minFare: 12000,
     commissionRate: 0.22,
     platformFee: 1200,
-
-    fuelConsumptionPerKm: 0.22,
-    maintenanceCostPerKm: 220,
   },
   LARGE_VAN: {
     baseFare: 7000,
-    perKm: 1100,
+    perKm: 350,
     minFare: 16000,
     commissionRate: 0.23,
     platformFee: 1500,
-
-    fuelConsumptionPerKm: 0.28,
-    maintenanceCostPerKm: 300,
   },
 
   // BOX TRUCKS
   TRUCK_5T: {
     baseFare: 12000,
-    perKm: 1600,
+    perKm: 400,
     minFare: 30000,
     commissionRate: 0.25,
     platformFee: 2000,
-
-    fuelConsumptionPerKm: 0.32,
-    maintenanceCostPerKm: 450,
   },
   TRUCK_10T: {
     baseFare: 20000,
-    perKm: 2200,
+    perKm: 600,
     minFare: 45000,
     commissionRate: 0.27,
     platformFee: 3000,
-
-    fuelConsumptionPerKm: 0.4,
-    maintenanceCostPerKm: 650,
   },
   // TRUCK_20T: {
   //     baseFare: 12000,
@@ -95,23 +113,17 @@ export const PRICING_CONFIG = {
   // FLATBEDS
   FLATBED_5T: {
     baseFare: 18000,
-    perKm: 2200,
+    perKm: 400,
     minFare: 40000,
     commissionRate: 0.26,
     platformFee: 3000,
-
-    fuelConsumptionPerKm: 0.35,
-    maintenanceCostPerKm: 500,
   },
   FLATBED_10T: {
     baseFare: 30000,
-    perKm: 3200,
-    minFare: 75000,
+    perKm: 500,
+    minFare: 50000,
     commissionRate: 0.28,
     platformFee: 5000,
-
-    fuelConsumptionPerKm: 0.45,
-    maintenanceCostPerKm: 750,
   },
   // FLATBED_20T: {
   //     baseFare: 15000,
@@ -124,23 +136,17 @@ export const PRICING_CONFIG = {
   // TIPPERS (usually higher wear & risk)
   TIPPER_5T: {
     baseFare: 20000,
-    perKm: 2400,
+    perKm: 450,
     minFare: 45000,
     commissionRate: 0.27,
     platformFee: 3500,
-
-    fuelConsumptionPerKm: 0.38,
-    maintenanceCostPerKm: 600,
   },
   TIPPER_10T: {
     baseFare: 35000,
-    perKm: 3500,
+    perKm: 550,
     minFare: 90000,
     commissionRate: 0.3,
     platformFee: 6000,
-
-    fuelConsumptionPerKm: 0.5,
-    maintenanceCostPerKm: 900,
   },
   // TIPPER_20T: {
   //     baseFare: 18000, perKm: 2300, minFare: 35000, commissionRate: 0.32, platformFee: 4000
@@ -149,13 +155,10 @@ export const PRICING_CONFIG = {
   // REFRIGERATED
   REFRIGERATED_5T: {
     baseFare: 25000,
-    perKm: 3000,
+    perKm: 500,
     minFare: 60000,
     commissionRate: 0.28,
     platformFee: 4000,
-
-    fuelConsumptionPerKm: 0.42,
-    maintenanceCostPerKm: 700,
   },
   REFRIGERATED_10T: {
     baseFare: 40000,
@@ -163,8 +166,5 @@ export const PRICING_CONFIG = {
     minFare: 100000,
     commissionRate: 0.3,
     platformFee: 7000,
-
-    fuelConsumptionPerKm: 0.55,
-    maintenanceCostPerKm: 1100,
   },
 };

@@ -25,51 +25,104 @@ export default function VehicleGallery() {
   const pagerRef = useRef(null);
   const scrollY = useRef(new Animated.Value(0)).current;
 
-  const [couriers, setCouriers] = useState([]);
   const [images, setImages] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activePage, setActivePage] = useState(0);
 
   useEffect(() => {
     fetchCouriers();
-  }, []);
+  }, [vehicleClass]);
 
   const fetchCouriers = async () => {
     try {
+      setLoading(true);
+      setImages([]);
+      setActivePage(0);
+
       const result = await DataStore.query(Courier, (c) =>
         c.vehicleClass.eq(vehicleClass),
       );
 
-      setCouriers(result);
-
-      if (result.length > 0) {
-        const vehicleImages = result[0]?.maxiImages || [];
-
-        const urls = await Promise.all(
-          vehicleImages.map(async (key) => {
-            const res = await getUrl({
-              path: key,
-              options: { validateObjectExistence: true },
-            });
-
-            return res.url.toString();
-          }),
-        );
-
-        setImages(urls);
+      // No courier found for this vehicle class
+      if (result.length === 0) {
+        console.log("No courier found for:", vehicleClass);
+        return;
       }
 
-      setLoading(false);
+      // Get images from the first matching courier
+      const vehicleImages = result[0]?.maxiImages;
+
+      console.log("Vehicle class:", vehicleClass);
+      console.log("Courier found:", result[0]);
+      console.log("maxiImages:", vehicleImages);
+
+      // Courier exists but has no images
+      if (
+        !vehicleImages ||
+        !Array.isArray(vehicleImages) ||
+        vehicleImages.length === 0
+      ) {
+        console.log("No images available for:", vehicleClass);
+        return;
+      }
+
+      const urls = [];
+
+      for (const key of vehicleImages) {
+        try {
+          if (!key) {
+            continue;
+          }
+
+          const res = await getUrl({
+            path: key,
+            options: {
+              validateObjectExistence: true,
+            },
+          });
+
+          if (res?.url) {
+            urls.push(res.url.toString());
+          }
+        } catch (imageError) {
+          console.log("Could not load image:", key, imageError);
+        }
+      }
+
+      console.log("Valid image URLs:", urls);
+
+      setImages(urls);
     } catch (error) {
-      console.log("Error loading vehicles", error);
+      console.log("Error loading vehicles:", error);
+      setImages([]);
+    } finally {
       setLoading(false);
     }
   };
 
+  // Loading screen
   if (loading) {
     return (
       <View style={styles.loader}>
         <ActivityIndicator size="large" color="#fff" />
+      </View>
+    );
+  }
+
+  // No vehicles/images available
+  if (images.length === 0) {
+    return (
+      <View style={styles.emptyContainer}>
+        <View style={styles.emptyIcon}>
+          <Text style={styles.emptyIconText}>🚚</Text>
+        </View>
+
+        <Text style={styles.emptyTitle}>No Vehicles Available</Text>
+
+        <Text style={styles.emptyDescription}>
+          There are currently no available vehicles in the{" "}
+          {vehicleClass?.toString().replace(/_/g, " ")} category.
+        </Text>
       </View>
     );
   }
@@ -80,7 +133,9 @@ export default function VehicleGallery() {
       scrollEventThrottle={16}
       onScroll={Animated.event(
         [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-        { useNativeDriver: true },
+        {
+          useNativeDriver: true,
+        },
       )}
     >
       {/* PARALLAX HEADER */}
@@ -142,7 +197,7 @@ export default function VehicleGallery() {
         {images.map((img, index) => (
           <TouchableOpacity
             key={index}
-            onPress={() => pagerRef.current.setPage(index)}
+            onPress={() => pagerRef.current?.setPage(index)}
           >
             <Image
               source={{ uri: img }}
@@ -185,7 +240,12 @@ function ZoomableImage({ uri }) {
     >
       <Animated.Image
         source={{ uri }}
-        style={[styles.image, { transform: [{ scale }] }]}
+        style={[
+          styles.image,
+          {
+            transform: [{ scale }],
+          },
+        ]}
         resizeMode="cover"
       />
     </PinchGestureHandler>

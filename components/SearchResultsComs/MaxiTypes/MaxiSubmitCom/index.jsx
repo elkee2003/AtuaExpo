@@ -1,4 +1,5 @@
 import { freightPricingEngine } from "@/modules/freightPricingEngine";
+
 import { useAuthContext } from "@/providers/AuthProvider";
 import { useLocationContext } from "@/providers/LocationProvider";
 import { useOrderContext } from "@/providers/OrderProvider";
@@ -150,6 +151,12 @@ const MaxiSubmit = () => {
 
           status: "BIDDING",
 
+          paymentStatus: "PENDING",
+
+          payoutStatus: "NOT_PAID",
+
+          fundsStatus: "HELD",
+
           // PRICING
           loadCategory,
           isInterState,
@@ -166,8 +173,6 @@ const MaxiSubmit = () => {
           floorSurcharge: pricing.extras.floorSurcharge,
           fragileSurcharge: pricing.extras.fragileSurcharge,
           extrasTotal: pricing.extrasTotal,
-
-          platformFee: parseFloat(platformFee),
 
           // WEIGHT
           declaredWeightBracket,

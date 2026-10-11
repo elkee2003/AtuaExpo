@@ -296,7 +296,18 @@ type Payout @model @auth(rules: [{ allow: public }]) {
 
   walletID: ID @index(name: "byWallet")
 
+  # The amount actually sent to the courier's bank account.
+  # This does NOT include the Atua payout fee.
   amount: Float!
+
+  # Atua's fee charged for processing this payout.
+  # For COURIER_REQUESTED payouts, the fee is tiered by the requested payout amount.
+  # For ADMIN_MANUAL and SYSTEM payouts, the fee is ₦100.
+  payoutFee: Float!
+
+  # The total amount deducted from the courier's wallet.
+  # Formula: amount + payoutFee
+  totalWalletDebit: Float!
 
   status: PayoutStatus
 
@@ -346,6 +357,8 @@ type Transaction @model @auth(rules: [{ allow: public }]) {
 
   orderID: ID @index(name: "byOrder")
   paymentID: ID @index(name: "byPayment")
+
+  payoutID: ID @index(name: "byPayout")
 
   reference: String
     @index(
@@ -1037,6 +1050,14 @@ type Mutation {
   ): DeleteSavedPaymentMethodResult
     @auth(rules: [{ allow: private, provider: userPools }])
     @function(name: "deletePaymentMethod-${env}")
+
+  cancelOrder(
+    orderID: ID!
+    reason: CancellationReason
+    reasonNote: String
+  ): OrderCancellation
+    @auth(rules: [{ allow: private, provider: userPools }])
+    @function(name: "cancelOrder-${env}")
 
   permanentlyDeleteOrder(orderID: ID!): Boolean
     @auth(rules: [{ allow: private, provider: userPools }])

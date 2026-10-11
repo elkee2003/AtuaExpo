@@ -44,6 +44,7 @@
 
 import { GOOGLE_API_KEY } from "@/keys";
 import { Courier, CourierLiveLocation, Offer, Order } from "@/src/models";
+import { calculateMaxiFinancials } from "../../modules/freightPricingEngine";
 
 import Ionicons from "@expo/vector-icons/Ionicons";
 import BottomSheet, { BottomSheetView } from "@gorhom/bottom-sheet";
@@ -900,127 +901,98 @@ const OrderTrackingScreen = ({ orderId }) => {
       return;
     }
 
-    // ----------------------------------------------------------
-    // Only Maxi orders use this flow.
-    // ----------------------------------------------------------
-
+    // Only Maxi orders.
     if (order.transportationType !== "MAXI") {
       return;
     }
 
-    // ----------------------------------------------------------
-    // We only care about accepted orders.
-    // ----------------------------------------------------------
-
+    // Only when the courier has accepted the offer.
     if (order.status !== "ACCEPTED") {
       return;
     }
 
-    // ----------------------------------------------------------
-    // A courier must be assigned.
-    // ----------------------------------------------------------
+    // Only when payment is pending.
+    if (order.paymentStatus !== "PENDING") {
+      return;
+    }
 
+    // A courier must be assigned.
     if (!order.assignedCourierId) {
       return;
     }
 
-    // ----------------------------------------------------------
-    // We need the accepted Offer ID.
-    // ----------------------------------------------------------
-
+    // The accepted offer must exist.
     if (!order.acceptedOfferID) {
       return;
     }
 
-    // ----------------------------------------------------------
-    // Prevent duplicate handling.
-    // ----------------------------------------------------------
-
+    // Prevent duplicate alerts.
     if (courierAcceptanceHandledRef.current) {
       return;
     }
 
-    // ----------------------------------------------------------
-    // Check the accepted Offer.
-    //
-    // If the accepted Offer was created by the USER, then this
-    // was the courier accepting the user's offer.
-    //
-    // If it was created by the COURIER, then the user accepted
-    // the courier's offer and this effect must do nothing.
-    // ----------------------------------------------------------
-
     const checkAcceptedOffer = async () => {
       try {
+        // Fetch the accepted offer.
         const acceptedOffer = await DataStore.query(
           Offer,
           order.acceptedOfferID,
         );
 
         if (!acceptedOffer) {
-          console.log("MAXI ACCEPTANCE: accepted Offer not found yet.");
-
+          console.log("MAXI ACCEPTANCE: Accepted offer not found.");
           return;
         }
 
-        // ------------------------------------------------------
-        // USER accepted courier offer.
-        //
-        // Do NOT show the courier-accepted alert here.
-        // The existing handleAcceptOffer already handles payment
-        // navigation for this path.
-        // ------------------------------------------------------
-
+        // Only show this alert when the courier accepted
+        // an offer originally created by the user.
         if (acceptedOffer.senderType !== "USER") {
           return;
         }
 
-        // ------------------------------------------------------
-        // At this point:
-        //
-        // Order = ACCEPTED
-        // acceptedOffer = USER offer
-        // assignedCourierId = courier
-        //
-        // Therefore the COURIER accepted the user's offer.
-        // ------------------------------------------------------
+        // Re-fetch the latest order before showing the alert.
+        const latestOrder = await DataStore.query(Order, order.id);
+
+        if (
+          !latestOrder ||
+          latestOrder.transportationType !== "MAXI" ||
+          latestOrder.status !== "ACCEPTED" ||
+          latestOrder.paymentStatus !== "PENDING" ||
+          latestOrder.acceptedOfferID !== order.acceptedOfferID ||
+          !latestOrder.assignedCourierId
+        ) {
+          return;
+        }
+
+        // Prevent duplicate alerts.
+        if (courierAcceptanceHandledRef.current) {
+          return;
+        }
 
         courierAcceptanceHandledRef.current = true;
 
-        // ------------------------------------------------------
-        // Get the courier.
-        // ------------------------------------------------------
-
+        // Fetch the assigned courier.
         let acceptedCourier = courier;
 
         if (
           !acceptedCourier ||
-          acceptedCourier.id !== order.assignedCourierId
+          acceptedCourier.id !== latestOrder.assignedCourierId
         ) {
           acceptedCourier = await DataStore.query(
             Courier,
-            order.assignedCourierId,
+            latestOrder.assignedCourierId,
           );
         }
 
-        // ------------------------------------------------------
-        // Courier first name.
-        // ------------------------------------------------------
-
+        // Prepare courier name and agreed price.
         const courierFirstName = acceptedCourier?.firstName || "Your courier";
 
-        // ------------------------------------------------------
-        // Agreed price.
-        // ------------------------------------------------------
-
-        const agreedPrice = Number(order.totalPrice || 0);
+        const agreedPrice = Number(latestOrder.totalPrice || 0);
 
         const formattedPrice = agreedPrice.toLocaleString("en-NG");
 
-        // ------------------------------------------------------
-        // Notify the user.
-        // ------------------------------------------------------
-
+        // Show the alert only when status is ACCEPTED
+        // and paymentStatus is PENDING.
         Alert.alert(
           "Courier Accepted Your Offer",
           `${courierFirstName} has accepted your Maxi delivery offer for ₦${formattedPrice}. Please complete payment to continue.`,
@@ -1031,7 +1003,7 @@ const OrderTrackingScreen = ({ orderId }) => {
                 router.replace({
                   pathname: "/screens/payment",
                   params: {
-                    orderId: order.id,
+                    orderId: latestOrder.id,
                   },
                 });
               },
@@ -1050,6 +1022,7 @@ const OrderTrackingScreen = ({ orderId }) => {
   }, [
     order?.id,
     order?.status,
+    order?.paymentStatus,
     order?.transportationType,
     order?.assignedCourierId,
     order?.acceptedOfferID,
@@ -1993,6 +1966,19 @@ const OrderTrackingScreen = ({ orderId }) => {
         return;
       }
 
+      const financials = calculateMaxiFinancials({
+        type: latestOrder.vehicleClass,
+        agreedAmount: offer.amount,
+      });
+
+      if (!financials) {
+        Alert.alert(
+          "Unable to accept offer",
+          "The pricing information for this vehicle is unavailable.",
+        );
+        return;
+      }
+
       //---------------------------------
       // Update Order
       //---------------------------------
@@ -2001,11 +1987,35 @@ const OrderTrackingScreen = ({ orderId }) => {
         Order.copyOf(latestOrder, (updated) => {
           updated.status = "ACCEPTED";
 
-          updated.totalPrice = offer.amount;
+          // The negotiated amount
+          updated.operationalFare = financials.operationalFare;
+
+          // Atua commission
+          updated.commissionAmount = financials.commissionAmount;
+
+          // Fixed platform fee
+          updated.platformFee = financials.platformFee;
+
+          // Commission + platform fee
+          updated.platformServiceRevenue = financials.platformServiceRevenue;
+
+          // VAT charged to the customer
+          updated.vatAmount = financials.vatAmount;
+
+          // Platform revenue after VAT
+          updated.platformNetRevenue = financials.platformNetRevenue;
+
+          // Courier's actual earnings
+          updated.courierEarnings = financials.courierEarnings;
+
+          // Customer's final payable amount
+          updated.totalPrice = financials.customerPrice;
 
           updated.acceptedOfferID = offer.id;
 
           updated.assignedCourierId = offer.courierID;
+
+          updated.acceptedAt = new Date().toISOString();
 
           updated.hasNewOffer = false;
         }),

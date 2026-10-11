@@ -2,11 +2,11 @@ import { TRANSPORT_TYPES } from "../constants/transportTypes";
 
 export const SERVICE_RULES = {
   [TRANSPORT_TYPES.MICRO_EXPRESS]: {
-    maxDistanceKm: 13,
+    maxDistanceKm: 12,
     category: "INSTANT",
   },
   [TRANSPORT_TYPES.MICRO_BATCH]: {
-    maxDistanceKm: 13,
+    maxDistanceKm: 12,
     category: "BATCH",
   },
   [TRANSPORT_TYPES.MOTO_EXPRESS]: {

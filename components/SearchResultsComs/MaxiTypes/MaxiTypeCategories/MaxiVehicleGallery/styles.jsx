@@ -97,4 +97,46 @@ export default StyleSheet.create({
     alignItems: "center",
     backgroundColor: "#000",
   },
+
+  // -----------------------------------
+  // NO VEHICLES AVAILABLE
+  // -----------------------------------
+
+  emptyContainer: {
+    flex: 1,
+    backgroundColor: "#000",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 32,
+  },
+
+  emptyIcon: {
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+    backgroundColor: "#1f1f1f",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 24,
+  },
+
+  emptyIconText: {
+    fontSize: 42,
+  },
+
+  emptyTitle: {
+    color: "#fff",
+    fontSize: 24,
+    fontWeight: "700",
+    textAlign: "center",
+    marginBottom: 10,
+  },
+
+  emptyDescription: {
+    color: "#aaa",
+    fontSize: 15,
+    lineHeight: 22,
+    textAlign: "center",
+    maxWidth: 320,
+  },
 });
