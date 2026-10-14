@@ -14,6 +14,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { SERVICE_RULES } from "@/config/serviceRules";
 import { TRANSPORT_TYPES } from "@/constants/transportTypes";
 import { pricingEngine } from "@/modules/pricingEngine";
 import { formatCurrency } from "@/utils/formatCurrency";
@@ -21,7 +22,31 @@ import { getAvailableServices } from "@/utils/getAvailableServices";
 import deliveryMediums from "../../../assets/data/types";
 import styles from "./styles";
 
-const AtuaTypes = ({ selectedType, setSelectedType }) => {
+const LOCATION_STALE_AFTER_MS = 3 * 60 * 1000;
+
+const getDistanceKm = (pointA, pointB) => {
+  const toRadians = (degrees) => (degrees * Math.PI) / 180;
+  const earthRadiusKm = 6371;
+
+  const dLat = toRadians(pointB.latitude - pointA.latitude);
+  const dLng = toRadians(pointB.longitude - pointA.longitude);
+
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRadians(pointA.latitude)) *
+      Math.cos(toRadians(pointB.latitude)) *
+      Math.sin(dLng / 2) ** 2;
+
+  return 2 * earthRadiusKm * Math.asin(Math.sqrt(Math.min(1, a)));
+};
+
+const AtuaTypes = ({
+  selectedType,
+  setSelectedType,
+  nearbyCouriers = [],
+  courierAvailabilityReady = false,
+  pickupCoordinates = null,
+}) => {
   const {
     setOperationalFare,
     setTotalPrice,
@@ -37,14 +62,114 @@ const AtuaTypes = ({ selectedType, setSelectedType }) => {
 
   const { totalKm, totalMins, isRouteReady } = useLocationContext();
 
-  const canContinue =
-    selectedType && isRouteReady && totalKm > 0 && totalMins > 0;
-
   // Filter allowed services by distance rules
   const availableServiceTypes = getAvailableServices(totalKm);
 
   const filteredDeliveryMediums = deliveryMediums.filter((medium) =>
     availableServiceTypes.includes(medium.type),
+  );
+
+  // Micro services
+  const isMicroService = (type) =>
+    type === TRANSPORT_TYPES.MICRO_EXPRESS ||
+    type === TRANSPORT_TYPES.MICRO_BATCH;
+
+  const getServiceAvailability = (type) => {
+    // Preserve existing Moto and Maxi behaviour.
+    if (!isMicroService(type)) {
+      return { available: true, message: null };
+    }
+
+    if (!pickupCoordinates) {
+      return {
+        available: false,
+        message: "Choose a pickup location",
+      };
+    }
+
+    if (!courierAvailabilityReady) {
+      return {
+        available: false,
+        message: "Checking nearby couriers...",
+      };
+    }
+
+    const maxDistance = SERVICE_RULES[type]?.maxCourierPickupDistanceKm;
+
+    if (typeof maxDistance !== "number" || !Number.isFinite(maxDistance)) {
+      return {
+        available: false,
+        message: "Availability unavailable",
+      };
+    }
+
+    const now = Date.now();
+
+    const available = nearbyCouriers.some(({ courier, liveLocation }) => {
+      if (!courier || !liveLocation) return false;
+
+      if (
+        courier.isOnline !== true ||
+        courier.isApproved !== true ||
+        courier.isBlocked === true ||
+        liveLocation.isTracking !== true ||
+        courier.transportationType !==
+          (type === TRANSPORT_TYPES.MICRO_EXPRESS ||
+          type === TRANSPORT_TYPES.MICRO_BATCH
+            ? "MICRO"
+            : type === TRANSPORT_TYPES.MOTO_EXPRESS ||
+                type === TRANSPORT_TYPES.MOTO_BATCH
+              ? "MOTO"
+              : "MAXI")
+      ) {
+        return false;
+      }
+
+      const { latitude, longitude, lastSeenAt } = liveLocation;
+
+      if (
+        typeof latitude !== "number" ||
+        !Number.isFinite(latitude) ||
+        latitude < -90 ||
+        latitude > 90 ||
+        typeof longitude !== "number" ||
+        !Number.isFinite(longitude) ||
+        longitude < -180 ||
+        longitude > 180 ||
+        !lastSeenAt
+      ) {
+        return false;
+      }
+
+      const timestamp = new Date(lastSeenAt).getTime();
+
+      if (!Number.isFinite(timestamp)) return false;
+
+      const age = now - timestamp;
+
+      if (age < 0 || age > LOCATION_STALE_AFTER_MS) return false;
+
+      return (
+        getDistanceKm(pickupCoordinates, { latitude, longitude }) <= maxDistance
+      );
+    });
+
+    return {
+      available,
+      message: available ? null : "No courier nearby",
+    };
+  };
+
+  const selectedAvailability = selectedType
+    ? getServiceAvailability(selectedType)
+    : null;
+
+  const canContinue = Boolean(
+    selectedType &&
+    isRouteReady &&
+    Number(totalKm) > 0 &&
+    Number(totalMins) > 0 &&
+    (!isMicroService(selectedType) || selectedAvailability?.available),
   );
 
   const getImage = (type) => {
@@ -162,12 +287,21 @@ const AtuaTypes = ({ selectedType, setSelectedType }) => {
 
           const isSelected = selectedType === medium.type;
 
+          const availability = getServiceAvailability(medium.type);
+          const isDisabled =
+            isMicroService(medium.type) && !availability.available;
+
           return (
             <TouchableOpacity
               key={medium.id}
-              activeOpacity={0.85}
+              activeOpacity={isDisabled ? 1 : 0.85}
+              disabled={isDisabled}
               onPress={() => setSelectedType(medium.type)}
-              style={[styles.card, isSelected && styles.selectedCard]}
+              style={[
+                styles.card,
+                isSelected && styles.selectedCard,
+                isDisabled && styles.disabledCard,
+              ]}
             >
               <Image style={styles.image} source={getImage(medium.type)} />
 
@@ -185,6 +319,12 @@ const AtuaTypes = ({ selectedType, setSelectedType }) => {
                 </View>
 
                 <Text style={styles.subtitle}>Fast • Reliable • Secure</Text>
+
+                {isMicroService(medium.type) && !availability.available && (
+                  <Text style={styles.unavailableText}>
+                    {availability.message}
+                  </Text>
+                )}
               </View>
 
               <View style={styles.priceContainer}>

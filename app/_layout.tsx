@@ -39,7 +39,12 @@ DataStore.configure({
 // TEST PUBLIC KEY ONLY FOR NOW.
 //-----------------------------------------
 
-const PAYSTACK_PUBLIC_KEY = "pk_test_02c242878c00dfec3ba77ac909a90b2f56c938b3";
+// const PAYSTACK_PUBLIC_KEY = "pk_test_02c242878c00dfec3ba77ac909a90b2f56c938b3";
+
+// LIVE PUBLIC KEY ONLY FOR NOW.
+//-----------------------------------------
+
+const PAYSTACK_PUBLIC_KEY = "pk_live_55d3d9f1516448ea3184663ec74e9c75fab5a181";
 
 //-----------------------------------------
 // Root Layout
@@ -63,6 +68,7 @@ const RootLayout = () => {
       <PaystackProvider
         publicKey={PAYSTACK_PUBLIC_KEY}
         currency="NGN"
+        defaultChannels={["card", "bank_transfer", "ussd", "bank"]}
         debug={true}
       >
         <AuthProvider>

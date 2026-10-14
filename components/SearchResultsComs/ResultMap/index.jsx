@@ -24,7 +24,7 @@ import styles from "./styles";
  */
 const LOCATION_STALE_AFTER_MS = 3 * 60 * 1000;
 
-const ResultMap = () => {
+const ResultMap = ({ onCouriersChange }) => {
   const { width, height } = useWindowDimensions();
 
   /**
@@ -60,6 +60,19 @@ const ResultMap = () => {
    * - lastSeenAt
    */
   const [liveLocations, setLiveLocations] = useState([]);
+
+  const [courierProfilesLoaded, setCourierProfilesLoaded] = useState(false);
+  const [liveLocationsLoaded, setLiveLocationsLoaded] = useState(false);
+  const [freshnessNow, setFreshnessNow] = useState(Date.now());
+
+  // Recheck courier GPS freshness every 15 seconds.
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setFreshnessNow(Date.now());
+    }, 15000);
+
+    return () => clearInterval(interval);
+  }, []);
 
   /**
    * Error state for the customer's location.
@@ -246,6 +259,8 @@ const ResultMap = () => {
         setCouriers(availableCouriers);
       } catch (error) {
         console.error("[ResultMap] Error fetching couriers:", error);
+      } finally {
+        if (isMounted) setCourierProfilesLoaded(true);
       }
     };
 
@@ -383,6 +398,8 @@ const ResultMap = () => {
           "[ResultMap] Error fetching courier live locations:",
           error,
         );
+      } finally {
+        if (isMounted) setLiveLocationsLoaded(true);
       }
     };
 
@@ -481,7 +498,7 @@ const ResultMap = () => {
    *   -> isTracking
    */
   const mapCouriers = useMemo(() => {
-    const now = Date.now();
+    const now = freshnessNow;
 
     return liveLocations
       .map((liveLocation) => {
@@ -531,16 +548,18 @@ const ResultMap = () => {
         /**
          * Ignore stale GPS locations.
          */
-        if (liveLocation.lastSeenAt) {
-          const timestamp = new Date(liveLocation.lastSeenAt).getTime();
+        const timestamp = liveLocation.lastSeenAt
+          ? new Date(liveLocation.lastSeenAt).getTime()
+          : NaN;
 
-          if (!Number.isNaN(timestamp)) {
-            const age = now - timestamp;
+        if (!Number.isFinite(timestamp)) {
+          return null;
+        }
 
-            if (age > LOCATION_STALE_AFTER_MS) {
-              return null;
-            }
-          }
+        const age = now - timestamp;
+
+        if (age < 0 || age > LOCATION_STALE_AFTER_MS) {
+          return null;
         }
 
         return {
@@ -549,7 +568,18 @@ const ResultMap = () => {
         };
       })
       .filter(Boolean);
-  }, [couriers, liveLocations]);
+  }, [couriers, liveLocations, freshnessNow]);
+
+  useEffect(() => {
+    if (courierProfilesLoaded && liveLocationsLoaded) {
+      onCouriersChange?.(mapCouriers);
+    }
+  }, [
+    mapCouriers,
+    courierProfilesLoaded,
+    liveLocationsLoaded,
+    onCouriersChange,
+  ]);
 
   /**
    * Don't render the map until we have determined the customer's

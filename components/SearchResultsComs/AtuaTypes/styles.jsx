@@ -74,6 +74,19 @@ const styles = StyleSheet.create({
     color: "#6b7280",
   },
 
+  unavailableText: {
+    marginTop: 4,
+    fontSize: 11,
+    fontWeight: "600",
+    color: "#dc2626",
+  },
+
+  disabledCard: {
+    backgroundColor: "#F3F4F6",
+    borderColor: "#E5E7EB",
+    opacity: 0.65,
+  },
+
   priceContainer: {
     alignItems: "flex-end",
   },
