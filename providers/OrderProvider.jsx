@@ -4,6 +4,10 @@ const OrderContext = createContext({});
 
 const OrderProvider = ({ children }) => {
   // BASIC INFO
+  const [senderName, setSenderName] = useState("");
+  const [senderNumber, setSenderNumber] = useState("");
+  const [senderNumber2, setSenderNumber2] = useState("");
+
   const [recipientName, setRecipientName] = useState("");
   const [recipientNumber, setRecipientNumber] = useState("");
   const [recipientNumber2, setRecipientNumber2] = useState("");
@@ -122,6 +126,9 @@ const OrderProvider = ({ children }) => {
   // Function to reset all fields:
   const resetAllOrderFields = () => {
     // BASIC INFO
+    setSenderName("");
+    setSenderNumber("");
+    setSenderNumber2("");
     setRecipientName("");
     setRecipientNumber("");
     setRecipientNumber2("");
@@ -195,10 +202,16 @@ const OrderProvider = ({ children }) => {
   return (
     <OrderContext.Provider
       value={{
+        senderName,
+        senderNumber,
+        senderNumber2,
         recipientName,
         recipientNumber,
         recipientNumber2,
         orderDetails,
+        setSenderName,
+        setSenderNumber,
+        setSenderNumber2,
         setRecipientName,
         setRecipientNumber,
         setRecipientNumber2,

@@ -309,6 +309,67 @@ const getOrder = async (orderID) => {
   return data?.getOrder || null;
 };
 
+const getSuccessfulPaymentForOrder = async (order) => {
+  const query = /* GraphQL */ `
+    query GetPaymentsForCancellation($filter: ModelPaymentFilterInput) {
+      listPayments(filter: $filter, limit: 10) {
+        items {
+          id
+          orderID
+          userID
+          amount
+          currency
+          status
+          provider
+          reference
+          _deleted
+        }
+      }
+    }
+  `;
+
+  const data = await graphqlRequest(
+    query,
+    {
+      filter: {
+        orderID: {
+          eq: order.id,
+        },
+      },
+    },
+    "GetPaymentsForCancellation",
+  );
+
+  const payments = (data?.listPayments?.items || []).filter(
+    (payment) =>
+      payment &&
+      payment._deleted !== true &&
+      payment.orderID === order.id &&
+      payment.userID === order.userID &&
+      payment.status === "SUCCESS" &&
+      payment.provider === "PAYSTACK" &&
+      payment.currency === "NGN" &&
+      typeof payment.reference === "string" &&
+      payment.reference.trim().length > 0 &&
+      Number(payment.amount) === Number(order.totalPrice) &&
+      (!order.paymentID || payment.id === order.paymentID),
+  );
+
+  if (payments.length !== 1) {
+    console.error("PAYMENT REFERENCE RECOVERY REJECTED:", {
+      orderID: order.id,
+      paymentID: order.paymentID || null,
+      matchingPayments: payments.length,
+    });
+
+    throw new Error(
+      "Unable to safely identify the successful Paystack payment for this order. Please contact support.",
+    );
+  }
+
+  return payments[0];
+};
+
 /* ============================================================
    GET COURIER
 ============================================================ */
@@ -1075,6 +1136,99 @@ const getPaystackSecretKey = async () => {
  * The Paystack refund webhook is responsible for
  * the later refund lifecycle.
  */
+
+/**
+ * Finds a previously created Paystack refund for a transaction.
+ *
+ * Returns:
+ *   { found: true, refund: ... } when a refund exists.
+ *   { found: false } when Paystack successfully confirms none exists.
+ *
+ * Throws if Paystack cannot be queried reliably.
+ */
+const reconcilePaystackRefund = async ({ paymentReference }) => {
+  if (!paymentReference) {
+    throw new Error("Payment reference is required for refund reconciliation.");
+  }
+
+  const secretKey = await getPaystackSecretKey();
+
+  // First, get the original transaction ID from Paystack.
+  const verifyResponse = await fetch(
+    `https://api.paystack.co/transaction/verify/${encodeURIComponent(paymentReference)}`,
+    {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${secretKey}`,
+        "Cache-Control": "no-cache",
+      },
+    },
+  );
+
+  const verifyBody = await verifyResponse.json().catch(() => null);
+
+  if (
+    !verifyResponse.ok ||
+    verifyBody?.status !== true ||
+    !verifyBody?.data?.id ||
+    verifyBody?.data?.reference !== paymentReference
+  ) {
+    throw new Error(
+      "Unable to verify the original transaction with Paystack. Refund retry remains blocked.",
+    );
+  }
+
+  const transactionID = verifyBody.data.id;
+
+  // List refunds for this exact transaction.
+  const refundsURL = new URL("https://api.paystack.co/refund");
+  refundsURL.searchParams.set("transaction", String(transactionID));
+  refundsURL.searchParams.set("perPage", "50");
+  refundsURL.searchParams.set("page", "1");
+
+  const refundsResponse = await fetch(refundsURL.toString(), {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${secretKey}`,
+      "Cache-Control": "no-cache",
+    },
+  });
+
+  const refundsBody = await refundsResponse.json().catch(() => null);
+
+  if (
+    !refundsResponse.ok ||
+    refundsBody?.status !== true ||
+    !Array.isArray(refundsBody?.data)
+  ) {
+    throw new Error(
+      "Unable to reliably check Paystack refunds. Refund retry remains blocked.",
+    );
+  }
+
+  const matchingRefunds = refundsBody.data.filter((refund) => {
+    const refundTransaction = refund?.transaction;
+    const refundTransactionID =
+      typeof refundTransaction === "object"
+        ? refundTransaction?.id
+        : refundTransaction;
+
+    return String(refundTransactionID) === String(transactionID);
+  });
+
+  if (matchingRefunds.length > 1) {
+    throw new Error(
+      "Multiple refunds were found for this transaction. Manual reconciliation is required.",
+    );
+  }
+
+  if (matchingRefunds.length === 1) {
+    return { found: true, refund: matchingRefunds[0] };
+  }
+
+  return { found: false };
+};
+
 const initiatePaystackRefund = async ({ paymentReference, amount }) => {
   if (!paymentReference) {
     throw new Error("Payment reference is required to initiate a refund.");
@@ -1102,6 +1256,46 @@ const initiatePaystackRefund = async ({ paymentReference, amount }) => {
    */
   const paystackSecretKey = await getPaystackSecretKey();
 
+  // Verify the original transaction directly with Paystack
+  // before initiating a refund.
+  const verificationResponse = await fetch(
+    `https://api.paystack.co/transaction/verify/${encodeURIComponent(paymentReference)}`,
+    {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${paystackSecretKey}`,
+        "Cache-Control": "no-cache",
+      },
+    },
+  );
+
+  const verificationBody = await verificationResponse.json();
+  const transaction = verificationBody?.data;
+
+  const expectedAmountInKobo = Math.round(Number(amount) * 100);
+
+  if (
+    !verificationResponse.ok ||
+    verificationBody?.status !== true ||
+    transaction?.status !== "success" ||
+    transaction?.reference !== paymentReference ||
+    transaction?.currency !== "NGN" ||
+    Number(transaction?.amount) !== expectedAmountInKobo
+  ) {
+    console.error("PAYSTACK TRANSACTION VERIFICATION FAILED:", {
+      paymentReference,
+      apiStatus: verificationResponse.status,
+      transactionStatus: transaction?.status || null,
+      transactionCurrency: transaction?.currency || null,
+      transactionAmount: transaction?.amount ?? null,
+      expectedAmountInKobo,
+    });
+
+    throw new Error(
+      "The original Paystack transaction could not be verified against the refund amount. No refund was initiated.",
+    );
+  }
+
   /*
    * Never log paystackSecretKey.
    */
@@ -1125,6 +1319,7 @@ const initiatePaystackRefund = async ({ paymentReference, amount }) => {
   });
 
   const body = await response.json();
+  const refundData = body?.data;
 
   console.log("PAYSTACK REFUND RESPONSE:", JSON.stringify(body));
 
@@ -1134,22 +1329,29 @@ const initiatePaystackRefund = async ({ paymentReference, amount }) => {
     );
   }
 
-  const refundData = body?.data || {};
+  const refundID = refundData?.id != null ? String(refundData.id) : null;
+
+  if (!refundID) {
+    console.error("PAYSTACK REFUND RESPONSE HAS NO REFUND ID:", {
+      paymentReference,
+      amountInKobo,
+      refundStatus: refundData?.status || null,
+    });
+
+    throw new Error(
+      "Paystack returned no refund ID. The refund outcome must be reconciled before retrying.",
+    );
+  }
 
   return {
     success: true,
-
     message: body?.message || "Refund has been queued for processing.",
-
-    refundID: refundData?.id != null ? String(refundData.id) : null,
-
+    refundID,
     refundStatus: String(refundData?.status || "pending").toUpperCase(),
-
     amount:
       refundData?.amount != null
         ? Number(refundData.amount) / 100
         : Number(amount),
-
     transactionReference:
       refundData?.transaction?.reference || paymentReference,
   };
@@ -1178,15 +1380,16 @@ const getAuthenticatedCognitoSub = (event) => {
  *
  * We must NOT compare Cognito sub directly to Order.userID.
  */
+
 const getUserByCognitoSub = async (cognitoSub) => {
   const query = /* GraphQL */ `
     query GetAtuaUserBySub($filter: ModelUserFilterInput) {
-      listUsers(filter: $filter, limit: 1) {
+      listUsers(filter: $filter, limit: 10) {
         items {
           id
           sub
+          email
           _version
-          _lastChangedAt
           _deleted
         }
       }
@@ -1207,11 +1410,15 @@ const getUserByCognitoSub = async (cognitoSub) => {
 
   const users = data?.listUsers?.items || [];
 
-  if (users.length === 0) {
+  const matchingUsers = users.filter(
+    (user) => user.sub === cognitoSub && user._deleted !== true,
+  );
+
+  if (matchingUsers.length !== 1) {
     throw new Error("Unable to resolve your Atua User account.");
   }
 
-  return users[0];
+  return matchingUsers[0];
 };
 
 /* ============================================================
@@ -1347,7 +1554,10 @@ exports.handler = async (event) => {
 
   console.log("ATUA CANCEL ORDER STARTED");
 
-  console.log("EVENT:", JSON.stringify(event));
+  console.log("Cancellation request received:", {
+    orderID: event?.arguments?.orderID || null,
+    hasIdentity: Boolean(event?.identity),
+  });
 
   console.log("============================================================");
 
@@ -1447,19 +1657,33 @@ exports.handler = async (event) => {
       ====================================================== */
 
     if (order.status === "CANCELLED") {
-      /*
-       * If the order is already cancelled and
-       * we have its cancellation record,
-       * simply return that record.
-       *
-       * This is important for retries.
-       */
+      if (!cancellation) {
+        throw new Error(
+          "This order is already cancelled, but its cancellation record is missing. Manual review is required.",
+        );
+      }
 
-      if (cancellation) {
+      const cancellationIsComplete =
+        cancellation.status === "COMPLETED" &&
+        (cancellation.refundStatus === "PROCESSED" ||
+          cancellation.refundStatus === "NONE");
+
+      if (cancellationIsComplete) {
         return cancellation;
       }
 
-      throw new Error("This order has already been cancelled.");
+      console.error("CANCELLED ORDER REQUIRES RECOVERY:", {
+        orderID: order.id,
+        cancellationID: cancellation.id,
+        cancellationStatus: cancellation.status,
+        refundStatus: cancellation.refundStatus,
+        assignmentReversed: cancellation.assignmentReversed,
+        courierEarningsReversed: cancellation.courierEarningsReversed,
+      });
+
+      throw new Error(
+        "This order is already cancelled, but its cancellation is incomplete. Manual reconciliation is required before retrying.",
+      );
     }
 
     /* ======================================================
@@ -1491,15 +1715,53 @@ exports.handler = async (event) => {
     const cancellationRequestedAt =
       cancellation?.cancellationRequestedAt || new Date().toISOString();
 
-    /* ======================================================
-         9. VALIDATE REFUND CASE
-      ====================================================== */
+    /* ============================================================
+      9. VALIDATE REFUND CASE
+    ============================================================ */
 
     if (eligibility.requiresRefund) {
       if (order.paymentStatus !== "PAID") {
         throw new Error(
           "This paid order cannot be cancelled because its payment has not been confirmed.",
         );
+      }
+
+      if (!order.paymentReference) {
+        console.warn(
+          "ORDER PAYMENT REFERENCE MISSING. CHECKING PAYMENT RECORD:",
+          {
+            orderID: order.id,
+            paymentID: order.paymentID || null,
+          },
+        );
+
+        // Recover only from one matching successful Payment record.
+        const payment = await getSuccessfulPaymentForOrder(order);
+
+        // Persist the recovered reference before attempting a refund.
+        const repairedOrder = await updateOrder(order, {
+          paymentReference: payment.reference,
+        });
+
+        if (
+          !repairedOrder ||
+          repairedOrder.id !== order.id ||
+          repairedOrder.userID !== userID ||
+          repairedOrder.paymentReference !== payment.reference
+        ) {
+          throw new Error(
+            "Unable to save the verified payment reference. No refund was initiated.",
+          );
+        }
+
+        // Use the persisted order for all subsequent cancellation steps.
+        order = repairedOrder;
+
+        console.log("ORDER PAYMENT REFERENCE RECOVERED:", {
+          orderID: order.id,
+          paymentID: payment.id,
+          paymentReference: order.paymentReference,
+        });
       }
 
       if (!order.paymentReference) {
@@ -1656,6 +1918,12 @@ exports.handler = async (event) => {
         refundedAt: null,
       });
 
+      if (!updatedOrder || updatedOrder.status !== "CANCELLED") {
+        throw new Error(
+          "Failed to update the MAXI order to CANCELLED. Check the order and cancellation records before retrying.",
+        );
+      }
+
       console.log("MAXI BIDDING ORDER CANCELLED:", updatedOrder?.id);
 
       cancellation = await updateCancellation(cancellation, {
@@ -1707,6 +1975,86 @@ exports.handler = async (event) => {
       if (!cancellation.refundReference) {
         console.log("MAXI PAID ORDER REQUIRES FULL REFUND.");
 
+        // A previous request may have reached Paystack even if
+        // the Lambda did not save its refund ID.
+
+        if (cancellation.refundRequestedAt) {
+          console.log("CHECKING PREVIOUS PAYSTACK REFUND:", {
+            cancellationID: cancellation.id,
+            paymentReference: cancellation.paymentReference,
+          });
+
+          const reconciliation = await reconcilePaystackRefund({
+            paymentReference:
+              cancellation.paymentReference || order.paymentReference,
+          });
+
+          if (reconciliation.found) {
+            const existingRefund = reconciliation.refund;
+            const paystackStatus = String(
+              existingRefund.status || "",
+            ).toLowerCase();
+
+            // Do not initiate another refund if one already exists.
+
+            const mappedStatus =
+              paystackStatus === "processed"
+                ? "PROCESSED"
+                : paystackStatus === "failed"
+                  ? "FAILED"
+                  : "PENDING";
+
+            cancellation = await updateCancellation(cancellation, {
+              refundReference: String(existingRefund.id),
+              refundStatus: mappedStatus,
+
+              status: mappedStatus === "PROCESSED" ? "COMPLETED" : "PROCESSING",
+
+              refundedAt:
+                mappedStatus === "PROCESSED"
+                  ? existingRefund.refunded_at || new Date().toISOString()
+                  : null,
+
+              errorMessage: null,
+            });
+
+            console.log("PREVIOUS PAYSTACK REFUND RECOVERED:", {
+              cancellationID: cancellation.id,
+              refundReference: cancellation.refundReference,
+              paystackStatus,
+            });
+
+            throw new Error(
+              mappedStatus === "FAILED"
+                ? "The previous Paystack refund failed. No new refund was initiated. Manual review is required before retrying."
+                : "An existing Paystack refund was recovered. No duplicate refund was initiated.",
+            );
+          } else {
+            // Paystack confirmed no refund was found for this transaction.
+            // Clear the stale attempt marker before starting a new attempt.
+            cancellation = await updateCancellation(cancellation, {
+              refundRequestedAt: null,
+              errorMessage: null,
+            });
+          }
+        }
+
+        // Save the attempt marker BEFORE contacting Paystack.
+        const attemptAt = new Date().toISOString();
+
+        cancellation = await updateCancellation(cancellation, {
+          status: "PROCESSING",
+          refundStatus: "PROCESSING",
+          refundRequestedAt: attemptAt,
+          errorMessage: null,
+        });
+
+        if (!cancellation) {
+          throw new Error(
+            "Unable to record the refund attempt. No refund was initiated.",
+          );
+        }
+
         let refundResult;
 
         try {
@@ -1716,20 +2064,29 @@ exports.handler = async (event) => {
             amount: refundAmount,
           });
         } catch (refundError) {
-          console.error("MAXI PAYSTACK REFUND INITIATION FAILED:", refundError);
+          console.error("PAYSTACK REFUND INITIATION ERROR:", refundError);
 
-          cancellation = await updateCancellation(cancellation, {
-            status: "FAILED",
+          // Do not mark the refund FAILED merely because the request threw.
+          // Paystack may have created the refund even if its response was lost.
+          // Keep refundRequestedAt so the next attempt reconciles with Paystack
+          // before deciding whether another refund can be initiated.
 
-            refundStatus: "FAILED",
+          const errorMessage =
+            refundError?.message ||
+            "The refund outcome is uncertain and must be reconciled with Paystack.";
 
-            errorMessage:
-              refundError?.message || "Unable to initiate Paystack refund.",
+          const updatedCancellation = await updateCancellation(cancellation, {
+            status: "PROCESSING",
+            refundStatus: "PROCESSING",
+            errorMessage,
           });
 
+          if (updatedCancellation) {
+            cancellation = updatedCancellation;
+          }
+
           throw new Error(
-            refundError?.message ||
-              "Unable to initiate the refund. The order has not been cancelled.",
+            "The refund outcome could not be confirmed. The cancellation remains in processing. Reconcile the refund with Paystack before retrying.",
           );
         }
 
@@ -1863,7 +2220,34 @@ exports.handler = async (event) => {
 
       if (order.status !== "ACCEPTED" || order.paymentStatus !== "PAID") {
         if (order.status === "CANCELLED") {
-          return cancellation;
+          cancellation = await getCancellation(cancellationID);
+
+          if (!cancellation) {
+            throw new Error("Cancellation record could not be found.");
+          }
+
+          const cancellationIsComplete =
+            cancellation.status === "COMPLETED" &&
+            (cancellation.refundStatus === "PROCESSED" ||
+              cancellation.refundStatus === "NONE");
+
+          if (cancellationIsComplete) {
+            return cancellation;
+          }
+
+          console.log("MAXI CANCELLATION IS INCOMPLETE. CONTINUING RECOVERY.", {
+            orderID: order.id,
+            cancellationID: cancellation.id,
+            cancellationStatus: cancellation.status,
+            refundStatus: cancellation.refundStatus,
+          });
+
+          // Do not return here. Continue recovery.
+          // The next steps must reconcile the refund and
+          // safely complete any outstanding cancellation work.
+          throw new Error(
+            "This MAXI order is already cancelled but its cancellation is incomplete. Recovery must resume before retrying the remaining steps.",
+          );
         }
 
         throw new Error(
@@ -1902,6 +2286,12 @@ exports.handler = async (event) => {
 
         refundedAt: null,
       });
+
+      if (!updatedOrder || updatedOrder.status !== "CANCELLED") {
+        throw new Error(
+          "Failed to cancel the MAXI order. Check the order and cancellation records before retrying.",
+        );
+      }
 
       console.log("MAXI ACCEPTED + PAID ORDER CANCELLED:", {
         orderID: updatedOrder?.id,
@@ -1951,6 +2341,82 @@ exports.handler = async (event) => {
       ------------------------------------------------------ */
 
     if (!cancellation.refundReference) {
+      // Do not blindly repeat a request whose outcome is uncertain.
+
+      if (cancellation.refundRequestedAt) {
+        console.log("CHECKING PREVIOUS PAYSTACK REFUND:", {
+          cancellationID: cancellation.id,
+          paymentReference: cancellation.paymentReference,
+        });
+
+        const reconciliation = await reconcilePaystackRefund({
+          paymentReference:
+            cancellation.paymentReference || order.paymentReference,
+        });
+
+        if (reconciliation.found) {
+          const existingRefund = reconciliation.refund;
+          const paystackStatus = String(
+            existingRefund.status || "",
+          ).toLowerCase();
+
+          // Do not initiate another refund if one already exists.
+
+          const mappedStatus =
+            paystackStatus === "processed"
+              ? "PROCESSED"
+              : paystackStatus === "failed"
+                ? "FAILED"
+                : "PENDING";
+
+          cancellation = await updateCancellation(cancellation, {
+            refundReference: String(existingRefund.id),
+            refundStatus: mappedStatus,
+            status: mappedStatus === "PROCESSED" ? "COMPLETED" : "PROCESSING",
+            refundedAt:
+              mappedStatus === "PROCESSED"
+                ? existingRefund.refunded_at || new Date().toISOString()
+                : null,
+            errorMessage: null,
+          });
+
+          console.log("PREVIOUS PAYSTACK REFUND RECOVERED:", {
+            cancellationID: cancellation.id,
+            refundReference: cancellation.refundReference,
+            paystackStatus,
+          });
+
+          throw new Error(
+            mappedStatus === "FAILED"
+              ? "The previous Paystack refund failed. No new refund was initiated. Manual review is required before retrying."
+              : "An existing Paystack refund was recovered. No duplicate refund was initiated.",
+          );
+        } else {
+          // Paystack confirmed no refund was found for this transaction.
+          // Clear the stale attempt marker before starting a new attempt.
+          cancellation = await updateCancellation(cancellation, {
+            refundRequestedAt: null,
+            errorMessage: null,
+          });
+        }
+      }
+
+      // Save the attempt marker BEFORE contacting Paystack.
+      const attemptAt = new Date().toISOString();
+
+      cancellation = await updateCancellation(cancellation, {
+        status: "PROCESSING",
+        refundStatus: "PROCESSING",
+        refundRequestedAt: attemptAt,
+        errorMessage: null,
+      });
+
+      if (!cancellation) {
+        throw new Error(
+          "Unable to record the refund attempt. No refund was initiated.",
+        );
+      }
+
       let refundResult;
 
       try {
@@ -1960,20 +2426,29 @@ exports.handler = async (event) => {
           amount: refundAmount,
         });
       } catch (refundError) {
-        console.error("PAYSTACK REFUND INITIATION FAILED:", refundError);
+        console.error("PAYSTACK REFUND INITIATION ERROR:", refundError);
 
-        cancellation = await updateCancellation(cancellation, {
-          status: "FAILED",
+        // Do not mark the refund FAILED merely because the request threw.
+        // Paystack may have created the refund even if its response was lost.
+        // Keep refundRequestedAt so the next attempt reconciles with Paystack
+        // before deciding whether another refund can be initiated.
 
-          refundStatus: "FAILED",
+        const errorMessage =
+          refundError?.message ||
+          "The refund outcome is uncertain and must be reconciled with Paystack.";
 
-          errorMessage:
-            refundError?.message || "Unable to initiate Paystack refund.",
+        const updatedCancellation = await updateCancellation(cancellation, {
+          status: "PROCESSING",
+          refundStatus: "PROCESSING",
+          errorMessage,
         });
 
+        if (updatedCancellation) {
+          cancellation = updatedCancellation;
+        }
+
         throw new Error(
-          refundError?.message ||
-            "Unable to initiate the refund. The order has not been cancelled.",
+          "The refund outcome could not be confirmed. The cancellation remains in processing. Reconcile the refund with Paystack before retrying.",
         );
       }
 
@@ -2049,6 +2524,12 @@ exports.handler = async (event) => {
 
       refundedAt: null,
     });
+
+    if (!updatedOrder || updatedOrder.status !== "CANCELLED") {
+      throw new Error(
+        "Failed to update the order to CANCELLED. Check the order and cancellation records before retrying.",
+      );
+    }
 
     console.log("MICRO/MOTO ORDER CANCELLED:", {
       orderID: updatedOrder?.id,

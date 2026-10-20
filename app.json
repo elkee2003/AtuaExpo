@@ -28,6 +28,8 @@
       },
       "permissions": [
         "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.CAMERA",
         "android.permission.RECORD_AUDIO"
       ]
     },
@@ -77,6 +79,12 @@
         "projectId": "2f73cc5c-0283-45ec-93b5-e4689622d650"
       }
     },
-    "owner": "atuainc"
+    "owner": "atuainc",
+    "runtimeVersion": {
+      "policy": "fingerprint"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/2f73cc5c-0283-45ec-93b5-e4689622d650"
+    }
   }
 }

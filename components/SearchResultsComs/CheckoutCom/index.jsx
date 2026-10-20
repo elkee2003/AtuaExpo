@@ -46,6 +46,9 @@ const Checkout = () => {
   } = useLocationContext();
 
   const {
+    senderName,
+    senderNumber,
+    senderNumber2,
     recipientName,
     recipientNumber,
     recipientNumber2,
@@ -209,17 +212,17 @@ const Checkout = () => {
 
           // REAL customer orders must be PRODUCTION.
           // TEST orders should explicitly use TEST.
-          orderEnvironment: "PRODUCTION",
-          // orderEnvironment: "TEST",
+          // orderEnvironment: "PRODUCTION",
+          orderEnvironment: "TEST",
 
-          //---------------------------------
+          // Sender
+          senderName: senderName?.trim() || null,
+          senderNumber: senderNumber?.trim() || null,
+          senderNumber2: senderNumber2?.trim() || null,
+
           // Recipient
-          //---------------------------------
-
           recipientName: recipientName.trim(),
-
           recipientNumber: recipientNumber.trim(),
-
           recipientNumber2: recipientNumber2?.trim() || null,
 
           orderDetails: orderDetails?.trim() || null,
@@ -376,6 +379,28 @@ const Checkout = () => {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
+        {/* Sender */}
+        <View style={styles.card}>
+          <Text style={styles.sectionTitle}>Sender</Text>
+
+          <View style={styles.row}>
+            <Text style={styles.label}>Name</Text>
+            <Text style={styles.value}>{senderName || "—"}</Text>
+          </View>
+
+          <View style={styles.row}>
+            <Text style={styles.label}>Phone</Text>
+            <Text style={styles.value}>{senderNumber || "—"}</Text>
+          </View>
+
+          {senderNumber2 ? (
+            <View style={styles.row}>
+              <Text style={styles.label}>Backup</Text>
+              <Text style={styles.value}>{senderNumber2}</Text>
+            </View>
+          ) : null}
+        </View>
+
         {/* Recipient */}
 
         <View style={styles.card}>

@@ -72,8 +72,8 @@ const ConfirmEmailCom = () => {
 
     try {
       await confirmSignUp({
-        username,
-        confirmationCode: confirmationCode.trim(),
+        username: username.trim(),
+        confirmationCode: data.confirmationCode.trim(),
       });
 
       await AsyncStorage.removeItem("pendingVerificationEmail");
@@ -147,8 +147,8 @@ const ConfirmEmailCom = () => {
               defaultValue=""
               rules={{
                 required: "Code is required",
-                minLength: {
-                  value: 6,
+                pattern: {
+                  value: /^\d{6}$/,
                   message: "Enter a valid 6-digit code",
                 },
               }}

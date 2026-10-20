@@ -27,6 +27,10 @@ export default function MaxiReviewScreen() {
   const [selectedIndex, setSelectedIndex] = useState(0);
 
   const {
+    senderName,
+    senderNumber,
+    senderNumber2,
+
     recipientName,
     recipientNumber,
     recipientNumber2,
@@ -433,6 +437,52 @@ export default function MaxiReviewScreen() {
                   {dropoffHasElevator ? "Available" : "None"}
                 </Text>
               </View>
+            </View>
+          </View>
+        </View>
+
+        {/* =========================================================
+    SENDER
+========================================================= */}
+        <View style={styles.card}>
+          <View style={styles.cardHeader}>
+            <View style={styles.sectionIcon}>
+              <Ionicons name="person-outline" size={17} color="#F97316" />
+            </View>
+
+            <View>
+              <Text style={styles.sectionTitle}>Sender</Text>
+              <Text style={styles.sectionSubtitle}>
+                Pickup contact information
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.recipientCard}>
+            <View style={styles.avatar}>
+              <Text style={styles.avatarText}>
+                {senderName?.charAt(0)?.toUpperCase() || "S"}
+              </Text>
+            </View>
+
+            <View style={styles.recipientInfo}>
+              <Text style={styles.recipientName}>{senderName || "Sender"}</Text>
+
+              <View style={styles.phoneRow}>
+                <Ionicons name="call-outline" size={13} color="#64748B" />
+
+                <Text style={styles.phoneText}>
+                  {senderNumber || "No phone number"}
+                </Text>
+              </View>
+
+              {senderNumber2 ? (
+                <View style={styles.phoneRow}>
+                  <Ionicons name="call-outline" size={13} color="#64748B" />
+
+                  <Text style={styles.phoneText}>{senderNumber2}</Text>
+                </View>
+              ) : null}
             </View>
           </View>
         </View>

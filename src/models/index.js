@@ -2,6 +2,100 @@
 import { initSchema } from '@aws-amplify/datastore';
 import { schema } from './schema';
 
+const FleetOrganisationType = {
+  "CORPORATE": "CORPORATE",
+  "REGISTERED_BUSINESS": "REGISTERED_BUSINESS",
+  "INFORMAL_FLEET": "INFORMAL_FLEET"
+};
+
+const FleetLegalStatus = {
+  "REGISTERED": "REGISTERED",
+  "UNREGISTERED": "UNREGISTERED",
+  "REGISTRATION_IN_PROGRESS": "REGISTRATION_IN_PROGRESS"
+};
+
+const FleetVerificationStatus = {
+  "UNVERIFIED": "UNVERIFIED",
+  "PENDING": "PENDING",
+  "VERIFIED": "VERIFIED",
+  "REJECTED": "REJECTED"
+};
+
+const FleetStatus = {
+  "PENDING": "PENDING",
+  "ACTIVE": "ACTIVE",
+  "SUSPENDED": "SUSPENDED",
+  "DEACTIVATED": "DEACTIVATED"
+};
+
+const FleetRole = {
+  "OWNER": "OWNER",
+  "MANAGER": "MANAGER",
+  "DISPATCHER": "DISPATCHER",
+  "ACCOUNTANT": "ACCOUNTANT",
+  "RIDER": "RIDER"
+};
+
+const FleetMemberStatus = {
+  "INVITED": "INVITED",
+  "PENDING": "PENDING",
+  "ACTIVE": "ACTIVE",
+  "SUSPENDED": "SUSPENDED",
+  "REMOVED": "REMOVED"
+};
+
+const FleetInvitationStatus = {
+  "PENDING": "PENDING",
+  "ACCEPTED": "ACCEPTED",
+  "DECLINED": "DECLINED",
+  "EXPIRED": "EXPIRED",
+  "CANCELLED": "CANCELLED"
+};
+
+const FleetVehicleStatus = {
+  "AVAILABLE": "AVAILABLE",
+  "ASSIGNED": "ASSIGNED",
+  "IN_USE": "IN_USE",
+  "MAINTENANCE": "MAINTENANCE",
+  "INACTIVE": "INACTIVE"
+};
+
+const FleetAssignmentType = {
+  "MARKETPLACE_AUTO": "MARKETPLACE_AUTO",
+  "FLEET_DISPATCH": "FLEET_DISPATCH",
+  "PRIVATE": "PRIVATE"
+};
+
+const FleetOrderSource = {
+  "ATUA_MARKETPLACE": "ATUA_MARKETPLACE",
+  "FLEET_CREATED": "FLEET_CREATED",
+  "API": "API"
+};
+
+const FleetSubscriptionPlan = {
+  "FREE": "FREE",
+  "STARTER": "STARTER",
+  "GROWTH": "GROWTH",
+  "BUSINESS": "BUSINESS",
+  "ENTERPRISE": "ENTERPRISE"
+};
+
+const FleetSubscriptionStatus = {
+  "ACTIVE": "ACTIVE",
+  "TRIALING": "TRIALING",
+  "PAST_DUE": "PAST_DUE",
+  "CANCELLED": "CANCELLED",
+  "EXPIRED": "EXPIRED"
+};
+
+const CourierAvailabilityStatus = {
+  "OFFLINE": "OFFLINE",
+  "AVAILABLE": "AVAILABLE",
+  "BUSY": "BUSY",
+  "ON_DELIVERY": "ON_DELIVERY",
+  "SUSPENDED": "SUSPENDED"
+};
+
 const PaystackEnvironment = {
   "TEST": "TEST",
   "LIVE": "LIVE"
@@ -182,11 +276,17 @@ const CourierReportStatus = {
   "DISMISSED": "DISMISSED"
 };
 
-const { CompanyVehicle, CourierCompany, PaymentMethod, Payout, Transaction, Wallet, Payment, Offer, OrderCancellation, Order, CourierReport, CourierReview, AdminAlert, CourierLiveLocation, Courier, User, VerifyAtuaPaymentResult, VerifiedPaymentDetails, ChargeAtuaPaymentMethodResult, DeleteSavedPaymentMethodResult, ProcessPayoutsResponse, ReversePayoutResponse } = initSchema(schema);
+const { FleetWallet, FleetTransaction, FleetSubscription, FleetOrder, Fleet, FleetMember, FleetInvitation, FleetVehicle, PaymentMethod, Payout, Transaction, Wallet, Payment, Offer, OrderCancellation, Order, CourierReport, CourierReview, AdminAlert, CourierLiveLocation, Courier, User, VerifyAtuaPaymentResult, VerifiedPaymentDetails, ChargeAtuaPaymentMethodResult, DeleteSavedPaymentMethodResult, ProcessPayoutsResponse, ReversePayoutResponse } = initSchema(schema);
 
 export {
-  CompanyVehicle,
-  CourierCompany,
+  FleetWallet,
+  FleetTransaction,
+  FleetSubscription,
+  FleetOrder,
+  Fleet,
+  FleetMember,
+  FleetInvitation,
+  FleetVehicle,
   PaymentMethod,
   Payout,
   Transaction,
@@ -201,6 +301,19 @@ export {
   CourierLiveLocation,
   Courier,
   User,
+  FleetOrganisationType,
+  FleetLegalStatus,
+  FleetVerificationStatus,
+  FleetStatus,
+  FleetRole,
+  FleetMemberStatus,
+  FleetInvitationStatus,
+  FleetVehicleStatus,
+  FleetAssignmentType,
+  FleetOrderSource,
+  FleetSubscriptionPlan,
+  FleetSubscriptionStatus,
+  CourierAvailabilityStatus,
   PaystackEnvironment,
   OrderEnvironment,
   PaymentMethodStatus,

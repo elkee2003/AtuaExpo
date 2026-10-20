@@ -1,14 +1,56 @@
 /* eslint-disable */
 // this is an auto generated file. This will be overwritten
 
-export const getCompanyVehicle = /* GraphQL */ `
-  query GetCompanyVehicle($id: ID!) {
-    getCompanyVehicle(id: $id) {
+export const getFleetWallet = /* GraphQL */ `
+  query GetFleetWallet($id: ID!) {
+    getFleetWallet(id: $id) {
       id
-      vehicleType
-      model
-      plateNumber
-      couriercompanyID
+      fleetID
+      availableBalance
+      pendingBalance
+      lifetimeEarnings
+      fleet {
+        id
+        name
+        businessName
+        organisationType
+        legalStatus
+        verificationStatus
+        registrationNumber
+        registrationCountry
+        registrationAuthority
+        isRecognisedBrand
+        brandWebsite
+        verificationNotes
+        logo
+        phoneNumber
+        email
+        address
+        state
+        city
+        landmark
+        lat
+        lng
+        status
+        ownerUserID
+        subscriptionPlan
+        subscriptionStatus
+        subscriptionStartedAt
+        subscriptionRenewsAt
+        trialEndsAt
+        walletID
+        createdAt
+        updatedAt
+        _version
+        _deleted
+        _lastChangedAt
+        __typename
+      }
+      transactions {
+        nextToken
+        startedAt
+        __typename
+      }
       createdAt
       updatedAt
       _version
@@ -18,19 +60,19 @@ export const getCompanyVehicle = /* GraphQL */ `
     }
   }
 `;
-export const listCompanyVehicles = /* GraphQL */ `
-  query ListCompanyVehicles(
-    $filter: ModelCompanyVehicleFilterInput
+export const listFleetWallets = /* GraphQL */ `
+  query ListFleetWallets(
+    $filter: ModelFleetWalletFilterInput
     $limit: Int
     $nextToken: String
   ) {
-    listCompanyVehicles(filter: $filter, limit: $limit, nextToken: $nextToken) {
+    listFleetWallets(filter: $filter, limit: $limit, nextToken: $nextToken) {
       items {
         id
-        vehicleType
-        model
-        plateNumber
-        couriercompanyID
+        fleetID
+        availableBalance
+        pendingBalance
+        lifetimeEarnings
         createdAt
         updatedAt
         _version
@@ -44,14 +86,14 @@ export const listCompanyVehicles = /* GraphQL */ `
     }
   }
 `;
-export const syncCompanyVehicles = /* GraphQL */ `
-  query SyncCompanyVehicles(
-    $filter: ModelCompanyVehicleFilterInput
+export const syncFleetWallets = /* GraphQL */ `
+  query SyncFleetWallets(
+    $filter: ModelFleetWalletFilterInput
     $limit: Int
     $nextToken: String
     $lastSync: AWSTimestamp
   ) {
-    syncCompanyVehicles(
+    syncFleetWallets(
       filter: $filter
       limit: $limit
       nextToken: $nextToken
@@ -59,10 +101,10 @@ export const syncCompanyVehicles = /* GraphQL */ `
     ) {
       items {
         id
-        vehicleType
-        model
-        plateNumber
-        couriercompanyID
+        fleetID
+        availableBalance
+        pendingBalance
+        lifetimeEarnings
         createdAt
         updatedAt
         _version
@@ -76,16 +118,16 @@ export const syncCompanyVehicles = /* GraphQL */ `
     }
   }
 `;
-export const companyVehiclesByCouriercompanyID = /* GraphQL */ `
-  query CompanyVehiclesByCouriercompanyID(
-    $couriercompanyID: ID!
+export const fleetWalletsByFleetID = /* GraphQL */ `
+  query FleetWalletsByFleetID(
+    $fleetID: ID!
     $sortDirection: ModelSortDirection
-    $filter: ModelCompanyVehicleFilterInput
+    $filter: ModelFleetWalletFilterInput
     $limit: Int
     $nextToken: String
   ) {
-    companyVehiclesByCouriercompanyID(
-      couriercompanyID: $couriercompanyID
+    fleetWalletsByFleetID(
+      fleetID: $fleetID
       sortDirection: $sortDirection
       filter: $filter
       limit: $limit
@@ -93,10 +135,10 @@ export const companyVehiclesByCouriercompanyID = /* GraphQL */ `
     ) {
       items {
         id
-        vehicleType
-        model
-        plateNumber
-        couriercompanyID
+        fleetID
+        availableBalance
+        pendingBalance
+        lifetimeEarnings
         createdAt
         updatedAt
         _version
@@ -110,31 +152,207 @@ export const companyVehiclesByCouriercompanyID = /* GraphQL */ `
     }
   }
 `;
-export const getCourierCompany = /* GraphQL */ `
-  query GetCourierCompany($id: ID!) {
-    getCourierCompany(id: $id) {
+export const getFleetTransaction = /* GraphQL */ `
+  query GetFleetTransaction($id: ID!) {
+    getFleetTransaction(id: $id) {
       id
-      sub
-      firstName
-      lastName
-      profilePic
-      address
-      lat
-      lng
-      landmark
-      phoneNumber
-      email
-      adminFirstName
-      adminLastName
-      adminPhoneNumber
-      bankName
-      CompanyVehicles {
-        nextToken
-        startedAt
+      fleetWalletID
+      fleetID
+      orderID
+      type
+      status
+      amount
+      description
+      reference
+      fleet {
+        id
+        name
+        businessName
+        organisationType
+        legalStatus
+        verificationStatus
+        registrationNumber
+        registrationCountry
+        registrationAuthority
+        isRecognisedBrand
+        brandWebsite
+        verificationNotes
+        logo
+        phoneNumber
+        email
+        address
+        state
+        city
+        landmark
+        lat
+        lng
+        status
+        ownerUserID
+        subscriptionPlan
+        subscriptionStatus
+        subscriptionStartedAt
+        subscriptionRenewsAt
+        trialEndsAt
+        walletID
+        createdAt
+        updatedAt
+        _version
+        _deleted
+        _lastChangedAt
         __typename
       }
-      accountNumber
-      push_token
+      fleetWallet {
+        id
+        fleetID
+        availableBalance
+        pendingBalance
+        lifetimeEarnings
+        createdAt
+        updatedAt
+        _version
+        _deleted
+        _lastChangedAt
+        __typename
+      }
+      order {
+        id
+        senderName
+        senderNumber
+        senderNumber2
+        recipientName
+        recipientNumber
+        recipientNumber2
+        orderDetails
+        originAddress
+        originState
+        originLat
+        originLng
+        destinationAddress
+        destinationState
+        destinationLat
+        destinationLng
+        tripType
+        distance
+        transportationType
+        vehicleClass
+        status
+        cancellationStatus
+        refundStatus
+        cancellationFee
+        refundAmount
+        cancellationReason
+        cancellationReasonNote
+        cancellationStage
+        cancellationRequestedAt
+        cancellationProcessedAt
+        refundReference
+        refundRequestedAt
+        refundedAt
+        hasNewOffer
+        lastOfferAt
+        lastOfferSenderType
+        loadCategory
+        isInterState
+        estimatedMinPrice
+        estimatedMaxPrice
+        initialOfferPrice
+        loadingFee
+        unloadingFee
+        floorSurcharge
+        fragileSurcharge
+        extrasTotal
+        totalPrice
+        operationalFare
+        courierEarnings
+        commissionAmount
+        platformFee
+        platformServiceRevenue
+        vatAmount
+        platformNetRevenue
+        deliveryVerificationCode
+        declaredWeightBracket
+        senderPreTransferPhotos
+        senderPreTransferVideo
+        senderPreTransferRecordedAt
+        senderPreTransferLocalPhotos
+        senderPreTransferLocalVideo
+        mediaUploadStatus
+        courierPreTransferUploadStatus
+        courierPostLoadingUploadStatus
+        dropoffUploadStatus
+        courierPreTransferPhotos
+        courierPreTransferVideo
+        courierPreTransferRecordedAt
+        courierPreTransferLocalPhotos
+        courierPreTransferLocalVideo
+        courierPostLoadingPhotos
+        courierPostLoadingVideo
+        courierPostLoadingLocalPhotos
+        courierPostLoadingLocalVideo
+        dropoffArrivalPhotos
+        dropoffArrivalVideo
+        dropoffArrivalLocalPhotos
+        dropoffArrivalLocalVideo
+        postDeliveryPhotos
+        postDeliveryVideo
+        pickupLoadingResponsibility
+        pickupFloorLevel
+        pickupFloorLevelPrice
+        pickupHasElevator
+        dropoffUnloadingResponsibility
+        dropoffFloorLevel
+        dropoffFloorLevelPrice
+        dropoffHasElevator
+        acceptedAt
+        arrivedPickupAt
+        loadingStartedAt
+        tripStartedAt
+        arrivedDropoffAt
+        unloadingCompletedAt
+        logisticsCompanyId
+        waybillNumber
+        waybillPhoto
+        logisticsTrackingCode
+        logisticsTrackingStatus
+        handedOverToLogisticsAt
+        logisticsIntakeConfirmedAt
+        acceptedOfferID
+        paymentStatus
+        paymentID
+        paymentReference
+        payoutStatus
+        fundsStatus
+        earningsAllocationStatus
+        earningsAllocatedAt
+        maxiCountIncrementedAt
+        fundsReleaseBlocked
+        fundsHoldReason
+        fundsHeldBy
+        fundsHeldAt
+        fundsReleasedAmount
+        pickupFundsReleasedAt
+        fundsReleasedAt
+        fundsReleaseType
+        orderEnvironment
+        assignedCourierId
+        assignmentExpiresAt
+        assignmentAttempts
+        lastAssignedAt
+        rejectedCourierIds
+        assignmentStatus
+        trackingStartedAt
+        trackingEndedAt
+        recipientTrackingToken
+        recipientTrackingEnabled
+        recipientTrackingRevokedAt
+        userID
+        createdAt
+        updatedAt
+        _version
+        _deleted
+        _lastChangedAt
+        __typename
+      }
       createdAt
       updatedAt
       _version
@@ -144,35 +362,27 @@ export const getCourierCompany = /* GraphQL */ `
     }
   }
 `;
-export const listCourierCompanies = /* GraphQL */ `
-  query ListCourierCompanies(
-    $filter: ModelCourierCompanyFilterInput
+export const listFleetTransactions = /* GraphQL */ `
+  query ListFleetTransactions(
+    $filter: ModelFleetTransactionFilterInput
     $limit: Int
     $nextToken: String
   ) {
-    listCourierCompanies(
+    listFleetTransactions(
       filter: $filter
       limit: $limit
       nextToken: $nextToken
     ) {
       items {
         id
-        sub
-        firstName
-        lastName
-        profilePic
-        address
-        lat
-        lng
-        landmark
-        phoneNumber
-        email
-        adminFirstName
-        adminLastName
-        adminPhoneNumber
-        bankName
-        accountNumber
-        push_token
+        fleetWalletID
+        fleetID
+        orderID
+        type
+        status
+        amount
+        description
+        reference
         createdAt
         updatedAt
         _version
@@ -186,14 +396,14 @@ export const listCourierCompanies = /* GraphQL */ `
     }
   }
 `;
-export const syncCourierCompanies = /* GraphQL */ `
-  query SyncCourierCompanies(
-    $filter: ModelCourierCompanyFilterInput
+export const syncFleetTransactions = /* GraphQL */ `
+  query SyncFleetTransactions(
+    $filter: ModelFleetTransactionFilterInput
     $limit: Int
     $nextToken: String
     $lastSync: AWSTimestamp
   ) {
-    syncCourierCompanies(
+    syncFleetTransactions(
       filter: $filter
       limit: $limit
       nextToken: $nextToken
@@ -201,22 +411,2069 @@ export const syncCourierCompanies = /* GraphQL */ `
     ) {
       items {
         id
+        fleetWalletID
+        fleetID
+        orderID
+        type
+        status
+        amount
+        description
+        reference
+        createdAt
+        updatedAt
+        _version
+        _deleted
+        _lastChangedAt
+        __typename
+      }
+      nextToken
+      startedAt
+      __typename
+    }
+  }
+`;
+export const fleetTransactionsByFleetWalletID = /* GraphQL */ `
+  query FleetTransactionsByFleetWalletID(
+    $fleetWalletID: ID!
+    $sortDirection: ModelSortDirection
+    $filter: ModelFleetTransactionFilterInput
+    $limit: Int
+    $nextToken: String
+  ) {
+    fleetTransactionsByFleetWalletID(
+      fleetWalletID: $fleetWalletID
+      sortDirection: $sortDirection
+      filter: $filter
+      limit: $limit
+      nextToken: $nextToken
+    ) {
+      items {
+        id
+        fleetWalletID
+        fleetID
+        orderID
+        type
+        status
+        amount
+        description
+        reference
+        createdAt
+        updatedAt
+        _version
+        _deleted
+        _lastChangedAt
+        __typename
+      }
+      nextToken
+      startedAt
+      __typename
+    }
+  }
+`;
+export const fleetTransactionsByFleetID = /* GraphQL */ `
+  query FleetTransactionsByFleetID(
+    $fleetID: ID!
+    $sortDirection: ModelSortDirection
+    $filter: ModelFleetTransactionFilterInput
+    $limit: Int
+    $nextToken: String
+  ) {
+    fleetTransactionsByFleetID(
+      fleetID: $fleetID
+      sortDirection: $sortDirection
+      filter: $filter
+      limit: $limit
+      nextToken: $nextToken
+    ) {
+      items {
+        id
+        fleetWalletID
+        fleetID
+        orderID
+        type
+        status
+        amount
+        description
+        reference
+        createdAt
+        updatedAt
+        _version
+        _deleted
+        _lastChangedAt
+        __typename
+      }
+      nextToken
+      startedAt
+      __typename
+    }
+  }
+`;
+export const fleetTransactionsByOrderID = /* GraphQL */ `
+  query FleetTransactionsByOrderID(
+    $orderID: ID!
+    $sortDirection: ModelSortDirection
+    $filter: ModelFleetTransactionFilterInput
+    $limit: Int
+    $nextToken: String
+  ) {
+    fleetTransactionsByOrderID(
+      orderID: $orderID
+      sortDirection: $sortDirection
+      filter: $filter
+      limit: $limit
+      nextToken: $nextToken
+    ) {
+      items {
+        id
+        fleetWalletID
+        fleetID
+        orderID
+        type
+        status
+        amount
+        description
+        reference
+        createdAt
+        updatedAt
+        _version
+        _deleted
+        _lastChangedAt
+        __typename
+      }
+      nextToken
+      startedAt
+      __typename
+    }
+  }
+`;
+export const fleetTransactionsByReference = /* GraphQL */ `
+  query FleetTransactionsByReference(
+    $reference: String!
+    $sortDirection: ModelSortDirection
+    $filter: ModelFleetTransactionFilterInput
+    $limit: Int
+    $nextToken: String
+  ) {
+    fleetTransactionsByReference(
+      reference: $reference
+      sortDirection: $sortDirection
+      filter: $filter
+      limit: $limit
+      nextToken: $nextToken
+    ) {
+      items {
+        id
+        fleetWalletID
+        fleetID
+        orderID
+        type
+        status
+        amount
+        description
+        reference
+        createdAt
+        updatedAt
+        _version
+        _deleted
+        _lastChangedAt
+        __typename
+      }
+      nextToken
+      startedAt
+      __typename
+    }
+  }
+`;
+export const getFleetSubscription = /* GraphQL */ `
+  query GetFleetSubscription($id: ID!) {
+    getFleetSubscription(id: $id) {
+      id
+      fleetID
+      plan
+      status
+      billingInterval
+      amount
+      currency
+      provider
+      providerReference
+      startedAt
+      currentPeriodStart
+      currentPeriodEnd
+      cancelledAt
+      fleet {
+        id
+        name
+        businessName
+        organisationType
+        legalStatus
+        verificationStatus
+        registrationNumber
+        registrationCountry
+        registrationAuthority
+        isRecognisedBrand
+        brandWebsite
+        verificationNotes
+        logo
+        phoneNumber
+        email
+        address
+        state
+        city
+        landmark
+        lat
+        lng
+        status
+        ownerUserID
+        subscriptionPlan
+        subscriptionStatus
+        subscriptionStartedAt
+        subscriptionRenewsAt
+        trialEndsAt
+        walletID
+        createdAt
+        updatedAt
+        _version
+        _deleted
+        _lastChangedAt
+        __typename
+      }
+      createdAt
+      updatedAt
+      _version
+      _deleted
+      _lastChangedAt
+      __typename
+    }
+  }
+`;
+export const listFleetSubscriptions = /* GraphQL */ `
+  query ListFleetSubscriptions(
+    $filter: ModelFleetSubscriptionFilterInput
+    $limit: Int
+    $nextToken: String
+  ) {
+    listFleetSubscriptions(
+      filter: $filter
+      limit: $limit
+      nextToken: $nextToken
+    ) {
+      items {
+        id
+        fleetID
+        plan
+        status
+        billingInterval
+        amount
+        currency
+        provider
+        providerReference
+        startedAt
+        currentPeriodStart
+        currentPeriodEnd
+        cancelledAt
+        createdAt
+        updatedAt
+        _version
+        _deleted
+        _lastChangedAt
+        __typename
+      }
+      nextToken
+      startedAt
+      __typename
+    }
+  }
+`;
+export const syncFleetSubscriptions = /* GraphQL */ `
+  query SyncFleetSubscriptions(
+    $filter: ModelFleetSubscriptionFilterInput
+    $limit: Int
+    $nextToken: String
+    $lastSync: AWSTimestamp
+  ) {
+    syncFleetSubscriptions(
+      filter: $filter
+      limit: $limit
+      nextToken: $nextToken
+      lastSync: $lastSync
+    ) {
+      items {
+        id
+        fleetID
+        plan
+        status
+        billingInterval
+        amount
+        currency
+        provider
+        providerReference
+        startedAt
+        currentPeriodStart
+        currentPeriodEnd
+        cancelledAt
+        createdAt
+        updatedAt
+        _version
+        _deleted
+        _lastChangedAt
+        __typename
+      }
+      nextToken
+      startedAt
+      __typename
+    }
+  }
+`;
+export const fleetSubscriptionsByFleetID = /* GraphQL */ `
+  query FleetSubscriptionsByFleetID(
+    $fleetID: ID!
+    $sortDirection: ModelSortDirection
+    $filter: ModelFleetSubscriptionFilterInput
+    $limit: Int
+    $nextToken: String
+  ) {
+    fleetSubscriptionsByFleetID(
+      fleetID: $fleetID
+      sortDirection: $sortDirection
+      filter: $filter
+      limit: $limit
+      nextToken: $nextToken
+    ) {
+      items {
+        id
+        fleetID
+        plan
+        status
+        billingInterval
+        amount
+        currency
+        provider
+        providerReference
+        startedAt
+        currentPeriodStart
+        currentPeriodEnd
+        cancelledAt
+        createdAt
+        updatedAt
+        _version
+        _deleted
+        _lastChangedAt
+        __typename
+      }
+      nextToken
+      startedAt
+      __typename
+    }
+  }
+`;
+export const fleetSubscriptionsByProviderReference = /* GraphQL */ `
+  query FleetSubscriptionsByProviderReference(
+    $providerReference: String!
+    $sortDirection: ModelSortDirection
+    $filter: ModelFleetSubscriptionFilterInput
+    $limit: Int
+    $nextToken: String
+  ) {
+    fleetSubscriptionsByProviderReference(
+      providerReference: $providerReference
+      sortDirection: $sortDirection
+      filter: $filter
+      limit: $limit
+      nextToken: $nextToken
+    ) {
+      items {
+        id
+        fleetID
+        plan
+        status
+        billingInterval
+        amount
+        currency
+        provider
+        providerReference
+        startedAt
+        currentPeriodStart
+        currentPeriodEnd
+        cancelledAt
+        createdAt
+        updatedAt
+        _version
+        _deleted
+        _lastChangedAt
+        __typename
+      }
+      nextToken
+      startedAt
+      __typename
+    }
+  }
+`;
+export const getFleetOrder = /* GraphQL */ `
+  query GetFleetOrder($id: ID!) {
+    getFleetOrder(id: $id) {
+      id
+      fleetID
+      orderID
+      courierID
+      vehicleID
+      source
+      assignmentType
+      assignedAt
+      completedAt
+      fleetEarnings
+      fleet {
+        id
+        name
+        businessName
+        organisationType
+        legalStatus
+        verificationStatus
+        registrationNumber
+        registrationCountry
+        registrationAuthority
+        isRecognisedBrand
+        brandWebsite
+        verificationNotes
+        logo
+        phoneNumber
+        email
+        address
+        state
+        city
+        landmark
+        lat
+        lng
+        status
+        ownerUserID
+        subscriptionPlan
+        subscriptionStatus
+        subscriptionStartedAt
+        subscriptionRenewsAt
+        trialEndsAt
+        walletID
+        createdAt
+        updatedAt
+        _version
+        _deleted
+        _lastChangedAt
+        __typename
+      }
+      order {
+        id
+        senderName
+        senderNumber
+        senderNumber2
+        recipientName
+        recipientNumber
+        recipientNumber2
+        orderDetails
+        originAddress
+        originState
+        originLat
+        originLng
+        destinationAddress
+        destinationState
+        destinationLat
+        destinationLng
+        tripType
+        distance
+        transportationType
+        vehicleClass
+        status
+        cancellationStatus
+        refundStatus
+        cancellationFee
+        refundAmount
+        cancellationReason
+        cancellationReasonNote
+        cancellationStage
+        cancellationRequestedAt
+        cancellationProcessedAt
+        refundReference
+        refundRequestedAt
+        refundedAt
+        hasNewOffer
+        lastOfferAt
+        lastOfferSenderType
+        loadCategory
+        isInterState
+        estimatedMinPrice
+        estimatedMaxPrice
+        initialOfferPrice
+        loadingFee
+        unloadingFee
+        floorSurcharge
+        fragileSurcharge
+        extrasTotal
+        totalPrice
+        operationalFare
+        courierEarnings
+        commissionAmount
+        platformFee
+        platformServiceRevenue
+        vatAmount
+        platformNetRevenue
+        deliveryVerificationCode
+        declaredWeightBracket
+        senderPreTransferPhotos
+        senderPreTransferVideo
+        senderPreTransferRecordedAt
+        senderPreTransferLocalPhotos
+        senderPreTransferLocalVideo
+        mediaUploadStatus
+        courierPreTransferUploadStatus
+        courierPostLoadingUploadStatus
+        dropoffUploadStatus
+        courierPreTransferPhotos
+        courierPreTransferVideo
+        courierPreTransferRecordedAt
+        courierPreTransferLocalPhotos
+        courierPreTransferLocalVideo
+        courierPostLoadingPhotos
+        courierPostLoadingVideo
+        courierPostLoadingLocalPhotos
+        courierPostLoadingLocalVideo
+        dropoffArrivalPhotos
+        dropoffArrivalVideo
+        dropoffArrivalLocalPhotos
+        dropoffArrivalLocalVideo
+        postDeliveryPhotos
+        postDeliveryVideo
+        pickupLoadingResponsibility
+        pickupFloorLevel
+        pickupFloorLevelPrice
+        pickupHasElevator
+        dropoffUnloadingResponsibility
+        dropoffFloorLevel
+        dropoffFloorLevelPrice
+        dropoffHasElevator
+        acceptedAt
+        arrivedPickupAt
+        loadingStartedAt
+        tripStartedAt
+        arrivedDropoffAt
+        unloadingCompletedAt
+        logisticsCompanyId
+        waybillNumber
+        waybillPhoto
+        logisticsTrackingCode
+        logisticsTrackingStatus
+        handedOverToLogisticsAt
+        logisticsIntakeConfirmedAt
+        acceptedOfferID
+        paymentStatus
+        paymentID
+        paymentReference
+        payoutStatus
+        fundsStatus
+        earningsAllocationStatus
+        earningsAllocatedAt
+        maxiCountIncrementedAt
+        fundsReleaseBlocked
+        fundsHoldReason
+        fundsHeldBy
+        fundsHeldAt
+        fundsReleasedAmount
+        pickupFundsReleasedAt
+        fundsReleasedAt
+        fundsReleaseType
+        orderEnvironment
+        assignedCourierId
+        assignmentExpiresAt
+        assignmentAttempts
+        lastAssignedAt
+        rejectedCourierIds
+        assignmentStatus
+        trackingStartedAt
+        trackingEndedAt
+        recipientTrackingToken
+        recipientTrackingEnabled
+        recipientTrackingRevokedAt
+        userID
+        createdAt
+        updatedAt
+        _version
+        _deleted
+        _lastChangedAt
+        __typename
+      }
+      courier {
+        id
         sub
+        isOnline
+        isBlocked
         firstName
         lastName
         profilePic
         address
-        lat
-        lng
-        landmark
+        landMark
         phoneNumber
         email
-        adminFirstName
-        adminLastName
-        adminPhoneNumber
+        courierNIN
+        courierNINImage
+        bankCode
         bankName
+        accountName
         accountNumber
+        transportationType
+        vehicleClass
+        model
+        vehicleColour
+        plateNumber
+        maxiImages
+        maxiDescription
+        guarantorName
+        guarantorLastName
+        guarantorProfession
+        guarantorNumber
+        guarantorRelationship
+        guarantorAddress
+        guarantorEmail
+        guarantorNIN
+        guarantorNINImage
+        lat
+        lng
+        heading
+        liveLocationID
+        isOnboardingComplete
         push_token
+        isApproved
+        approvedById
+        currentBatchCount
+        currentExpressCount
+        currentMaxiCount
+        lastBatchAssignedAt
+        averageRating
+        reviewCount
+        totalReports
+        availabilityStatus
+        lastLocationUpdateAt
+        statusKey
+        walletID
+        createdAt
+        updatedAt
+        _version
+        _deleted
+        _lastChangedAt
+        __typename
+      }
+      vehicle {
+        id
+        fleetID
+        vehicleType
+        vehicleClass
+        make
+        model
+        year
+        plateNumber
+        colour
+        status
+        assignedCourierID
+        assignedAt
+        registrationDocument
+        insuranceDocument
+        createdAt
+        updatedAt
+        _version
+        _deleted
+        _lastChangedAt
+        __typename
+      }
+      createdAt
+      updatedAt
+      _version
+      _deleted
+      _lastChangedAt
+      __typename
+    }
+  }
+`;
+export const listFleetOrders = /* GraphQL */ `
+  query ListFleetOrders(
+    $filter: ModelFleetOrderFilterInput
+    $limit: Int
+    $nextToken: String
+  ) {
+    listFleetOrders(filter: $filter, limit: $limit, nextToken: $nextToken) {
+      items {
+        id
+        fleetID
+        orderID
+        courierID
+        vehicleID
+        source
+        assignmentType
+        assignedAt
+        completedAt
+        fleetEarnings
+        createdAt
+        updatedAt
+        _version
+        _deleted
+        _lastChangedAt
+        __typename
+      }
+      nextToken
+      startedAt
+      __typename
+    }
+  }
+`;
+export const syncFleetOrders = /* GraphQL */ `
+  query SyncFleetOrders(
+    $filter: ModelFleetOrderFilterInput
+    $limit: Int
+    $nextToken: String
+    $lastSync: AWSTimestamp
+  ) {
+    syncFleetOrders(
+      filter: $filter
+      limit: $limit
+      nextToken: $nextToken
+      lastSync: $lastSync
+    ) {
+      items {
+        id
+        fleetID
+        orderID
+        courierID
+        vehicleID
+        source
+        assignmentType
+        assignedAt
+        completedAt
+        fleetEarnings
+        createdAt
+        updatedAt
+        _version
+        _deleted
+        _lastChangedAt
+        __typename
+      }
+      nextToken
+      startedAt
+      __typename
+    }
+  }
+`;
+export const fleetOrdersByFleetID = /* GraphQL */ `
+  query FleetOrdersByFleetID(
+    $fleetID: ID!
+    $sortDirection: ModelSortDirection
+    $filter: ModelFleetOrderFilterInput
+    $limit: Int
+    $nextToken: String
+  ) {
+    fleetOrdersByFleetID(
+      fleetID: $fleetID
+      sortDirection: $sortDirection
+      filter: $filter
+      limit: $limit
+      nextToken: $nextToken
+    ) {
+      items {
+        id
+        fleetID
+        orderID
+        courierID
+        vehicleID
+        source
+        assignmentType
+        assignedAt
+        completedAt
+        fleetEarnings
+        createdAt
+        updatedAt
+        _version
+        _deleted
+        _lastChangedAt
+        __typename
+      }
+      nextToken
+      startedAt
+      __typename
+    }
+  }
+`;
+export const fleetOrdersByOrderID = /* GraphQL */ `
+  query FleetOrdersByOrderID(
+    $orderID: ID!
+    $sortDirection: ModelSortDirection
+    $filter: ModelFleetOrderFilterInput
+    $limit: Int
+    $nextToken: String
+  ) {
+    fleetOrdersByOrderID(
+      orderID: $orderID
+      sortDirection: $sortDirection
+      filter: $filter
+      limit: $limit
+      nextToken: $nextToken
+    ) {
+      items {
+        id
+        fleetID
+        orderID
+        courierID
+        vehicleID
+        source
+        assignmentType
+        assignedAt
+        completedAt
+        fleetEarnings
+        createdAt
+        updatedAt
+        _version
+        _deleted
+        _lastChangedAt
+        __typename
+      }
+      nextToken
+      startedAt
+      __typename
+    }
+  }
+`;
+export const fleetOrdersByCourierID = /* GraphQL */ `
+  query FleetOrdersByCourierID(
+    $courierID: ID!
+    $sortDirection: ModelSortDirection
+    $filter: ModelFleetOrderFilterInput
+    $limit: Int
+    $nextToken: String
+  ) {
+    fleetOrdersByCourierID(
+      courierID: $courierID
+      sortDirection: $sortDirection
+      filter: $filter
+      limit: $limit
+      nextToken: $nextToken
+    ) {
+      items {
+        id
+        fleetID
+        orderID
+        courierID
+        vehicleID
+        source
+        assignmentType
+        assignedAt
+        completedAt
+        fleetEarnings
+        createdAt
+        updatedAt
+        _version
+        _deleted
+        _lastChangedAt
+        __typename
+      }
+      nextToken
+      startedAt
+      __typename
+    }
+  }
+`;
+export const fleetOrdersByVehicleID = /* GraphQL */ `
+  query FleetOrdersByVehicleID(
+    $vehicleID: ID!
+    $sortDirection: ModelSortDirection
+    $filter: ModelFleetOrderFilterInput
+    $limit: Int
+    $nextToken: String
+  ) {
+    fleetOrdersByVehicleID(
+      vehicleID: $vehicleID
+      sortDirection: $sortDirection
+      filter: $filter
+      limit: $limit
+      nextToken: $nextToken
+    ) {
+      items {
+        id
+        fleetID
+        orderID
+        courierID
+        vehicleID
+        source
+        assignmentType
+        assignedAt
+        completedAt
+        fleetEarnings
+        createdAt
+        updatedAt
+        _version
+        _deleted
+        _lastChangedAt
+        __typename
+      }
+      nextToken
+      startedAt
+      __typename
+    }
+  }
+`;
+export const getFleet = /* GraphQL */ `
+  query GetFleet($id: ID!) {
+    getFleet(id: $id) {
+      id
+      name
+      businessName
+      organisationType
+      legalStatus
+      verificationStatus
+      registrationNumber
+      registrationCountry
+      registrationAuthority
+      isRecognisedBrand
+      brandWebsite
+      verificationNotes
+      logo
+      phoneNumber
+      email
+      address
+      state
+      city
+      landmark
+      lat
+      lng
+      status
+      ownerUserID
+      subscriptionPlan
+      subscriptionStatus
+      subscriptionStartedAt
+      subscriptionRenewsAt
+      trialEndsAt
+      members {
+        nextToken
+        startedAt
+        __typename
+      }
+      vehicles {
+        nextToken
+        startedAt
+        __typename
+      }
+      invitations {
+        nextToken
+        startedAt
+        __typename
+      }
+      fleetOrders {
+        nextToken
+        startedAt
+        __typename
+      }
+      walletID
+      wallets {
+        nextToken
+        startedAt
+        __typename
+      }
+      transactions {
+        nextToken
+        startedAt
+        __typename
+      }
+      subscriptions {
+        nextToken
+        startedAt
+        __typename
+      }
+      createdAt
+      updatedAt
+      _version
+      _deleted
+      _lastChangedAt
+      __typename
+    }
+  }
+`;
+export const listFleets = /* GraphQL */ `
+  query ListFleets(
+    $filter: ModelFleetFilterInput
+    $limit: Int
+    $nextToken: String
+  ) {
+    listFleets(filter: $filter, limit: $limit, nextToken: $nextToken) {
+      items {
+        id
+        name
+        businessName
+        organisationType
+        legalStatus
+        verificationStatus
+        registrationNumber
+        registrationCountry
+        registrationAuthority
+        isRecognisedBrand
+        brandWebsite
+        verificationNotes
+        logo
+        phoneNumber
+        email
+        address
+        state
+        city
+        landmark
+        lat
+        lng
+        status
+        ownerUserID
+        subscriptionPlan
+        subscriptionStatus
+        subscriptionStartedAt
+        subscriptionRenewsAt
+        trialEndsAt
+        walletID
+        createdAt
+        updatedAt
+        _version
+        _deleted
+        _lastChangedAt
+        __typename
+      }
+      nextToken
+      startedAt
+      __typename
+    }
+  }
+`;
+export const syncFleets = /* GraphQL */ `
+  query SyncFleets(
+    $filter: ModelFleetFilterInput
+    $limit: Int
+    $nextToken: String
+    $lastSync: AWSTimestamp
+  ) {
+    syncFleets(
+      filter: $filter
+      limit: $limit
+      nextToken: $nextToken
+      lastSync: $lastSync
+    ) {
+      items {
+        id
+        name
+        businessName
+        organisationType
+        legalStatus
+        verificationStatus
+        registrationNumber
+        registrationCountry
+        registrationAuthority
+        isRecognisedBrand
+        brandWebsite
+        verificationNotes
+        logo
+        phoneNumber
+        email
+        address
+        state
+        city
+        landmark
+        lat
+        lng
+        status
+        ownerUserID
+        subscriptionPlan
+        subscriptionStatus
+        subscriptionStartedAt
+        subscriptionRenewsAt
+        trialEndsAt
+        walletID
+        createdAt
+        updatedAt
+        _version
+        _deleted
+        _lastChangedAt
+        __typename
+      }
+      nextToken
+      startedAt
+      __typename
+    }
+  }
+`;
+export const fleetsByOwnerUserID = /* GraphQL */ `
+  query FleetsByOwnerUserID(
+    $ownerUserID: ID!
+    $sortDirection: ModelSortDirection
+    $filter: ModelFleetFilterInput
+    $limit: Int
+    $nextToken: String
+  ) {
+    fleetsByOwnerUserID(
+      ownerUserID: $ownerUserID
+      sortDirection: $sortDirection
+      filter: $filter
+      limit: $limit
+      nextToken: $nextToken
+    ) {
+      items {
+        id
+        name
+        businessName
+        organisationType
+        legalStatus
+        verificationStatus
+        registrationNumber
+        registrationCountry
+        registrationAuthority
+        isRecognisedBrand
+        brandWebsite
+        verificationNotes
+        logo
+        phoneNumber
+        email
+        address
+        state
+        city
+        landmark
+        lat
+        lng
+        status
+        ownerUserID
+        subscriptionPlan
+        subscriptionStatus
+        subscriptionStartedAt
+        subscriptionRenewsAt
+        trialEndsAt
+        walletID
+        createdAt
+        updatedAt
+        _version
+        _deleted
+        _lastChangedAt
+        __typename
+      }
+      nextToken
+      startedAt
+      __typename
+    }
+  }
+`;
+export const getFleetMember = /* GraphQL */ `
+  query GetFleetMember($id: ID!) {
+    getFleetMember(id: $id) {
+      id
+      fleetID
+      courierID
+      role
+      status
+      currentVehicleID
+      invitedByID
+      approvedByID
+      joinedAt
+      leftAt
+      fleet {
+        id
+        name
+        businessName
+        organisationType
+        legalStatus
+        verificationStatus
+        registrationNumber
+        registrationCountry
+        registrationAuthority
+        isRecognisedBrand
+        brandWebsite
+        verificationNotes
+        logo
+        phoneNumber
+        email
+        address
+        state
+        city
+        landmark
+        lat
+        lng
+        status
+        ownerUserID
+        subscriptionPlan
+        subscriptionStatus
+        subscriptionStartedAt
+        subscriptionRenewsAt
+        trialEndsAt
+        walletID
+        createdAt
+        updatedAt
+        _version
+        _deleted
+        _lastChangedAt
+        __typename
+      }
+      courier {
+        id
+        sub
+        isOnline
+        isBlocked
+        firstName
+        lastName
+        profilePic
+        address
+        landMark
+        phoneNumber
+        email
+        courierNIN
+        courierNINImage
+        bankCode
+        bankName
+        accountName
+        accountNumber
+        transportationType
+        vehicleClass
+        model
+        vehicleColour
+        plateNumber
+        maxiImages
+        maxiDescription
+        guarantorName
+        guarantorLastName
+        guarantorProfession
+        guarantorNumber
+        guarantorRelationship
+        guarantorAddress
+        guarantorEmail
+        guarantorNIN
+        guarantorNINImage
+        lat
+        lng
+        heading
+        liveLocationID
+        isOnboardingComplete
+        push_token
+        isApproved
+        approvedById
+        currentBatchCount
+        currentExpressCount
+        currentMaxiCount
+        lastBatchAssignedAt
+        averageRating
+        reviewCount
+        totalReports
+        availabilityStatus
+        lastLocationUpdateAt
+        statusKey
+        walletID
+        createdAt
+        updatedAt
+        _version
+        _deleted
+        _lastChangedAt
+        __typename
+      }
+      currentVehicle {
+        id
+        fleetID
+        vehicleType
+        vehicleClass
+        make
+        model
+        year
+        plateNumber
+        colour
+        status
+        assignedCourierID
+        assignedAt
+        registrationDocument
+        insuranceDocument
+        createdAt
+        updatedAt
+        _version
+        _deleted
+        _lastChangedAt
+        __typename
+      }
+      createdAt
+      updatedAt
+      _version
+      _deleted
+      _lastChangedAt
+      __typename
+    }
+  }
+`;
+export const listFleetMembers = /* GraphQL */ `
+  query ListFleetMembers(
+    $filter: ModelFleetMemberFilterInput
+    $limit: Int
+    $nextToken: String
+  ) {
+    listFleetMembers(filter: $filter, limit: $limit, nextToken: $nextToken) {
+      items {
+        id
+        fleetID
+        courierID
+        role
+        status
+        currentVehicleID
+        invitedByID
+        approvedByID
+        joinedAt
+        leftAt
+        createdAt
+        updatedAt
+        _version
+        _deleted
+        _lastChangedAt
+        __typename
+      }
+      nextToken
+      startedAt
+      __typename
+    }
+  }
+`;
+export const syncFleetMembers = /* GraphQL */ `
+  query SyncFleetMembers(
+    $filter: ModelFleetMemberFilterInput
+    $limit: Int
+    $nextToken: String
+    $lastSync: AWSTimestamp
+  ) {
+    syncFleetMembers(
+      filter: $filter
+      limit: $limit
+      nextToken: $nextToken
+      lastSync: $lastSync
+    ) {
+      items {
+        id
+        fleetID
+        courierID
+        role
+        status
+        currentVehicleID
+        invitedByID
+        approvedByID
+        joinedAt
+        leftAt
+        createdAt
+        updatedAt
+        _version
+        _deleted
+        _lastChangedAt
+        __typename
+      }
+      nextToken
+      startedAt
+      __typename
+    }
+  }
+`;
+export const fleetMembersByFleetID = /* GraphQL */ `
+  query FleetMembersByFleetID(
+    $fleetID: ID!
+    $sortDirection: ModelSortDirection
+    $filter: ModelFleetMemberFilterInput
+    $limit: Int
+    $nextToken: String
+  ) {
+    fleetMembersByFleetID(
+      fleetID: $fleetID
+      sortDirection: $sortDirection
+      filter: $filter
+      limit: $limit
+      nextToken: $nextToken
+    ) {
+      items {
+        id
+        fleetID
+        courierID
+        role
+        status
+        currentVehicleID
+        invitedByID
+        approvedByID
+        joinedAt
+        leftAt
+        createdAt
+        updatedAt
+        _version
+        _deleted
+        _lastChangedAt
+        __typename
+      }
+      nextToken
+      startedAt
+      __typename
+    }
+  }
+`;
+export const fleetMembersByCourierID = /* GraphQL */ `
+  query FleetMembersByCourierID(
+    $courierID: ID!
+    $sortDirection: ModelSortDirection
+    $filter: ModelFleetMemberFilterInput
+    $limit: Int
+    $nextToken: String
+  ) {
+    fleetMembersByCourierID(
+      courierID: $courierID
+      sortDirection: $sortDirection
+      filter: $filter
+      limit: $limit
+      nextToken: $nextToken
+    ) {
+      items {
+        id
+        fleetID
+        courierID
+        role
+        status
+        currentVehicleID
+        invitedByID
+        approvedByID
+        joinedAt
+        leftAt
+        createdAt
+        updatedAt
+        _version
+        _deleted
+        _lastChangedAt
+        __typename
+      }
+      nextToken
+      startedAt
+      __typename
+    }
+  }
+`;
+export const fleetMembersByCurrentVehicleID = /* GraphQL */ `
+  query FleetMembersByCurrentVehicleID(
+    $currentVehicleID: ID!
+    $sortDirection: ModelSortDirection
+    $filter: ModelFleetMemberFilterInput
+    $limit: Int
+    $nextToken: String
+  ) {
+    fleetMembersByCurrentVehicleID(
+      currentVehicleID: $currentVehicleID
+      sortDirection: $sortDirection
+      filter: $filter
+      limit: $limit
+      nextToken: $nextToken
+    ) {
+      items {
+        id
+        fleetID
+        courierID
+        role
+        status
+        currentVehicleID
+        invitedByID
+        approvedByID
+        joinedAt
+        leftAt
+        createdAt
+        updatedAt
+        _version
+        _deleted
+        _lastChangedAt
+        __typename
+      }
+      nextToken
+      startedAt
+      __typename
+    }
+  }
+`;
+export const getFleetInvitation = /* GraphQL */ `
+  query GetFleetInvitation($id: ID!) {
+    getFleetInvitation(id: $id) {
+      id
+      fleetID
+      courierID
+      phoneNumber
+      email
+      role
+      status
+      invitationCode
+      invitedByID
+      expiresAt
+      acceptedAt
+      fleet {
+        id
+        name
+        businessName
+        organisationType
+        legalStatus
+        verificationStatus
+        registrationNumber
+        registrationCountry
+        registrationAuthority
+        isRecognisedBrand
+        brandWebsite
+        verificationNotes
+        logo
+        phoneNumber
+        email
+        address
+        state
+        city
+        landmark
+        lat
+        lng
+        status
+        ownerUserID
+        subscriptionPlan
+        subscriptionStatus
+        subscriptionStartedAt
+        subscriptionRenewsAt
+        trialEndsAt
+        walletID
+        createdAt
+        updatedAt
+        _version
+        _deleted
+        _lastChangedAt
+        __typename
+      }
+      courier {
+        id
+        sub
+        isOnline
+        isBlocked
+        firstName
+        lastName
+        profilePic
+        address
+        landMark
+        phoneNumber
+        email
+        courierNIN
+        courierNINImage
+        bankCode
+        bankName
+        accountName
+        accountNumber
+        transportationType
+        vehicleClass
+        model
+        vehicleColour
+        plateNumber
+        maxiImages
+        maxiDescription
+        guarantorName
+        guarantorLastName
+        guarantorProfession
+        guarantorNumber
+        guarantorRelationship
+        guarantorAddress
+        guarantorEmail
+        guarantorNIN
+        guarantorNINImage
+        lat
+        lng
+        heading
+        liveLocationID
+        isOnboardingComplete
+        push_token
+        isApproved
+        approvedById
+        currentBatchCount
+        currentExpressCount
+        currentMaxiCount
+        lastBatchAssignedAt
+        averageRating
+        reviewCount
+        totalReports
+        availabilityStatus
+        lastLocationUpdateAt
+        statusKey
+        walletID
+        createdAt
+        updatedAt
+        _version
+        _deleted
+        _lastChangedAt
+        __typename
+      }
+      createdAt
+      updatedAt
+      _version
+      _deleted
+      _lastChangedAt
+      __typename
+    }
+  }
+`;
+export const listFleetInvitations = /* GraphQL */ `
+  query ListFleetInvitations(
+    $filter: ModelFleetInvitationFilterInput
+    $limit: Int
+    $nextToken: String
+  ) {
+    listFleetInvitations(
+      filter: $filter
+      limit: $limit
+      nextToken: $nextToken
+    ) {
+      items {
+        id
+        fleetID
+        courierID
+        phoneNumber
+        email
+        role
+        status
+        invitationCode
+        invitedByID
+        expiresAt
+        acceptedAt
+        createdAt
+        updatedAt
+        _version
+        _deleted
+        _lastChangedAt
+        __typename
+      }
+      nextToken
+      startedAt
+      __typename
+    }
+  }
+`;
+export const syncFleetInvitations = /* GraphQL */ `
+  query SyncFleetInvitations(
+    $filter: ModelFleetInvitationFilterInput
+    $limit: Int
+    $nextToken: String
+    $lastSync: AWSTimestamp
+  ) {
+    syncFleetInvitations(
+      filter: $filter
+      limit: $limit
+      nextToken: $nextToken
+      lastSync: $lastSync
+    ) {
+      items {
+        id
+        fleetID
+        courierID
+        phoneNumber
+        email
+        role
+        status
+        invitationCode
+        invitedByID
+        expiresAt
+        acceptedAt
+        createdAt
+        updatedAt
+        _version
+        _deleted
+        _lastChangedAt
+        __typename
+      }
+      nextToken
+      startedAt
+      __typename
+    }
+  }
+`;
+export const fleetInvitationsByFleetID = /* GraphQL */ `
+  query FleetInvitationsByFleetID(
+    $fleetID: ID!
+    $sortDirection: ModelSortDirection
+    $filter: ModelFleetInvitationFilterInput
+    $limit: Int
+    $nextToken: String
+  ) {
+    fleetInvitationsByFleetID(
+      fleetID: $fleetID
+      sortDirection: $sortDirection
+      filter: $filter
+      limit: $limit
+      nextToken: $nextToken
+    ) {
+      items {
+        id
+        fleetID
+        courierID
+        phoneNumber
+        email
+        role
+        status
+        invitationCode
+        invitedByID
+        expiresAt
+        acceptedAt
+        createdAt
+        updatedAt
+        _version
+        _deleted
+        _lastChangedAt
+        __typename
+      }
+      nextToken
+      startedAt
+      __typename
+    }
+  }
+`;
+export const fleetInvitationsByCourierID = /* GraphQL */ `
+  query FleetInvitationsByCourierID(
+    $courierID: ID!
+    $sortDirection: ModelSortDirection
+    $filter: ModelFleetInvitationFilterInput
+    $limit: Int
+    $nextToken: String
+  ) {
+    fleetInvitationsByCourierID(
+      courierID: $courierID
+      sortDirection: $sortDirection
+      filter: $filter
+      limit: $limit
+      nextToken: $nextToken
+    ) {
+      items {
+        id
+        fleetID
+        courierID
+        phoneNumber
+        email
+        role
+        status
+        invitationCode
+        invitedByID
+        expiresAt
+        acceptedAt
+        createdAt
+        updatedAt
+        _version
+        _deleted
+        _lastChangedAt
+        __typename
+      }
+      nextToken
+      startedAt
+      __typename
+    }
+  }
+`;
+export const fleetInvitationsByInvitationCode = /* GraphQL */ `
+  query FleetInvitationsByInvitationCode(
+    $invitationCode: String!
+    $sortDirection: ModelSortDirection
+    $filter: ModelFleetInvitationFilterInput
+    $limit: Int
+    $nextToken: String
+  ) {
+    fleetInvitationsByInvitationCode(
+      invitationCode: $invitationCode
+      sortDirection: $sortDirection
+      filter: $filter
+      limit: $limit
+      nextToken: $nextToken
+    ) {
+      items {
+        id
+        fleetID
+        courierID
+        phoneNumber
+        email
+        role
+        status
+        invitationCode
+        invitedByID
+        expiresAt
+        acceptedAt
+        createdAt
+        updatedAt
+        _version
+        _deleted
+        _lastChangedAt
+        __typename
+      }
+      nextToken
+      startedAt
+      __typename
+    }
+  }
+`;
+export const getFleetVehicle = /* GraphQL */ `
+  query GetFleetVehicle($id: ID!) {
+    getFleetVehicle(id: $id) {
+      id
+      fleetID
+      vehicleType
+      vehicleClass
+      make
+      model
+      year
+      plateNumber
+      colour
+      status
+      assignedCourierID
+      assignedAt
+      registrationDocument
+      insuranceDocument
+      fleet {
+        id
+        name
+        businessName
+        organisationType
+        legalStatus
+        verificationStatus
+        registrationNumber
+        registrationCountry
+        registrationAuthority
+        isRecognisedBrand
+        brandWebsite
+        verificationNotes
+        logo
+        phoneNumber
+        email
+        address
+        state
+        city
+        landmark
+        lat
+        lng
+        status
+        ownerUserID
+        subscriptionPlan
+        subscriptionStatus
+        subscriptionStartedAt
+        subscriptionRenewsAt
+        trialEndsAt
+        walletID
+        createdAt
+        updatedAt
+        _version
+        _deleted
+        _lastChangedAt
+        __typename
+      }
+      assignedCourier {
+        id
+        sub
+        isOnline
+        isBlocked
+        firstName
+        lastName
+        profilePic
+        address
+        landMark
+        phoneNumber
+        email
+        courierNIN
+        courierNINImage
+        bankCode
+        bankName
+        accountName
+        accountNumber
+        transportationType
+        vehicleClass
+        model
+        vehicleColour
+        plateNumber
+        maxiImages
+        maxiDescription
+        guarantorName
+        guarantorLastName
+        guarantorProfession
+        guarantorNumber
+        guarantorRelationship
+        guarantorAddress
+        guarantorEmail
+        guarantorNIN
+        guarantorNINImage
+        lat
+        lng
+        heading
+        liveLocationID
+        isOnboardingComplete
+        push_token
+        isApproved
+        approvedById
+        currentBatchCount
+        currentExpressCount
+        currentMaxiCount
+        lastBatchAssignedAt
+        averageRating
+        reviewCount
+        totalReports
+        availabilityStatus
+        lastLocationUpdateAt
+        statusKey
+        walletID
+        createdAt
+        updatedAt
+        _version
+        _deleted
+        _lastChangedAt
+        __typename
+      }
+      assignedMembers {
+        nextToken
+        startedAt
+        __typename
+      }
+      fleetOrders {
+        nextToken
+        startedAt
+        __typename
+      }
+      createdAt
+      updatedAt
+      _version
+      _deleted
+      _lastChangedAt
+      __typename
+    }
+  }
+`;
+export const listFleetVehicles = /* GraphQL */ `
+  query ListFleetVehicles(
+    $filter: ModelFleetVehicleFilterInput
+    $limit: Int
+    $nextToken: String
+  ) {
+    listFleetVehicles(filter: $filter, limit: $limit, nextToken: $nextToken) {
+      items {
+        id
+        fleetID
+        vehicleType
+        vehicleClass
+        make
+        model
+        year
+        plateNumber
+        colour
+        status
+        assignedCourierID
+        assignedAt
+        registrationDocument
+        insuranceDocument
+        createdAt
+        updatedAt
+        _version
+        _deleted
+        _lastChangedAt
+        __typename
+      }
+      nextToken
+      startedAt
+      __typename
+    }
+  }
+`;
+export const syncFleetVehicles = /* GraphQL */ `
+  query SyncFleetVehicles(
+    $filter: ModelFleetVehicleFilterInput
+    $limit: Int
+    $nextToken: String
+    $lastSync: AWSTimestamp
+  ) {
+    syncFleetVehicles(
+      filter: $filter
+      limit: $limit
+      nextToken: $nextToken
+      lastSync: $lastSync
+    ) {
+      items {
+        id
+        fleetID
+        vehicleType
+        vehicleClass
+        make
+        model
+        year
+        plateNumber
+        colour
+        status
+        assignedCourierID
+        assignedAt
+        registrationDocument
+        insuranceDocument
+        createdAt
+        updatedAt
+        _version
+        _deleted
+        _lastChangedAt
+        __typename
+      }
+      nextToken
+      startedAt
+      __typename
+    }
+  }
+`;
+export const fleetVehiclesByFleetID = /* GraphQL */ `
+  query FleetVehiclesByFleetID(
+    $fleetID: ID!
+    $sortDirection: ModelSortDirection
+    $filter: ModelFleetVehicleFilterInput
+    $limit: Int
+    $nextToken: String
+  ) {
+    fleetVehiclesByFleetID(
+      fleetID: $fleetID
+      sortDirection: $sortDirection
+      filter: $filter
+      limit: $limit
+      nextToken: $nextToken
+    ) {
+      items {
+        id
+        fleetID
+        vehicleType
+        vehicleClass
+        make
+        model
+        year
+        plateNumber
+        colour
+        status
+        assignedCourierID
+        assignedAt
+        registrationDocument
+        insuranceDocument
+        createdAt
+        updatedAt
+        _version
+        _deleted
+        _lastChangedAt
+        __typename
+      }
+      nextToken
+      startedAt
+      __typename
+    }
+  }
+`;
+export const fleetVehiclesByAssignedCourierID = /* GraphQL */ `
+  query FleetVehiclesByAssignedCourierID(
+    $assignedCourierID: ID!
+    $sortDirection: ModelSortDirection
+    $filter: ModelFleetVehicleFilterInput
+    $limit: Int
+    $nextToken: String
+  ) {
+    fleetVehiclesByAssignedCourierID(
+      assignedCourierID: $assignedCourierID
+      sortDirection: $sortDirection
+      filter: $filter
+      limit: $limit
+      nextToken: $nextToken
+    ) {
+      items {
+        id
+        fleetID
+        vehicleType
+        vehicleClass
+        make
+        model
+        year
+        plateNumber
+        colour
+        status
+        assignedCourierID
+        assignedAt
+        registrationDocument
+        insuranceDocument
         createdAt
         updatedAt
         _version
@@ -236,6 +2493,27 @@ export const getPaymentMethod = /* GraphQL */ `
       id
       owner
       userID
+      user {
+        id
+        sub
+        firstName
+        lastName
+        email
+        phoneNumber
+        profilePic
+        address
+        exactAddress
+        lat
+        lng
+        isBlocked
+        push_token
+        createdAt
+        updatedAt
+        _version
+        _deleted
+        _lastChangedAt
+        __typename
+      }
       paystackEnvironment
       provider
       authorizationCode
@@ -1086,6 +3364,9 @@ export const getPayment = /* GraphQL */ `
       reference
       order {
         id
+        senderName
+        senderNumber
+        senderNumber2
         recipientName
         recipientNumber
         recipientNumber2
@@ -1437,6 +3718,9 @@ export const getOffer = /* GraphQL */ `
       orderID
       order {
         id
+        senderName
+        senderNumber
+        senderNumber2
         recipientName
         recipientNumber
         recipientNumber2
@@ -1621,6 +3905,8 @@ export const getOffer = /* GraphQL */ `
         averageRating
         reviewCount
         totalReports
+        availabilityStatus
+        lastLocationUpdateAt
         statusKey
         walletID
         createdAt
@@ -2013,6 +4299,9 @@ export const getOrder = /* GraphQL */ `
   query GetOrder($id: ID!) {
     getOrder(id: $id) {
       id
+      senderName
+      senderNumber
+      senderNumber2
       recipientName
       recipientNumber
       recipientNumber2
@@ -2204,6 +4493,8 @@ export const getOrder = /* GraphQL */ `
         averageRating
         reviewCount
         totalReports
+        availabilityStatus
+        lastLocationUpdateAt
         statusKey
         walletID
         createdAt
@@ -2211,6 +4502,16 @@ export const getOrder = /* GraphQL */ `
         _version
         _deleted
         _lastChangedAt
+        __typename
+      }
+      fleetOrders {
+        nextToken
+        startedAt
+        __typename
+      }
+      fleetTransactions {
+        nextToken
+        startedAt
         __typename
       }
       payments {
@@ -2236,6 +4537,9 @@ export const listOrders = /* GraphQL */ `
     listOrders(filter: $filter, limit: $limit, nextToken: $nextToken) {
       items {
         id
+        senderName
+        senderNumber
+        senderNumber2
         recipientName
         recipientNumber
         recipientNumber2
@@ -2391,6 +4695,9 @@ export const syncOrders = /* GraphQL */ `
     ) {
       items {
         id
+        senderName
+        senderNumber
+        senderNumber2
         recipientName
         recipientNumber
         recipientNumber2
@@ -2548,6 +4855,9 @@ export const ordersByAssignedCourierId = /* GraphQL */ `
     ) {
       items {
         id
+        senderName
+        senderNumber
+        senderNumber2
         recipientName
         recipientNumber
         recipientNumber2
@@ -2707,6 +5017,9 @@ export const ordersByAssignmentStatusAndAssignmentExpiresAt = /* GraphQL */ `
     ) {
       items {
         id
+        senderName
+        senderNumber
+        senderNumber2
         recipientName
         recipientNumber
         recipientNumber2
@@ -2864,6 +5177,9 @@ export const ordersByRecipientTrackingToken = /* GraphQL */ `
     ) {
       items {
         id
+        senderName
+        senderNumber
+        senderNumber2
         recipientName
         recipientNumber
         recipientNumber2
@@ -3021,6 +5337,9 @@ export const ordersByUserID = /* GraphQL */ `
     ) {
       items {
         id
+        senderName
+        senderNumber
+        senderNumber2
         recipientName
         recipientNumber
         recipientNumber2
@@ -3215,6 +5534,8 @@ export const getCourierReport = /* GraphQL */ `
         averageRating
         reviewCount
         totalReports
+        availabilityStatus
+        lastLocationUpdateAt
         statusKey
         walletID
         createdAt
@@ -3249,6 +5570,9 @@ export const getCourierReport = /* GraphQL */ `
       orderID
       order {
         id
+        senderName
+        senderNumber
+        senderNumber2
         recipientName
         recipientNumber
         recipientNumber2
@@ -3637,6 +5961,8 @@ export const getCourierReview = /* GraphQL */ `
         averageRating
         reviewCount
         totalReports
+        availabilityStatus
+        lastLocationUpdateAt
         statusKey
         walletID
         createdAt
@@ -3671,6 +5997,9 @@ export const getCourierReview = /* GraphQL */ `
       orderID
       order {
         id
+        senderName
+        senderNumber
+        senderNumber2
         recipientName
         recipientNumber
         recipientNumber2
@@ -4152,6 +6481,8 @@ export const getCourierLiveLocation = /* GraphQL */ `
         averageRating
         reviewCount
         totalReports
+        availabilityStatus
+        lastLocationUpdateAt
         statusKey
         walletID
         createdAt
@@ -4363,6 +6694,28 @@ export const getCourier = /* GraphQL */ `
       averageRating
       reviewCount
       totalReports
+      availabilityStatus
+      lastLocationUpdateAt
+      fleetMemberships {
+        nextToken
+        startedAt
+        __typename
+      }
+      fleetVehicles {
+        nextToken
+        startedAt
+        __typename
+      }
+      fleetOrders {
+        nextToken
+        startedAt
+        __typename
+      }
+      fleetInvitations {
+        nextToken
+        startedAt
+        __typename
+      }
       reviews {
         nextToken
         startedAt
@@ -4464,6 +6817,8 @@ export const listCouriers = /* GraphQL */ `
         averageRating
         reviewCount
         totalReports
+        availabilityStatus
+        lastLocationUpdateAt
         statusKey
         walletID
         createdAt
@@ -4541,6 +6896,8 @@ export const syncCouriers = /* GraphQL */ `
         averageRating
         reviewCount
         totalReports
+        availabilityStatus
+        lastLocationUpdateAt
         statusKey
         walletID
         createdAt
@@ -4620,6 +6977,8 @@ export const couriersByStatus = /* GraphQL */ `
         averageRating
         reviewCount
         totalReports
+        availabilityStatus
+        lastLocationUpdateAt
         statusKey
         walletID
         createdAt

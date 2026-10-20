@@ -33,9 +33,14 @@ const MaxiSubmit = () => {
   } = useLocationContext();
 
   const {
+    senderName,
+    senderNumber,
+    senderNumber2,
+
     recipientName,
     recipientNumber,
     recipientNumber2,
+
     orderDetails,
     transportationType,
     vehicleClass,
@@ -77,6 +82,32 @@ const MaxiSubmit = () => {
     try {
       if (!dbUser?.id) {
         Alert.alert("Error", "User not authenticated");
+        return;
+      }
+
+      if (!senderName?.trim() || senderName.trim().length < 2) {
+        Alert.alert("Sender Required", "Please enter the sender's name.");
+        return;
+      }
+
+      if (!senderNumber || senderNumber.replace(/\D/g, "").length < 11) {
+        Alert.alert(
+          "Sender Phone Required",
+          "Please enter a valid sender phone number with at least 11 digits.",
+        );
+        return;
+      }
+
+      if (!recipientName?.trim() || recipientName.trim().length < 2) {
+        Alert.alert("Recipient Required", "Please enter the recipient's name.");
+        return;
+      }
+
+      if (!recipientNumber || recipientNumber.replace(/\D/g, "").length < 11) {
+        Alert.alert(
+          "Recipient Phone Required",
+          "Please enter a valid recipient phone number with at least 11 digits.",
+        );
         return;
       }
 
@@ -125,12 +156,19 @@ const MaxiSubmit = () => {
 
           // REAL customer orders = PRODUCTION
           // Test orders = TEST
-          orderEnvironment: "PRODUCTION",
-          // orderEnvironment: "TEST",
+          orderEnvironment: "TEST",
+          // orderEnvironment: "PRODUCTION",
 
-          recipientName,
-          recipientNumber,
-          recipientNumber2,
+          // Sender
+          senderName: senderName?.trim() || null,
+          senderNumber: senderNumber?.trim() || null,
+          senderNumber2: senderNumber2?.trim() || null,
+
+          // Recipient
+          recipientName: recipientName.trim(),
+          recipientNumber: recipientNumber.trim(),
+          recipientNumber2: recipientNumber2?.trim() || null,
+
           orderDetails,
 
           originAddress: originAddress?.data?.description,

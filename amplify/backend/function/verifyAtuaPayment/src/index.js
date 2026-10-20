@@ -818,6 +818,7 @@ const createPayment = async ({ order, transaction }) => {
 const markOrderAsPaidFallback = async ({
   order,
   paymentId,
+  paymentReference,
   verificationCode,
   recipientTrackingToken,
 }) => {
@@ -879,6 +880,8 @@ const markOrderAsPaidFallback = async ({
     paymentStatus: "PAID",
 
     paymentID: paymentId,
+
+    paymentReference,
 
     status: paymentFinalizedStatus,
 
@@ -1447,6 +1450,132 @@ const repairMissingVerificationCode = async ({
 };
 
 /* ==========================================================
+   REPAIR MISSING ORDER PAYMENT REFERENCE
+========================================================== */
+
+const repairMissingPaymentReference = async ({
+  order,
+  payment,
+  transaction,
+}) => {
+  if (!order?.id || !order?.userID) {
+    throw new Error("Order identity is missing.");
+  }
+
+  if (!payment?.id) {
+    throw new Error("Verified Payment record is missing.");
+  }
+
+  const reference = transaction?.reference;
+
+  // Validate that the stored Payment belongs to this exact Order.
+  if (payment.orderID !== order.id || payment.userID !== order.userID) {
+    throw new Error("Payment record does not match this Order and user.");
+  }
+
+  if (
+    payment.reference !== reference ||
+    transaction.status !== "success" ||
+    payment.status !== "SUCCESS"
+  ) {
+    throw new Error(
+      "Payment reference or payment status could not be verified.",
+    );
+  }
+
+  const expectedAmount = Number(order.totalPrice);
+  const paymentAmount = Number(payment.amount);
+
+  if (
+    !Number.isFinite(paymentAmount) ||
+    paymentAmount !== expectedAmount ||
+    payment.currency !== "NGN" ||
+    transaction.currency !== "NGN" ||
+    Number(transaction.amount) !== Math.round(expectedAmount * 100)
+  ) {
+    throw new Error("Payment amount or currency does not match the Order.");
+  }
+
+  if (order.paymentID && order.paymentID !== payment.id) {
+    throw new Error(
+      "Order paymentID does not match the verified Payment record. Manual review is required.",
+    );
+  }
+
+  if (payment.provider !== "PAYSTACK") {
+    throw new Error("Payment provider is not Paystack.");
+  }
+
+  // Never silently replace a different reference.
+  if (order.paymentReference) {
+    if (order.paymentReference !== reference) {
+      throw new Error(
+        "Order already has a different payment reference. Manual review is required.",
+      );
+    }
+
+    return order;
+  }
+
+  const mutation = `
+    mutation RepairOrderPaymentReference(
+      $input: UpdateOrderInput!
+    ) {
+      updateOrder(input: $input) {
+        id
+        userID
+        paymentStatus
+        paymentID
+        paymentReference
+        orderEnvironment
+        _version
+      }
+    }
+  `;
+
+  const input = {
+    id: order.id,
+    userID: order.userID,
+    orderEnvironment: order.orderEnvironment,
+    paymentReference: reference,
+  };
+
+  if (Number.isInteger(order._version)) {
+    input._version = order._version;
+  }
+
+  const data = await graphqlRequest(
+    mutation,
+    { input },
+    "RepairOrderPaymentReference",
+  );
+
+  const updatedOrder = data?.updateOrder;
+
+  if (!updatedOrder) {
+    throw new Error("Order payment reference repair returned no Order.");
+  }
+
+  if (
+    updatedOrder.id !== order.id ||
+    updatedOrder.userID !== order.userID ||
+    updatedOrder.paymentReference !== reference
+  ) {
+    throw new Error(
+      "Order payment reference repair failed identity or reference validation.",
+    );
+  }
+
+  console.log("ORDER PAYMENT REFERENCE REPAIRED:", {
+    orderID: updatedOrder.id,
+    paymentID: payment.id,
+    paymentReference: updatedOrder.paymentReference,
+  });
+
+  return updatedOrder;
+};
+
+/* ==========================================================
    MAIN HANDLER
 ========================================================== */
 
@@ -1743,6 +1872,13 @@ exports.handler = async (event) => {
     if (!order) {
       throw new Error("Order could not be reloaded.");
     }
+
+    /* Repair missing payment reference after verification. */
+    order = await repairMissingPaymentReference({
+      order,
+      payment,
+      transaction,
+    });
 
     console.log(
       "ORDER AFTER PAYSTACK VERIFICATION:",
@@ -2058,6 +2194,8 @@ exports.handler = async (event) => {
       order,
 
       paymentId: payment.id,
+
+      paymentReference: transaction.reference,
 
       verificationCode,
 

@@ -1,31 +1,976 @@
-type CompanyVehicle @model @auth(rules: [{ allow: public }]) {
-  id: ID!
-  vehicleType: String
-  model: String
-  plateNumber: String
-  couriercompanyID: ID! @index(name: "byCourierCompany")
+# =============================================================================
+# ATUA COURIER PRO — MASTER PRODUCT FLOW, ARCHITECTURE AND MODEL CONNECTIONS
+# =============================================================================
+#
+# PURPOSE
+# Atua Courier Pro is the fleet and delivery management platform within the
+# Atua ecosystem. It enables businesses to register fleets, manage riders and
+# vehicles, monitor live operations, manage deliveries and earnings, and
+# subscribe to additional fleet-management capabilities.
+#
+# Atua Courier remains the rider-facing application used by individual
+# couriers and fleet riders. Atua remains the customer-facing marketplace
+# through which customers can request deliveries. Atua Courier Pro is the
+# business-facing management interface. These are connected parts of the same
+# ecosystem, not separate courier and order databases.
+#
+# Atua Courier Pro supports TWO operating modes:
+#
+# 1. MARKETPLACE FLEET:
+#    A registered business manages its riders and vehicles through Pro.
+#    Eligible marketplace deliveries can be assigned to that fleet and
+#    completed by its riders through the existing Atua Courier application.
+#
+# 2. PRIVATE FLEET:
+#    A business manages deliveries created for its own customers, branches,
+#    operations or business relationships. These deliveries use the existing
+#    Order model and are linked to the managing fleet through FleetOrder.
+#    Private delivery creation and advanced private-fleet capabilities are
+#    subscription-controlled.
+#
+# Both modes use the same fleet, membership, vehicle, courier, order,
+# location, wallet and transaction infrastructure wherever applicable.
+#
+#
+# 1. AUTHENTICATION AND USER IDENTITY
+# -----------------------------------
+# Users authenticate through the existing Atua authentication system.
+# Authentication establishes the identity of the user; it does not, by itself,
+# grant access to a fleet or its resources.
+#
+# After authentication:
+#
+# - A business owner can create a Fleet.
+# - The creating user becomes the fleet owner and receives the appropriate
+#   owner membership/role through FleetMember.
+# - Existing authenticated couriers are identified through the existing
+#   Courier model and linked to fleets through FleetMember.
+# - A fleet manager, dispatcher or other authorised member accesses only the
+#   fleets and resources permitted by their membership and role.
+# - A courier remains the same Courier record whether operating independently
+#   or as a member of a fleet. Do not create duplicate Courier records simply
+#   because a courier joins a business.
+#
+# IMPORTANT:
+# Authentication, fleet membership, role permissions and subscription
+# entitlements are separate checks. A valid login must never automatically
+# grant access to every Fleet, FleetVehicle, FleetOrder, FleetWallet,
+# FleetTransaction, FleetSubscription or other fleet-owned resource.
+#
+#
+# 2. FLEET REGISTRATION AND ONBOARDING
+# ------------------------------------
+# Flow:
+#
+# Authenticated user
+#     -> creates Fleet
+#     -> becomes the fleet owner through FleetMember
+#     -> completes business/fleet details and verification where required
+#     -> receives the applicable initial subscription/trial state
+#     -> adds or invites riders
+#     -> registers vehicles
+#     -> starts managing fleet operations.
+#
+# Fleet is the central business/tenant record.
+#
+# Fleet connects to:
+# - FleetMember: the people and couriers belonging to the fleet.
+# - FleetVehicle: the vehicles owned or managed by the fleet.
+# - FleetInvitation: invitations sent to couriers or prospective members.
+# - FleetOrder: the fleet's involvement in marketplace or private deliveries.
+# - FleetWallet: the fleet's financial balance and earnings ledger.
+# - FleetSubscription: the fleet's subscription and billing history.
+#
+# Fleet.ownerUserID identifies the owner. FleetMember represents membership
+# and role-based access. These serve different purposes and must remain
+# consistent.
+#
+# Fleet.status controls whether the fleet is operationally active or otherwise
+# restricted. Fleet.verificationStatus represents the business verification
+# process. Subscription status represents billing/access entitlement. Do not
+# treat these three statuses as interchangeable.
+#
+#
+# 3. RIDER MEMBERSHIP AND INVITATIONS
+# -----------------------------------
+# Flow:
+#
+# Fleet owner/authorised manager
+#     -> creates FleetInvitation
+#     -> identifies the invited courier by courier ID, phone or email
+#     -> courier accepts the invitation
+#     -> backend validates the invitation and authenticated identity
+#     -> creates or activates the corresponding FleetMember
+#     -> courier becomes available for fleet operations according to status,
+#        permissions and the applicable business rules.
+#
+# FleetInvitation tracks the invitation lifecycle, including its recipient,
+# intended role, invitation code, expiry and acceptance status.
+#
+# FleetMember tracks the actual relationship between a Fleet and a Courier,
+# including membership status, role, join/leave dates and current vehicle.
+#
+# An invitation is not proof of active membership. Membership should only be
+# activated after a valid acceptance and server-side verification.
+#
+# Prevent duplicate active memberships for the same courier and fleet.
+# Decide and consistently enforce whether a courier can belong to multiple
+# fleets simultaneously. If multiple memberships are supported, a courier's
+# active fleet, current vehicle, availability and order assignment must not
+# become ambiguous.
+#
+# When a member leaves or is removed, preserve the historical membership
+# record where appropriate, revoke access to fleet resources, and prevent new
+# fleet assignments through that inactive membership.
+#
+#
+# 4. VEHICLE REGISTRATION AND ASSIGNMENT
+# --------------------------------------
+# Flow:
+#
+# Fleet
+#     -> registers FleetVehicle
+#     -> authorised manager assigns the vehicle to an eligible FleetMember/
+#        Courier
+#     -> FleetMember.currentVehicleID and FleetVehicle assignment information
+#        are kept consistent
+#     -> vehicle and rider become available for eligible dispatch operations.
+#
+# FleetVehicle belongs to one Fleet. It stores fleet-managed vehicle details,
+# status, registration information, documentation and assignment information.
+#
+# FleetVehicle.assignedCourierID identifies the assigned courier, while
+# FleetMember.currentVehicleID can identify the vehicle currently used by that
+# member. Update both consistently when assignments change.
+#
+# Validate that the courier is an eligible member of the same fleet, the
+# vehicle belongs to that fleet, and neither is in a state that prevents the
+# assignment.
+#
+# Prevent conflicting active assignments where the operating rules require
+# one active rider per vehicle or one active vehicle per rider.
+#
+# Existing independent-courier vehicle information and existing courier
+# functionality must continue to work. FleetVehicle does not automatically
+# replace every existing personal vehicle field or the legacy CompanyVehicle
+# model without a deliberate, migration-safe transition.
+#
+#
+# 5. LIVE LOCATION AND FLEET OPERATIONS
+# -------------------------------------
+# Fleet managers need to see the current locations and operational status of
+# the riders they are authorised to manage.
+#
+# Reuse the existing Courier and CourierLiveLocation infrastructure rather
+# than creating a second location system exclusively for Pro.
+#
+# Relevant connections:
+# - Courier identifies the rider.
+# - CourierLiveLocation provides the existing live-location data.
+# - Courier.availabilityStatus indicates the courier's current availability.
+# - Courier.lastLocationUpdateAt helps determine the freshness of a location.
+# - FleetMember establishes which fleet, if any, the courier belongs to.
+# - FleetVehicle identifies the vehicle assigned to the courier.
+# - FleetOrder connects the courier and vehicle to a delivery when applicable.
+#
+# The Pro dashboard combines these records to show the authorised fleet's
+# current operations: rider availability, live locations, assigned vehicles,
+# active deliveries and delivery status.
+#
+# FREE-TIER PRODUCT HOOK:
+# Current live tracking is available on the Free plan. It is an important
+# reason for small fleet owners to adopt Atua Courier Pro.
+#
+# Free live tracking means access to eligible, current location information;
+# it does not automatically include historical location playback, unlimited
+# location history or advanced tracking analytics.
+#
+# Location access must be restricted to authorised operational purposes and
+# the correct fleet/courier relationship. A fleet must not gain access to
+# another fleet's riders merely by knowing a Courier ID.
+#
+# Respect courier consent, applicable privacy requirements, location-sharing
+# rules and the existing rider app's location-update behaviour.
+#
+#
+# 6. SUBSCRIPTIONS, PLANS AND FEATURE ENTITLEMENTS
+# ------------------------------------------------
+# FleetSubscription represents a fleet's subscription/billing records.
+# Fleet.subscriptionPlan, Fleet.subscriptionStatus, subscriptionStartedAt,
+# subscriptionRenewsAt and trialEndsAt are convenient current-state fields
+# where needed by the application. They must remain consistent with the
+# authoritative subscription and billing state.
+#
+# FleetSubscription stores subscription history and relevant billing details,
+# including plan, status, billing interval, amount, currency, provider,
+# provider reference, period dates and cancellation information.
+#
+# Subscription flow:
+#
+# Fleet created
+#     -> initial Free/trial state is established
+#     -> owner selects an available plan
+#     -> backend validates the selected plan and price
+#     -> payment is initiated where payment is required
+#     -> payment/provider result is verified server-side
+#     -> FleetSubscription is created or updated
+#     -> current subscription state on Fleet is synchronised
+#     -> backend applies the plan's feature and capacity entitlements.
+#
+# A frontend payment success screen is not proof of payment. Paid access must
+# be activated only after the backend verifies the payment/provider result.
+# Handle retries, duplicate provider callbacks, failed payments, renewals,
+# cancellation, expiry, upgrades and downgrades safely.
+#
+# Initial subscription structure:
+#
+# FREE — ₦0:
+# - Up to 3 fleet riders and/or vehicles within the defined plan limits.
+# - Current live rider tracking.
+# - Basic fleet, rider and vehicle management.
+# - Basic operational visibility and delivery status.
+# - Basic summaries.
+# - No historical location playback or premium analytics by default.
+#
+# STARTER — ₦7,500/month:
+# - Up to 10 riders and/or vehicles within the defined plan limits.
+# - Free-tier capabilities.
+# - Expanded operational history.
+# - Manual assignment and basic reporting/export capabilities.
+# - Additional management access where permitted by the plan.
+#
+# GROWTH — ₦20,000/month:
+# - Up to 25 riders and/or vehicles within the defined plan limits.
+# - Starter capabilities.
+# - Private delivery creation and management.
+# - Expanded analytics and operational reporting.
+# - Maintenance tracking and additional management capabilities.
+#
+# BUSINESS — ₦50,000/month:
+# - Up to 75 riders and/or vehicles within the defined plan limits.
+# - Growth capabilities.
+# - Branch/location management.
+# - More granular roles and permissions.
+# - Advanced reports and larger-fleet operational controls.
+#
+# ENTERPRISE:
+# - Future configurable plans, custom capacity, advanced integrations,
+#   support and business-specific requirements.
+# - Do not assume Enterprise functionality is part of the initial MVP.
+#
+# These are the initial product/pricing intentions, not hard-coded guarantees.
+# Plan prices, limits, included features, trial rules and billing intervals
+# should be managed in a controlled configuration or validated backend logic.
+#
+# IMPORTANT SUBSCRIPTION PRINCIPLES:
+# - A subscription grants entitlements; it does not create user identity,
+#   fleet membership, courier records or delivery orders.
+# - Enforce rider/vehicle capacity and paid features on the backend, not only
+#   by hiding buttons in the frontend.
+# - Define precisely whether rider and vehicle limits are separate or combined
+#   limits, and enforce the chosen interpretation consistently.
+# - Existing active records must not be silently deleted when a fleet
+#   downgrades or a subscription expires.
+# - Apply a defined grace/restricted state for expired or failed subscriptions.
+# - Preserve access to necessary billing, account and historical records even
+#   when premium operational features are restricted.
+# - The Free plan can participate in the marketplace if the fleet and its
+#   riders otherwise satisfy marketplace eligibility rules. Subscription
+#   tier is not, by itself, proof of marketplace eligibility.
+#
+#
+# 7. MARKETPLACE DELIVERY FLOW
+# ----------------------------
+# Marketplace deliveries originate through the existing Atua customer/order
+# flow and use the existing Order model.
+#
+# Flow:
+#
+# Customer creates marketplace delivery
+#     -> existing Order and dispatch process operate
+#     -> eligible independent couriers and/or eligible marketplace fleets
+#        may be considered according to marketplace dispatch rules
+#     -> fleet involvement/assignment is confirmed
+#     -> FleetOrder links the existing Order to the participating Fleet
+#     -> an eligible FleetMember/Courier and, where applicable, FleetVehicle
+#        are assigned
+#     -> rider completes the delivery through the existing Atua Courier flow
+#     -> existing Order status and delivery lifecycle are updated
+#     -> FleetOrder records the fleet-specific assignment and outcome
+#     -> fleet dashboard and authorised financial/reporting views are updated.
+#
+# FleetOrder is the fleet-specific relationship with an existing Order.
+# It records which fleet participated, the linked order, assigned courier,
+# assigned vehicle, source, assignment type, assignment/completion timestamps
+# and fleet earnings where applicable.
+#
+# Do not duplicate the customer order simply because a fleet participates.
+# Order remains the primary order record; FleetOrder adds the fleet context.
+#
+# A marketplace order should only receive a FleetOrder when the fleet's
+# involvement is confirmed according to the dispatch workflow. Do not create
+# misleading fleet-order records for every marketplace order in existence.
+#
+# Marketplace eligibility remains governed by the existing marketplace,
+# verification, availability, dispatch and order rules. Fleet subscription
+# features must not accidentally bypass those checks.
+#
+# Financial attribution must distinguish the order's total value, courier
+# earnings, fleet earnings, platform fees and any other applicable charges.
+# Fleet earnings should be recorded only when the underlying business rules
+# establish that the fleet is entitled to them.
+#
+#
+# 8. PRIVATE DELIVERY FLOW
+# ------------------------
+# Private deliveries are created for a fleet's own customers, branches or
+# business operations rather than being accepted through the public marketplace.
+#
+# Flow:
+#
+# Authorised fleet user
+#     -> backend checks Fleet membership, role and subscription entitlements
+#     -> private delivery is created through the defined private-order workflow
+#     -> existing Order stores the delivery/order details
+#     -> FleetOrder links that Order to the creating/managing Fleet
+#     -> authorised dispatcher assigns an eligible courier and vehicle
+#     -> rider receives and completes the delivery through the existing rider
+#        workflow, where supported
+#     -> Order and FleetOrder statuses are updated
+#     -> the fleet dashboard records operational results and applicable earnings.
+#
+# Private delivery creation is a Growth-and-above entitlement under the initial
+# plan structure. Backend checks must prevent Free and Starter fleets from
+# creating private deliveries through direct API calls if that feature is not
+# included in their plan.
+#
+# The order source/assignment metadata must clearly distinguish private
+# deliveries from marketplace deliveries. Use the existing Order and
+# FleetOrder fields/enums designed for this purpose.
+#
+# A private delivery must have a clear owning/managing fleet. Validate that
+# its FleetOrder, courier, vehicle and relevant branch/business context all
+# belong to the correct authorised tenant.
+#
+# Private orders must not automatically appear in public marketplace dispatch
+# or become available to unrelated fleets unless a specific business rule
+# explicitly permits that behaviour.
+#
+# If private delivery creation requires additional customer, recipient,
+# payment or pricing details, define those requirements in the existing Order
+# workflow and backend validation. Do not rely on FleetOrder alone to replace
+# the full Order record.
+#
+#
+# 9. ORDER STATUS, DISPATCH AND RIDER APP CONNECTION
+# -------------------------------------------------
+# Atua Courier Pro manages fleet operations; it does not replace the existing
+# order lifecycle or rider application.
+#
+# Order remains the source of truth for the main delivery lifecycle.
+# FleetOrder records the fleet's participation, assignment and fleet-specific
+# operational details.
+# Courier remains the source of truth for the rider identity.
+# FleetMember records the rider's membership in a fleet.
+# FleetVehicle records the fleet-managed vehicle and its assignment.
+# CourierLiveLocation continues to support live-location functionality.
+#
+# When a delivery is assigned, reassigned, accepted, started, completed or
+# cancelled, the relevant existing order workflow and fleet-specific records
+# must be updated consistently.
+#
+# Do not allow a FleetOrder assignment to silently override the existing
+# dispatch rules, courier availability rules or order ownership checks.
+# Prevent conflicting assignments, stale updates and unauthorised status
+# transitions on the backend.
+#
+#
+# 10. FLEET WALLET, EARNINGS AND TRANSACTIONS
+# ------------------------------------------
+# FleetWallet and FleetTransaction represent fleet-level financial records.
+# They are separate from the existing personal Wallet, Transaction, Payout
+# and Payment models.
+#
+# Fleet -> FleetWallet -> FleetTransaction
+#
+# FleetWallet stores the fleet's available balance, pending balance and
+# lifetime earnings as applicable.
+#
+# FleetTransaction records individual fleet-level financial movements,
+# including type, status, amount, description, references and related order
+# where applicable. It connects to FleetWallet and Fleet.
+#
+# Financial flow:
+#
+# Eligible delivery/payment event
+#     -> backend determines the applicable financial attribution
+#     -> creates the appropriate fleet transaction/ledger entry
+#     -> updates or derives wallet balances consistently
+#     -> authorised fleet users see the relevant financial summary.
+#
+# Do not automatically credit a fleet merely because an order is completed.
+# Apply the configured settlement, fee, refund, cancellation and payment rules.
+#
+# Make financial writes idempotent so retries or duplicate callbacks cannot
+# create duplicate credits/debits. Maintain an auditable transaction history.
+# Do not trust client-supplied balances, transaction statuses or earnings.
+#
+# Decide and enforce whether exactly one FleetWallet is allowed per Fleet.
+# The current relationship can support the model's wallet connection, but a
+# uniqueness rule must be enforced by the backend/data design if one wallet
+# per fleet is required.
+#
+# Before real payments go live, use a money representation that avoids
+# floating-point rounding errors, such as integer minor currency units, or
+# another explicitly safe monetary representation. Keep currency and
+# conversion/rounding rules consistent.
+#
+# Subscription payments and delivery earnings are different financial events.
+# Do not mix subscription billing records with fleet delivery earnings.
+# FleetSubscription records the subscription lifecycle; FleetWallet and
+# FleetTransaction record fleet operational finances.
+#
+#
+# 11. ROLES, AUTHORISATION AND TENANT ISOLATION
+# --------------------------------------------
+# Every fleet-owned operation must validate the authenticated user's authority
+# over the target Fleet and the requested action.
+#
+# Examples:
+# - Owners can manage their fleet and its permitted settings.
+# - Managers can perform only the management actions granted to their role.
+# - Dispatchers can manage eligible delivery assignments and operations.
+# - Couriers can access their own assigned deliveries and permitted rider
+#   functionality, not the entire fleet's financial or administrative data.
+# - Finance-oriented roles, where implemented, receive only the appropriate
+#   financial permissions.
+#
+# Enforce role permissions and tenant isolation on the backend for every
+# relevant query, mutation, subscription and server-side operation.
+#
+# Do not rely solely on frontend route protection, hidden buttons, a supplied
+# fleetID, ownerUserID, courierID or client-side role value.
+#
+# Verify that the requested resource belongs to the authorised fleet and that
+# linked couriers, vehicles, orders, wallets and transactions are consistent
+# with that same fleet.
+#
+# Existing broad/public authorisation rules on legacy Atua models must be
+# reviewed carefully before production. Do not casually break existing
+# customer, courier or marketplace functionality, but do not let legacy
+# access rules expose private fleet data. Apply the correct fleet-specific
+# access controls and preserve existing application behaviour intentionally.
+#
+#
+# 12. MVP IMPLEMENTATION ORDER
+# ----------------------------
+# PHASE 1 — FOUNDATION:
+# - Authenticate users through the existing system.
+# - Create Fleet and establish the owner FleetMember relationship.
+# - Support fleet profile/status and required verification information.
+# - Invite and manage existing couriers through FleetInvitation/FleetMember.
+# - Register FleetVehicle records and manage assignments.
+# - Reuse existing Courier and CourierLiveLocation for live operations.
+#
+# PHASE 2 — OPERATIONAL MVP:
+# - Build the fleet dashboard and live tracking.
+# - Show rider availability, vehicles and active deliveries.
+# - Connect existing marketplace orders to FleetOrder when the fleet
+#   participates.
+# - Support the initial dispatch/assignment workflow.
+# - Provide basic operational summaries and notifications.
+# - Enforce roles, ownership and fleet isolation server-side.
+#
+# PHASE 3 — SUBSCRIPTIONS:
+# - Implement Free, Starter, Growth and Business entitlements.
+# - Create and maintain FleetSubscription records.
+# - Verify payments and billing-provider events server-side.
+# - Enforce rider/vehicle limits and subscription-controlled features.
+# - Handle renewals, expiry, cancellation, failed payments and plan changes.
+#
+# PHASE 4 — PRIVATE FLEET OPERATIONS:
+# - Enable private delivery creation for eligible subscribed fleets.
+# - Link private Orders to FleetOrder.
+# - Add dispatch, assignment, completion and reporting workflows.
+# - Enforce separation between private orders and public marketplace dispatch.
+#
+# PHASE 5 — EXPANSION:
+# - Add advanced analytics, historical location playback, branches,
+#   granular permissions, enhanced reports, integrations and enterprise
+#   features as the product and subscription tiers mature.
+#
+# The schema may contain models for later phases before those features are
+# exposed in the MVP. A model's existence does not mean its complete workflow
+# is implemented or its feature is enabled for every subscription tier.
+#
+#
+# 13. CORE DATA OWNERSHIP AND CONNECTION RULES
+# -------------------------------------------
+# Fleet              = business/fleet tenant and current fleet-level state.
+# FleetMember        = relationship between a fleet and its members/couriers.
+# FleetInvitation    = pending/accepted/expired invitation lifecycle.
+# FleetVehicle       = fleet-managed vehicle and assignment details.
+# FleetOrder         = fleet participation in an existing delivery Order.
+# FleetWallet        = fleet-level financial account/balance representation.
+# FleetTransaction   = auditable fleet-level financial movements.
+# FleetSubscription  = fleet subscription and billing lifecycle/history.
+# Courier            = existing courier identity and rider-level information.
+# CourierLiveLocation= existing live-location infrastructure.
+# Order              = existing primary customer/delivery order record.
+# Wallet/Transaction/Payout/Payment
+#                    = existing personal/platform financial workflows, which
+#                      remain separate from fleet-level financial records.
+#
+# Order.logisticsCompanyId remains part of the existing logistics/interstate
+# handover workflow. It must not be repurposed as fleet membership or used as
+# a substitute for FleetMember/FleetOrder.
+#
+# Legacy CourierCompany and CompanyVehicle functionality must be reviewed
+# and migrated deliberately if it overlaps with Fleet/FleetVehicle. Avoid
+# creating two competing sources of truth for the same fleet or vehicle.
+#
+#
+# 14. FINAL ARCHITECTURAL PRINCIPLES
+# ----------------------------------
+# - Reuse existing Atua identities, orders, courier records and live-location
+#   infrastructure wherever their existing purpose matches the requirement.
+# - Use Fleet as the tenant boundary for fleet management.
+# - Use FleetMember for actual membership and FleetInvitation for invitations.
+# - Use FleetOrder to connect fleet operations to existing Orders.
+# - Keep marketplace and private deliveries distinct by source and business
+#   rules, while reusing the common delivery infrastructure.
+# - Use FleetSubscription to represent subscription history and verified
+#   billing state; enforce entitlements on the backend.
+# - Keep fleet finances separate from personal courier finances.
+# - Enforce authorisation, ownership, capacity, valid state transitions,
+#   consistency, idempotency and privacy server-side.
+# - Preserve the independent-courier and existing Atua marketplace workflows.
+# - Treat this comment as the intended product architecture. Update it when
+#   the actual business rules, model relationships or subscription plans change.
+#
+# =============================================================================
+# END OF ATUA COURIER PRO MASTER ARCHITECTURE
+# =============================================================================
+
+# ---------------- FLEET ENUMS ----------------
+
+enum FleetOrganisationType {
+  CORPORATE
+  REGISTERED_BUSINESS
+  INFORMAL_FLEET
 }
 
-type CourierCompany @model @auth(rules: [{ allow: public }]) {
+enum FleetLegalStatus {
+  REGISTERED
+  UNREGISTERED
+  REGISTRATION_IN_PROGRESS
+}
+
+enum FleetVerificationStatus {
+  UNVERIFIED
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
+enum FleetStatus {
+  PENDING
+  ACTIVE
+  SUSPENDED
+  DEACTIVATED
+}
+
+enum FleetRole {
+  OWNER
+  MANAGER
+  DISPATCHER
+  ACCOUNTANT
+  RIDER
+}
+
+enum FleetMemberStatus {
+  INVITED
+  PENDING
+  ACTIVE
+  SUSPENDED
+  REMOVED
+}
+
+enum FleetInvitationStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  EXPIRED
+  CANCELLED
+}
+
+enum FleetVehicleStatus {
+  AVAILABLE
+  ASSIGNED
+  IN_USE
+  MAINTENANCE
+  INACTIVE
+}
+
+enum FleetAssignmentType {
+  MARKETPLACE_AUTO
+  FLEET_DISPATCH
+  PRIVATE
+}
+
+enum FleetOrderSource {
+  ATUA_MARKETPLACE
+  FLEET_CREATED
+  API
+}
+
+enum FleetSubscriptionPlan {
+  FREE
+  STARTER
+  GROWTH
+  BUSINESS
+  ENTERPRISE
+}
+
+enum FleetSubscriptionStatus {
+  ACTIVE
+  TRIALING
+  PAST_DUE
+  CANCELLED
+  EXPIRED
+}
+
+enum CourierAvailabilityStatus {
+  OFFLINE
+  AVAILABLE
+  BUSY
+  ON_DELIVERY
+  SUSPENDED
+}
+
+# ---------------- FLEET MODELS ----------------
+
+type FleetWallet
+  @model
+  @auth(
+    rules: [
+      {
+        allow: private
+        provider: iam
+        operations: [create, read, update, delete]
+      }
+    ]
+  ) {
   id: ID!
-  sub: String!
-  firstName: String!
-  lastName: String
-  profilePic: String
-  address: String
-  lat: Float
-  lng: Float
-  landmark: String
+
+  fleetID: ID! @index(name: "byFleetWallet")
+
+  availableBalance: Float
+  pendingBalance: Float
+  lifetimeEarnings: Float
+
+  fleet: Fleet @belongsTo(fields: ["fleetID"])
+
+  transactions: [FleetTransaction]
+    @hasMany(indexName: "byFleetTransactionWallet", fields: ["id"])
+
+  createdAt: AWSDateTime
+  updatedAt: AWSDateTime
+}
+
+type FleetTransaction
+  @model
+  @auth(
+    rules: [
+      {
+        allow: private
+        provider: iam
+        operations: [create, read, update, delete]
+      }
+    ]
+  ) {
+  id: ID!
+
+  fleetWalletID: ID! @index(name: "byFleetTransactionWallet")
+  fleetID: ID! @index(name: "byFleetTransactionFleet")
+  orderID: ID @index(name: "byFleetTransactionOrder")
+
+  type: TransactionType!
+  status: TransactionStatus!
+  amount: Float!
+
+  description: String
+  reference: String @index(name: "byFleetTransactionReference")
+
+  fleet: Fleet @belongsTo(fields: ["fleetID"])
+
+  fleetWallet: FleetWallet @belongsTo(fields: ["fleetWalletID"])
+
+  order: Order @belongsTo(fields: ["orderID"])
+
+  createdAt: AWSDateTime
+  updatedAt: AWSDateTime
+}
+
+type FleetSubscription
+  @model
+  @auth(
+    rules: [
+      {
+        allow: private
+        provider: iam
+        operations: [create, read, update, delete]
+      }
+    ]
+  ) {
+  id: ID!
+
+  fleetID: ID! @index(name: "byFleetSubscription")
+
+  plan: FleetSubscriptionPlan!
+  status: FleetSubscriptionStatus!
+
+  billingInterval: String
+  amount: Float
+  currency: String
+
+  provider: String
+  providerReference: String @index(name: "byFleetSubscriptionReference")
+
+  startedAt: AWSDateTime
+  currentPeriodStart: AWSDateTime
+  currentPeriodEnd: AWSDateTime
+  cancelledAt: AWSDateTime
+
+  fleet: Fleet @belongsTo(fields: ["fleetID"])
+
+  createdAt: AWSDateTime
+  updatedAt: AWSDateTime
+}
+
+type FleetOrder
+  @model
+  @auth(
+    rules: [
+      {
+        allow: private
+        provider: iam
+        operations: [create, read, update, delete]
+      }
+    ]
+  ) {
+  id: ID!
+
+  fleetID: ID! @index(name: "byFleet")
+  orderID: ID! @index(name: "byOrder")
+  courierID: ID @index(name: "byFleetCourier")
+  vehicleID: ID @index(name: "byFleetVehicle")
+
+  source: FleetOrderSource!
+  assignmentType: FleetAssignmentType!
+
+  assignedAt: AWSDateTime
+  completedAt: AWSDateTime
+
+  fleetEarnings: Float
+
+  fleet: Fleet @belongsTo(fields: ["fleetID"])
+  order: Order @belongsTo(fields: ["orderID"])
+  courier: Courier @belongsTo(fields: ["courierID"])
+  vehicle: FleetVehicle @belongsTo(fields: ["vehicleID"])
+
+  createdAt: AWSDateTime
+  updatedAt: AWSDateTime
+}
+
+type Fleet
+  @model
+  @auth(
+    rules: [
+      {
+        allow: private
+        provider: iam
+        operations: [create, read, update, delete]
+      }
+    ]
+  ) {
+  id: ID!
+
+  name: String!
+  businessName: String
+  organisationType: FleetOrganisationType!
+  legalStatus: FleetLegalStatus!
+  verificationStatus: FleetVerificationStatus!
+
+  registrationNumber: String
+  registrationCountry: String
+  registrationAuthority: String
+
+  isRecognisedBrand: Boolean
+  brandWebsite: AWSURL
+  verificationNotes: String
+
+  logo: String
+
   phoneNumber: String
   email: String
-  adminFirstName: String
-  adminLastName: String
-  adminPhoneNumber: String
-  bankName: String
-  CompanyVehicles: [CompanyVehicle]
-    @hasMany(indexName: "byCourierCompany", fields: ["id"])
-  accountNumber: String
-  push_token: String
+
+  address: String
+  state: String
+  city: String
+  landmark: String
+  lat: Float
+  lng: Float
+
+  status: FleetStatus!
+
+  ownerUserID: ID! @index(name: "byFleetOwner")
+
+  subscriptionPlan: FleetSubscriptionPlan
+  subscriptionStatus: FleetSubscriptionStatus
+  subscriptionStartedAt: AWSDateTime
+  subscriptionRenewsAt: AWSDateTime
+  trialEndsAt: AWSDateTime
+
+  members: [FleetMember] @hasMany(indexName: "byFleet", fields: ["id"])
+
+  vehicles: [FleetVehicle] @hasMany(indexName: "byFleet", fields: ["id"])
+
+  invitations: [FleetInvitation] @hasMany(indexName: "byFleet", fields: ["id"])
+
+  fleetOrders: [FleetOrder] @hasMany(indexName: "byFleet", fields: ["id"])
+
+  walletID: ID
+  wallets: [FleetWallet] @hasMany(indexName: "byFleetWallet", fields: ["id"])
+
+  transactions: [FleetTransaction]
+    @hasMany(indexName: "byFleetTransactionFleet", fields: ["id"])
+
+  subscriptions: [FleetSubscription]
+    @hasMany(indexName: "byFleetSubscription", fields: ["id"])
+
+  createdAt: AWSDateTime
+  updatedAt: AWSDateTime
+}
+
+type FleetMember
+  @model
+  @auth(
+    rules: [
+      {
+        allow: private
+        provider: iam
+        operations: [create, read, update, delete]
+      }
+    ]
+  ) {
+  id: ID!
+
+  fleetID: ID! @index(name: "byFleet")
+  courierID: ID! @index(name: "byCourier")
+
+  role: FleetRole!
+  status: FleetMemberStatus!
+
+  currentVehicleID: ID @index(name: "byCurrentVehicle")
+
+  invitedByID: ID
+  approvedByID: ID
+
+  joinedAt: AWSDateTime
+  leftAt: AWSDateTime
+
+  fleet: Fleet @belongsTo(fields: ["fleetID"])
+  courier: Courier @belongsTo(fields: ["courierID"])
+
+  currentVehicle: FleetVehicle @belongsTo(fields: ["currentVehicleID"])
+
+  createdAt: AWSDateTime
+  updatedAt: AWSDateTime
+}
+
+type FleetInvitation
+  @model
+  @auth(
+    rules: [
+      {
+        allow: private
+        provider: iam
+        operations: [create, read, update, delete]
+      }
+    ]
+  ) {
+  id: ID!
+
+  fleetID: ID! @index(name: "byFleet")
+  courierID: ID @index(name: "byInvitedCourier")
+
+  phoneNumber: String
+  email: String
+
+  role: FleetRole!
+  status: FleetInvitationStatus!
+
+  invitationCode: String! @index(name: "byInvitationCode")
+
+  invitedByID: ID!
+
+  expiresAt: AWSDateTime!
+  acceptedAt: AWSDateTime
+
+  fleet: Fleet @belongsTo(fields: ["fleetID"])
+
+  courier: Courier @belongsTo(fields: ["courierID"])
+
+  createdAt: AWSDateTime
+  updatedAt: AWSDateTime
+}
+
+type FleetVehicle
+  @model
+  @auth(
+    rules: [
+      {
+        allow: private
+        provider: iam
+        operations: [create, read, update, delete]
+      }
+    ]
+  ) {
+  id: ID!
+
+  fleetID: ID! @index(name: "byFleet")
+
+  vehicleType: String!
+  vehicleClass: String
+  make: String
+  model: String
+  year: Int
+  plateNumber: String!
+  colour: String
+
+  status: FleetVehicleStatus!
+
+  assignedCourierID: ID @index(name: "byAssignedCourier")
+
+  assignedAt: AWSDateTime
+
+  registrationDocument: String
+  insuranceDocument: String
+
+  fleet: Fleet @belongsTo(fields: ["fleetID"])
+
+  assignedCourier: Courier @belongsTo(fields: ["assignedCourierID"])
+
+  # ADD THIS RELATIONSHIP
+  assignedMembers: [FleetMember]
+    @hasMany(indexName: "byCurrentVehicle", fields: ["id"])
+
+  fleetOrders: [FleetOrder]
+    @hasMany(indexName: "byFleetVehicle", fields: ["id"])
+
+  createdAt: AWSDateTime
+  updatedAt: AWSDateTime
 }
 
 # ---------------- ENUMS ----------------
@@ -235,6 +1180,8 @@ type PaymentMethod
   # to the existing User model.
   userID: ID!
     @index(name: "byPaymentMethodUser", queryField: "paymentMethodsByUser")
+
+  user: User @belongsTo(fields: ["userID"])
 
   # TEST or LIVE Paystack
   paystackEnvironment: PaystackEnvironment
@@ -469,6 +1416,10 @@ type Order @model @auth(rules: [{ allow: public }]) {
   id: ID!
 
   # ---------------- BASIC INFO ----------------
+  senderName: String
+  senderNumber: String
+  senderNumber2: String
+
   recipientName: String
   recipientNumber: String
   recipientNumber2: String
@@ -690,6 +1641,12 @@ type Order @model @auth(rules: [{ allow: public }]) {
   reports: [CourierReport] @hasMany(indexName: "byOrder", fields: ["id"])
   offers: [Offer] @hasMany(indexName: "byOrder", fields: ["id"])
   assignedCourier: Courier @belongsTo(fields: ["assignedCourierId"])
+
+  fleetOrders: [FleetOrder] @hasMany(indexName: "byOrder", fields: ["id"])
+
+  fleetTransactions: [FleetTransaction]
+    @hasMany(indexName: "byFleetTransactionOrder", fields: ["id"])
+
   payments: [Payment] @hasMany(indexName: "byOrder", fields: ["id"])
 }
 
@@ -944,6 +1901,21 @@ type Courier @model @auth(rules: [{ allow: public }]) {
   averageRating: Float
   reviewCount: Int
   totalReports: Int
+
+  availabilityStatus: CourierAvailabilityStatus
+  lastLocationUpdateAt: AWSDateTime
+
+  fleetMemberships: [FleetMember]
+    @hasMany(indexName: "byCourier", fields: ["id"])
+
+  fleetVehicles: [FleetVehicle]
+    @hasMany(indexName: "byAssignedCourier", fields: ["id"])
+
+  fleetOrders: [FleetOrder]
+    @hasMany(indexName: "byFleetCourier", fields: ["id"])
+
+  fleetInvitations: [FleetInvitation]
+    @hasMany(indexName: "byInvitedCourier", fields: ["id"])
 
   reviews: [CourierReview] @hasMany(indexName: "byCourier", fields: ["id"])
   reports: [CourierReport] @hasMany(indexName: "byCourier", fields: ["id"])

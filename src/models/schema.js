@@ -1,7 +1,7 @@
 export const schema = {
     "models": {
-        "CompanyVehicle": {
-            "name": "CompanyVehicle",
+        "FleetWallet": {
+            "name": "FleetWallet",
             "fields": {
                 "id": {
                     "name": "id",
@@ -10,53 +10,82 @@ export const schema = {
                     "isRequired": true,
                     "attributes": []
                 },
-                "vehicleType": {
-                    "name": "vehicleType",
-                    "isArray": false,
-                    "type": "String",
-                    "isRequired": false,
-                    "attributes": []
-                },
-                "model": {
-                    "name": "model",
-                    "isArray": false,
-                    "type": "String",
-                    "isRequired": false,
-                    "attributes": []
-                },
-                "plateNumber": {
-                    "name": "plateNumber",
-                    "isArray": false,
-                    "type": "String",
-                    "isRequired": false,
-                    "attributes": []
-                },
-                "couriercompanyID": {
-                    "name": "couriercompanyID",
+                "fleetID": {
+                    "name": "fleetID",
                     "isArray": false,
                     "type": "ID",
                     "isRequired": true,
                     "attributes": []
+                },
+                "availableBalance": {
+                    "name": "availableBalance",
+                    "isArray": false,
+                    "type": "Float",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "pendingBalance": {
+                    "name": "pendingBalance",
+                    "isArray": false,
+                    "type": "Float",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "lifetimeEarnings": {
+                    "name": "lifetimeEarnings",
+                    "isArray": false,
+                    "type": "Float",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "fleet": {
+                    "name": "fleet",
+                    "isArray": false,
+                    "type": {
+                        "model": "Fleet"
+                    },
+                    "isRequired": false,
+                    "attributes": [],
+                    "association": {
+                        "connectionType": "BELONGS_TO",
+                        "targetNames": [
+                            "fleetID"
+                        ]
+                    }
+                },
+                "transactions": {
+                    "name": "transactions",
+                    "isArray": true,
+                    "type": {
+                        "model": "FleetTransaction"
+                    },
+                    "isRequired": false,
+                    "attributes": [],
+                    "isArrayNullable": true,
+                    "association": {
+                        "connectionType": "HAS_MANY",
+                        "associatedWith": [
+                            "fleetWallet"
+                        ]
+                    }
                 },
                 "createdAt": {
                     "name": "createdAt",
                     "isArray": false,
                     "type": "AWSDateTime",
                     "isRequired": false,
-                    "attributes": [],
-                    "isReadOnly": true
+                    "attributes": []
                 },
                 "updatedAt": {
                     "name": "updatedAt",
                     "isArray": false,
                     "type": "AWSDateTime",
                     "isRequired": false,
-                    "attributes": [],
-                    "isReadOnly": true
+                    "attributes": []
                 }
             },
             "syncable": true,
-            "pluralName": "CompanyVehicles",
+            "pluralName": "FleetWallets",
             "attributes": [
                 {
                     "type": "model",
@@ -65,9 +94,9 @@ export const schema = {
                 {
                     "type": "key",
                     "properties": {
-                        "name": "byCourierCompany",
+                        "name": "byFleetWallet",
                         "fields": [
-                            "couriercompanyID"
+                            "fleetID"
                         ]
                     }
                 },
@@ -76,12 +105,13 @@ export const schema = {
                     "properties": {
                         "rules": [
                             {
-                                "allow": "public",
+                                "allow": "private",
+                                "provider": "iam",
                                 "operations": [
                                     "create",
+                                    "read",
                                     "update",
-                                    "delete",
-                                    "read"
+                                    "delete"
                                 ]
                             }
                         ]
@@ -89,8 +119,8 @@ export const schema = {
                 }
             ]
         },
-        "CourierCompany": {
-            "name": "CourierCompany",
+        "FleetTransaction": {
+            "name": "FleetTransaction",
             "fields": {
                 "id": {
                     "name": "id",
@@ -99,57 +129,669 @@ export const schema = {
                     "isRequired": true,
                     "attributes": []
                 },
-                "sub": {
-                    "name": "sub",
+                "fleetWalletID": {
+                    "name": "fleetWalletID",
                     "isArray": false,
-                    "type": "String",
+                    "type": "ID",
                     "isRequired": true,
                     "attributes": []
                 },
-                "firstName": {
-                    "name": "firstName",
+                "fleetID": {
+                    "name": "fleetID",
                     "isArray": false,
-                    "type": "String",
+                    "type": "ID",
                     "isRequired": true,
                     "attributes": []
                 },
-                "lastName": {
-                    "name": "lastName",
+                "orderID": {
+                    "name": "orderID",
+                    "isArray": false,
+                    "type": "ID",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "type": {
+                    "name": "type",
+                    "isArray": false,
+                    "type": {
+                        "enum": "TransactionType"
+                    },
+                    "isRequired": true,
+                    "attributes": []
+                },
+                "status": {
+                    "name": "status",
+                    "isArray": false,
+                    "type": {
+                        "enum": "TransactionStatus"
+                    },
+                    "isRequired": true,
+                    "attributes": []
+                },
+                "amount": {
+                    "name": "amount",
+                    "isArray": false,
+                    "type": "Float",
+                    "isRequired": true,
+                    "attributes": []
+                },
+                "description": {
+                    "name": "description",
                     "isArray": false,
                     "type": "String",
                     "isRequired": false,
                     "attributes": []
                 },
-                "profilePic": {
-                    "name": "profilePic",
+                "reference": {
+                    "name": "reference",
                     "isArray": false,
                     "type": "String",
                     "isRequired": false,
                     "attributes": []
                 },
-                "address": {
-                    "name": "address",
+                "fleet": {
+                    "name": "fleet",
+                    "isArray": false,
+                    "type": {
+                        "model": "Fleet"
+                    },
+                    "isRequired": false,
+                    "attributes": [],
+                    "association": {
+                        "connectionType": "BELONGS_TO",
+                        "targetNames": [
+                            "fleetID"
+                        ]
+                    }
+                },
+                "fleetWallet": {
+                    "name": "fleetWallet",
+                    "isArray": false,
+                    "type": {
+                        "model": "FleetWallet"
+                    },
+                    "isRequired": false,
+                    "attributes": [],
+                    "association": {
+                        "connectionType": "BELONGS_TO",
+                        "targetNames": [
+                            "fleetWalletID"
+                        ]
+                    }
+                },
+                "order": {
+                    "name": "order",
+                    "isArray": false,
+                    "type": {
+                        "model": "Order"
+                    },
+                    "isRequired": false,
+                    "attributes": [],
+                    "association": {
+                        "connectionType": "BELONGS_TO",
+                        "targetNames": [
+                            "orderID"
+                        ]
+                    }
+                },
+                "createdAt": {
+                    "name": "createdAt",
+                    "isArray": false,
+                    "type": "AWSDateTime",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "updatedAt": {
+                    "name": "updatedAt",
+                    "isArray": false,
+                    "type": "AWSDateTime",
+                    "isRequired": false,
+                    "attributes": []
+                }
+            },
+            "syncable": true,
+            "pluralName": "FleetTransactions",
+            "attributes": [
+                {
+                    "type": "model",
+                    "properties": {}
+                },
+                {
+                    "type": "key",
+                    "properties": {
+                        "name": "byFleetTransactionWallet",
+                        "fields": [
+                            "fleetWalletID"
+                        ]
+                    }
+                },
+                {
+                    "type": "key",
+                    "properties": {
+                        "name": "byFleetTransactionFleet",
+                        "fields": [
+                            "fleetID"
+                        ]
+                    }
+                },
+                {
+                    "type": "key",
+                    "properties": {
+                        "name": "byFleetTransactionOrder",
+                        "fields": [
+                            "orderID"
+                        ]
+                    }
+                },
+                {
+                    "type": "key",
+                    "properties": {
+                        "name": "byFleetTransactionReference",
+                        "fields": [
+                            "reference"
+                        ]
+                    }
+                },
+                {
+                    "type": "auth",
+                    "properties": {
+                        "rules": [
+                            {
+                                "allow": "private",
+                                "provider": "iam",
+                                "operations": [
+                                    "create",
+                                    "read",
+                                    "update",
+                                    "delete"
+                                ]
+                            }
+                        ]
+                    }
+                }
+            ]
+        },
+        "FleetSubscription": {
+            "name": "FleetSubscription",
+            "fields": {
+                "id": {
+                    "name": "id",
+                    "isArray": false,
+                    "type": "ID",
+                    "isRequired": true,
+                    "attributes": []
+                },
+                "fleetID": {
+                    "name": "fleetID",
+                    "isArray": false,
+                    "type": "ID",
+                    "isRequired": true,
+                    "attributes": []
+                },
+                "plan": {
+                    "name": "plan",
+                    "isArray": false,
+                    "type": {
+                        "enum": "FleetSubscriptionPlan"
+                    },
+                    "isRequired": true,
+                    "attributes": []
+                },
+                "status": {
+                    "name": "status",
+                    "isArray": false,
+                    "type": {
+                        "enum": "FleetSubscriptionStatus"
+                    },
+                    "isRequired": true,
+                    "attributes": []
+                },
+                "billingInterval": {
+                    "name": "billingInterval",
                     "isArray": false,
                     "type": "String",
                     "isRequired": false,
                     "attributes": []
                 },
-                "lat": {
-                    "name": "lat",
+                "amount": {
+                    "name": "amount",
                     "isArray": false,
                     "type": "Float",
                     "isRequired": false,
                     "attributes": []
                 },
-                "lng": {
-                    "name": "lng",
+                "currency": {
+                    "name": "currency",
+                    "isArray": false,
+                    "type": "String",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "provider": {
+                    "name": "provider",
+                    "isArray": false,
+                    "type": "String",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "providerReference": {
+                    "name": "providerReference",
+                    "isArray": false,
+                    "type": "String",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "startedAt": {
+                    "name": "startedAt",
+                    "isArray": false,
+                    "type": "AWSDateTime",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "currentPeriodStart": {
+                    "name": "currentPeriodStart",
+                    "isArray": false,
+                    "type": "AWSDateTime",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "currentPeriodEnd": {
+                    "name": "currentPeriodEnd",
+                    "isArray": false,
+                    "type": "AWSDateTime",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "cancelledAt": {
+                    "name": "cancelledAt",
+                    "isArray": false,
+                    "type": "AWSDateTime",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "fleet": {
+                    "name": "fleet",
+                    "isArray": false,
+                    "type": {
+                        "model": "Fleet"
+                    },
+                    "isRequired": false,
+                    "attributes": [],
+                    "association": {
+                        "connectionType": "BELONGS_TO",
+                        "targetNames": [
+                            "fleetID"
+                        ]
+                    }
+                },
+                "createdAt": {
+                    "name": "createdAt",
+                    "isArray": false,
+                    "type": "AWSDateTime",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "updatedAt": {
+                    "name": "updatedAt",
+                    "isArray": false,
+                    "type": "AWSDateTime",
+                    "isRequired": false,
+                    "attributes": []
+                }
+            },
+            "syncable": true,
+            "pluralName": "FleetSubscriptions",
+            "attributes": [
+                {
+                    "type": "model",
+                    "properties": {}
+                },
+                {
+                    "type": "key",
+                    "properties": {
+                        "name": "byFleetSubscription",
+                        "fields": [
+                            "fleetID"
+                        ]
+                    }
+                },
+                {
+                    "type": "key",
+                    "properties": {
+                        "name": "byFleetSubscriptionReference",
+                        "fields": [
+                            "providerReference"
+                        ]
+                    }
+                },
+                {
+                    "type": "auth",
+                    "properties": {
+                        "rules": [
+                            {
+                                "allow": "private",
+                                "provider": "iam",
+                                "operations": [
+                                    "create",
+                                    "read",
+                                    "update",
+                                    "delete"
+                                ]
+                            }
+                        ]
+                    }
+                }
+            ]
+        },
+        "FleetOrder": {
+            "name": "FleetOrder",
+            "fields": {
+                "id": {
+                    "name": "id",
+                    "isArray": false,
+                    "type": "ID",
+                    "isRequired": true,
+                    "attributes": []
+                },
+                "fleetID": {
+                    "name": "fleetID",
+                    "isArray": false,
+                    "type": "ID",
+                    "isRequired": true,
+                    "attributes": []
+                },
+                "orderID": {
+                    "name": "orderID",
+                    "isArray": false,
+                    "type": "ID",
+                    "isRequired": true,
+                    "attributes": []
+                },
+                "courierID": {
+                    "name": "courierID",
+                    "isArray": false,
+                    "type": "ID",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "vehicleID": {
+                    "name": "vehicleID",
+                    "isArray": false,
+                    "type": "ID",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "source": {
+                    "name": "source",
+                    "isArray": false,
+                    "type": {
+                        "enum": "FleetOrderSource"
+                    },
+                    "isRequired": true,
+                    "attributes": []
+                },
+                "assignmentType": {
+                    "name": "assignmentType",
+                    "isArray": false,
+                    "type": {
+                        "enum": "FleetAssignmentType"
+                    },
+                    "isRequired": true,
+                    "attributes": []
+                },
+                "assignedAt": {
+                    "name": "assignedAt",
+                    "isArray": false,
+                    "type": "AWSDateTime",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "completedAt": {
+                    "name": "completedAt",
+                    "isArray": false,
+                    "type": "AWSDateTime",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "fleetEarnings": {
+                    "name": "fleetEarnings",
                     "isArray": false,
                     "type": "Float",
                     "isRequired": false,
                     "attributes": []
                 },
-                "landmark": {
-                    "name": "landmark",
+                "fleet": {
+                    "name": "fleet",
+                    "isArray": false,
+                    "type": {
+                        "model": "Fleet"
+                    },
+                    "isRequired": false,
+                    "attributes": [],
+                    "association": {
+                        "connectionType": "BELONGS_TO",
+                        "targetNames": [
+                            "fleetID"
+                        ]
+                    }
+                },
+                "order": {
+                    "name": "order",
+                    "isArray": false,
+                    "type": {
+                        "model": "Order"
+                    },
+                    "isRequired": false,
+                    "attributes": [],
+                    "association": {
+                        "connectionType": "BELONGS_TO",
+                        "targetNames": [
+                            "orderID"
+                        ]
+                    }
+                },
+                "courier": {
+                    "name": "courier",
+                    "isArray": false,
+                    "type": {
+                        "model": "Courier"
+                    },
+                    "isRequired": false,
+                    "attributes": [],
+                    "association": {
+                        "connectionType": "BELONGS_TO",
+                        "targetNames": [
+                            "courierID"
+                        ]
+                    }
+                },
+                "vehicle": {
+                    "name": "vehicle",
+                    "isArray": false,
+                    "type": {
+                        "model": "FleetVehicle"
+                    },
+                    "isRequired": false,
+                    "attributes": [],
+                    "association": {
+                        "connectionType": "BELONGS_TO",
+                        "targetNames": [
+                            "vehicleID"
+                        ]
+                    }
+                },
+                "createdAt": {
+                    "name": "createdAt",
+                    "isArray": false,
+                    "type": "AWSDateTime",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "updatedAt": {
+                    "name": "updatedAt",
+                    "isArray": false,
+                    "type": "AWSDateTime",
+                    "isRequired": false,
+                    "attributes": []
+                }
+            },
+            "syncable": true,
+            "pluralName": "FleetOrders",
+            "attributes": [
+                {
+                    "type": "model",
+                    "properties": {}
+                },
+                {
+                    "type": "key",
+                    "properties": {
+                        "name": "byFleet",
+                        "fields": [
+                            "fleetID"
+                        ]
+                    }
+                },
+                {
+                    "type": "key",
+                    "properties": {
+                        "name": "byOrder",
+                        "fields": [
+                            "orderID"
+                        ]
+                    }
+                },
+                {
+                    "type": "key",
+                    "properties": {
+                        "name": "byFleetCourier",
+                        "fields": [
+                            "courierID"
+                        ]
+                    }
+                },
+                {
+                    "type": "key",
+                    "properties": {
+                        "name": "byFleetVehicle",
+                        "fields": [
+                            "vehicleID"
+                        ]
+                    }
+                },
+                {
+                    "type": "auth",
+                    "properties": {
+                        "rules": [
+                            {
+                                "allow": "private",
+                                "provider": "iam",
+                                "operations": [
+                                    "create",
+                                    "read",
+                                    "update",
+                                    "delete"
+                                ]
+                            }
+                        ]
+                    }
+                }
+            ]
+        },
+        "Fleet": {
+            "name": "Fleet",
+            "fields": {
+                "id": {
+                    "name": "id",
+                    "isArray": false,
+                    "type": "ID",
+                    "isRequired": true,
+                    "attributes": []
+                },
+                "name": {
+                    "name": "name",
+                    "isArray": false,
+                    "type": "String",
+                    "isRequired": true,
+                    "attributes": []
+                },
+                "businessName": {
+                    "name": "businessName",
+                    "isArray": false,
+                    "type": "String",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "organisationType": {
+                    "name": "organisationType",
+                    "isArray": false,
+                    "type": {
+                        "enum": "FleetOrganisationType"
+                    },
+                    "isRequired": true,
+                    "attributes": []
+                },
+                "legalStatus": {
+                    "name": "legalStatus",
+                    "isArray": false,
+                    "type": {
+                        "enum": "FleetLegalStatus"
+                    },
+                    "isRequired": true,
+                    "attributes": []
+                },
+                "verificationStatus": {
+                    "name": "verificationStatus",
+                    "isArray": false,
+                    "type": {
+                        "enum": "FleetVerificationStatus"
+                    },
+                    "isRequired": true,
+                    "attributes": []
+                },
+                "registrationNumber": {
+                    "name": "registrationNumber",
+                    "isArray": false,
+                    "type": "String",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "registrationCountry": {
+                    "name": "registrationCountry",
+                    "isArray": false,
+                    "type": "String",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "registrationAuthority": {
+                    "name": "registrationAuthority",
+                    "isArray": false,
+                    "type": "String",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "isRecognisedBrand": {
+                    "name": "isRecognisedBrand",
+                    "isArray": false,
+                    "type": "Boolean",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "brandWebsite": {
+                    "name": "brandWebsite",
+                    "isArray": false,
+                    "type": "AWSURL",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "verificationNotes": {
+                    "name": "verificationNotes",
+                    "isArray": false,
+                    "type": "String",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "logo": {
+                    "name": "logo",
                     "isArray": false,
                     "type": "String",
                     "isRequired": false,
@@ -169,39 +811,108 @@ export const schema = {
                     "isRequired": false,
                     "attributes": []
                 },
-                "adminFirstName": {
-                    "name": "adminFirstName",
+                "address": {
+                    "name": "address",
                     "isArray": false,
                     "type": "String",
                     "isRequired": false,
                     "attributes": []
                 },
-                "adminLastName": {
-                    "name": "adminLastName",
+                "state": {
+                    "name": "state",
                     "isArray": false,
                     "type": "String",
                     "isRequired": false,
                     "attributes": []
                 },
-                "adminPhoneNumber": {
-                    "name": "adminPhoneNumber",
+                "city": {
+                    "name": "city",
                     "isArray": false,
                     "type": "String",
                     "isRequired": false,
                     "attributes": []
                 },
-                "bankName": {
-                    "name": "bankName",
+                "landmark": {
+                    "name": "landmark",
                     "isArray": false,
                     "type": "String",
                     "isRequired": false,
                     "attributes": []
                 },
-                "CompanyVehicles": {
-                    "name": "CompanyVehicles",
+                "lat": {
+                    "name": "lat",
+                    "isArray": false,
+                    "type": "Float",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "lng": {
+                    "name": "lng",
+                    "isArray": false,
+                    "type": "Float",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "status": {
+                    "name": "status",
+                    "isArray": false,
+                    "type": {
+                        "enum": "FleetStatus"
+                    },
+                    "isRequired": true,
+                    "attributes": []
+                },
+                "ownerUserID": {
+                    "name": "ownerUserID",
+                    "isArray": false,
+                    "type": "ID",
+                    "isRequired": true,
+                    "attributes": []
+                },
+                "subscriptionPlan": {
+                    "name": "subscriptionPlan",
+                    "isArray": false,
+                    "type": {
+                        "enum": "FleetSubscriptionPlan"
+                    },
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "subscriptionStatus": {
+                    "name": "subscriptionStatus",
+                    "isArray": false,
+                    "type": {
+                        "enum": "FleetSubscriptionStatus"
+                    },
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "subscriptionStartedAt": {
+                    "name": "subscriptionStartedAt",
+                    "isArray": false,
+                    "type": "AWSDateTime",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "subscriptionRenewsAt": {
+                    "name": "subscriptionRenewsAt",
+                    "isArray": false,
+                    "type": "AWSDateTime",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "trialEndsAt": {
+                    "name": "trialEndsAt",
+                    "isArray": false,
+                    "type": "AWSDateTime",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "members": {
+                    "name": "members",
                     "isArray": true,
                     "type": {
-                        "model": "CompanyVehicle"
+                        "model": "FleetMember"
                     },
                     "isRequired": false,
                     "attributes": [],
@@ -209,59 +920,752 @@ export const schema = {
                     "association": {
                         "connectionType": "HAS_MANY",
                         "associatedWith": [
-                            "couriercompanyID"
+                            "fleet"
                         ]
                     }
                 },
-                "accountNumber": {
-                    "name": "accountNumber",
+                "vehicles": {
+                    "name": "vehicles",
+                    "isArray": true,
+                    "type": {
+                        "model": "FleetVehicle"
+                    },
+                    "isRequired": false,
+                    "attributes": [],
+                    "isArrayNullable": true,
+                    "association": {
+                        "connectionType": "HAS_MANY",
+                        "associatedWith": [
+                            "fleet"
+                        ]
+                    }
+                },
+                "invitations": {
+                    "name": "invitations",
+                    "isArray": true,
+                    "type": {
+                        "model": "FleetInvitation"
+                    },
+                    "isRequired": false,
+                    "attributes": [],
+                    "isArrayNullable": true,
+                    "association": {
+                        "connectionType": "HAS_MANY",
+                        "associatedWith": [
+                            "fleet"
+                        ]
+                    }
+                },
+                "fleetOrders": {
+                    "name": "fleetOrders",
+                    "isArray": true,
+                    "type": {
+                        "model": "FleetOrder"
+                    },
+                    "isRequired": false,
+                    "attributes": [],
+                    "isArrayNullable": true,
+                    "association": {
+                        "connectionType": "HAS_MANY",
+                        "associatedWith": [
+                            "fleet"
+                        ]
+                    }
+                },
+                "walletID": {
+                    "name": "walletID",
                     "isArray": false,
-                    "type": "String",
+                    "type": "ID",
                     "isRequired": false,
                     "attributes": []
                 },
-                "push_token": {
-                    "name": "push_token",
-                    "isArray": false,
-                    "type": "String",
+                "wallets": {
+                    "name": "wallets",
+                    "isArray": true,
+                    "type": {
+                        "model": "FleetWallet"
+                    },
                     "isRequired": false,
-                    "attributes": []
+                    "attributes": [],
+                    "isArrayNullable": true,
+                    "association": {
+                        "connectionType": "HAS_MANY",
+                        "associatedWith": [
+                            "fleet"
+                        ]
+                    }
+                },
+                "transactions": {
+                    "name": "transactions",
+                    "isArray": true,
+                    "type": {
+                        "model": "FleetTransaction"
+                    },
+                    "isRequired": false,
+                    "attributes": [],
+                    "isArrayNullable": true,
+                    "association": {
+                        "connectionType": "HAS_MANY",
+                        "associatedWith": [
+                            "fleet"
+                        ]
+                    }
+                },
+                "subscriptions": {
+                    "name": "subscriptions",
+                    "isArray": true,
+                    "type": {
+                        "model": "FleetSubscription"
+                    },
+                    "isRequired": false,
+                    "attributes": [],
+                    "isArrayNullable": true,
+                    "association": {
+                        "connectionType": "HAS_MANY",
+                        "associatedWith": [
+                            "fleet"
+                        ]
+                    }
                 },
                 "createdAt": {
                     "name": "createdAt",
                     "isArray": false,
                     "type": "AWSDateTime",
                     "isRequired": false,
-                    "attributes": [],
-                    "isReadOnly": true
+                    "attributes": []
                 },
                 "updatedAt": {
                     "name": "updatedAt",
                     "isArray": false,
                     "type": "AWSDateTime",
                     "isRequired": false,
-                    "attributes": [],
-                    "isReadOnly": true
+                    "attributes": []
                 }
             },
             "syncable": true,
-            "pluralName": "CourierCompanies",
+            "pluralName": "Fleets",
             "attributes": [
                 {
                     "type": "model",
                     "properties": {}
                 },
                 {
+                    "type": "key",
+                    "properties": {
+                        "name": "byFleetOwner",
+                        "fields": [
+                            "ownerUserID"
+                        ]
+                    }
+                },
+                {
                     "type": "auth",
                     "properties": {
                         "rules": [
                             {
-                                "allow": "public",
+                                "allow": "private",
+                                "provider": "iam",
                                 "operations": [
                                     "create",
+                                    "read",
                                     "update",
-                                    "delete",
-                                    "read"
+                                    "delete"
+                                ]
+                            }
+                        ]
+                    }
+                }
+            ]
+        },
+        "FleetMember": {
+            "name": "FleetMember",
+            "fields": {
+                "id": {
+                    "name": "id",
+                    "isArray": false,
+                    "type": "ID",
+                    "isRequired": true,
+                    "attributes": []
+                },
+                "fleetID": {
+                    "name": "fleetID",
+                    "isArray": false,
+                    "type": "ID",
+                    "isRequired": true,
+                    "attributes": []
+                },
+                "courierID": {
+                    "name": "courierID",
+                    "isArray": false,
+                    "type": "ID",
+                    "isRequired": true,
+                    "attributes": []
+                },
+                "role": {
+                    "name": "role",
+                    "isArray": false,
+                    "type": {
+                        "enum": "FleetRole"
+                    },
+                    "isRequired": true,
+                    "attributes": []
+                },
+                "status": {
+                    "name": "status",
+                    "isArray": false,
+                    "type": {
+                        "enum": "FleetMemberStatus"
+                    },
+                    "isRequired": true,
+                    "attributes": []
+                },
+                "currentVehicleID": {
+                    "name": "currentVehicleID",
+                    "isArray": false,
+                    "type": "ID",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "invitedByID": {
+                    "name": "invitedByID",
+                    "isArray": false,
+                    "type": "ID",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "approvedByID": {
+                    "name": "approvedByID",
+                    "isArray": false,
+                    "type": "ID",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "joinedAt": {
+                    "name": "joinedAt",
+                    "isArray": false,
+                    "type": "AWSDateTime",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "leftAt": {
+                    "name": "leftAt",
+                    "isArray": false,
+                    "type": "AWSDateTime",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "fleet": {
+                    "name": "fleet",
+                    "isArray": false,
+                    "type": {
+                        "model": "Fleet"
+                    },
+                    "isRequired": false,
+                    "attributes": [],
+                    "association": {
+                        "connectionType": "BELONGS_TO",
+                        "targetNames": [
+                            "fleetID"
+                        ]
+                    }
+                },
+                "courier": {
+                    "name": "courier",
+                    "isArray": false,
+                    "type": {
+                        "model": "Courier"
+                    },
+                    "isRequired": false,
+                    "attributes": [],
+                    "association": {
+                        "connectionType": "BELONGS_TO",
+                        "targetNames": [
+                            "courierID"
+                        ]
+                    }
+                },
+                "currentVehicle": {
+                    "name": "currentVehicle",
+                    "isArray": false,
+                    "type": {
+                        "model": "FleetVehicle"
+                    },
+                    "isRequired": false,
+                    "attributes": [],
+                    "association": {
+                        "connectionType": "BELONGS_TO",
+                        "targetNames": [
+                            "currentVehicleID"
+                        ]
+                    }
+                },
+                "createdAt": {
+                    "name": "createdAt",
+                    "isArray": false,
+                    "type": "AWSDateTime",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "updatedAt": {
+                    "name": "updatedAt",
+                    "isArray": false,
+                    "type": "AWSDateTime",
+                    "isRequired": false,
+                    "attributes": []
+                }
+            },
+            "syncable": true,
+            "pluralName": "FleetMembers",
+            "attributes": [
+                {
+                    "type": "model",
+                    "properties": {}
+                },
+                {
+                    "type": "key",
+                    "properties": {
+                        "name": "byFleet",
+                        "fields": [
+                            "fleetID"
+                        ]
+                    }
+                },
+                {
+                    "type": "key",
+                    "properties": {
+                        "name": "byCourier",
+                        "fields": [
+                            "courierID"
+                        ]
+                    }
+                },
+                {
+                    "type": "key",
+                    "properties": {
+                        "name": "byCurrentVehicle",
+                        "fields": [
+                            "currentVehicleID"
+                        ]
+                    }
+                },
+                {
+                    "type": "auth",
+                    "properties": {
+                        "rules": [
+                            {
+                                "allow": "private",
+                                "provider": "iam",
+                                "operations": [
+                                    "create",
+                                    "read",
+                                    "update",
+                                    "delete"
+                                ]
+                            }
+                        ]
+                    }
+                }
+            ]
+        },
+        "FleetInvitation": {
+            "name": "FleetInvitation",
+            "fields": {
+                "id": {
+                    "name": "id",
+                    "isArray": false,
+                    "type": "ID",
+                    "isRequired": true,
+                    "attributes": []
+                },
+                "fleetID": {
+                    "name": "fleetID",
+                    "isArray": false,
+                    "type": "ID",
+                    "isRequired": true,
+                    "attributes": []
+                },
+                "courierID": {
+                    "name": "courierID",
+                    "isArray": false,
+                    "type": "ID",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "phoneNumber": {
+                    "name": "phoneNumber",
+                    "isArray": false,
+                    "type": "String",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "email": {
+                    "name": "email",
+                    "isArray": false,
+                    "type": "String",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "role": {
+                    "name": "role",
+                    "isArray": false,
+                    "type": {
+                        "enum": "FleetRole"
+                    },
+                    "isRequired": true,
+                    "attributes": []
+                },
+                "status": {
+                    "name": "status",
+                    "isArray": false,
+                    "type": {
+                        "enum": "FleetInvitationStatus"
+                    },
+                    "isRequired": true,
+                    "attributes": []
+                },
+                "invitationCode": {
+                    "name": "invitationCode",
+                    "isArray": false,
+                    "type": "String",
+                    "isRequired": true,
+                    "attributes": []
+                },
+                "invitedByID": {
+                    "name": "invitedByID",
+                    "isArray": false,
+                    "type": "ID",
+                    "isRequired": true,
+                    "attributes": []
+                },
+                "expiresAt": {
+                    "name": "expiresAt",
+                    "isArray": false,
+                    "type": "AWSDateTime",
+                    "isRequired": true,
+                    "attributes": []
+                },
+                "acceptedAt": {
+                    "name": "acceptedAt",
+                    "isArray": false,
+                    "type": "AWSDateTime",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "fleet": {
+                    "name": "fleet",
+                    "isArray": false,
+                    "type": {
+                        "model": "Fleet"
+                    },
+                    "isRequired": false,
+                    "attributes": [],
+                    "association": {
+                        "connectionType": "BELONGS_TO",
+                        "targetNames": [
+                            "fleetID"
+                        ]
+                    }
+                },
+                "courier": {
+                    "name": "courier",
+                    "isArray": false,
+                    "type": {
+                        "model": "Courier"
+                    },
+                    "isRequired": false,
+                    "attributes": [],
+                    "association": {
+                        "connectionType": "BELONGS_TO",
+                        "targetNames": [
+                            "courierID"
+                        ]
+                    }
+                },
+                "createdAt": {
+                    "name": "createdAt",
+                    "isArray": false,
+                    "type": "AWSDateTime",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "updatedAt": {
+                    "name": "updatedAt",
+                    "isArray": false,
+                    "type": "AWSDateTime",
+                    "isRequired": false,
+                    "attributes": []
+                }
+            },
+            "syncable": true,
+            "pluralName": "FleetInvitations",
+            "attributes": [
+                {
+                    "type": "model",
+                    "properties": {}
+                },
+                {
+                    "type": "key",
+                    "properties": {
+                        "name": "byFleet",
+                        "fields": [
+                            "fleetID"
+                        ]
+                    }
+                },
+                {
+                    "type": "key",
+                    "properties": {
+                        "name": "byInvitedCourier",
+                        "fields": [
+                            "courierID"
+                        ]
+                    }
+                },
+                {
+                    "type": "key",
+                    "properties": {
+                        "name": "byInvitationCode",
+                        "fields": [
+                            "invitationCode"
+                        ]
+                    }
+                },
+                {
+                    "type": "auth",
+                    "properties": {
+                        "rules": [
+                            {
+                                "allow": "private",
+                                "provider": "iam",
+                                "operations": [
+                                    "create",
+                                    "read",
+                                    "update",
+                                    "delete"
+                                ]
+                            }
+                        ]
+                    }
+                }
+            ]
+        },
+        "FleetVehicle": {
+            "name": "FleetVehicle",
+            "fields": {
+                "id": {
+                    "name": "id",
+                    "isArray": false,
+                    "type": "ID",
+                    "isRequired": true,
+                    "attributes": []
+                },
+                "fleetID": {
+                    "name": "fleetID",
+                    "isArray": false,
+                    "type": "ID",
+                    "isRequired": true,
+                    "attributes": []
+                },
+                "vehicleType": {
+                    "name": "vehicleType",
+                    "isArray": false,
+                    "type": "String",
+                    "isRequired": true,
+                    "attributes": []
+                },
+                "vehicleClass": {
+                    "name": "vehicleClass",
+                    "isArray": false,
+                    "type": "String",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "make": {
+                    "name": "make",
+                    "isArray": false,
+                    "type": "String",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "model": {
+                    "name": "model",
+                    "isArray": false,
+                    "type": "String",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "year": {
+                    "name": "year",
+                    "isArray": false,
+                    "type": "Int",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "plateNumber": {
+                    "name": "plateNumber",
+                    "isArray": false,
+                    "type": "String",
+                    "isRequired": true,
+                    "attributes": []
+                },
+                "colour": {
+                    "name": "colour",
+                    "isArray": false,
+                    "type": "String",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "status": {
+                    "name": "status",
+                    "isArray": false,
+                    "type": {
+                        "enum": "FleetVehicleStatus"
+                    },
+                    "isRequired": true,
+                    "attributes": []
+                },
+                "assignedCourierID": {
+                    "name": "assignedCourierID",
+                    "isArray": false,
+                    "type": "ID",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "assignedAt": {
+                    "name": "assignedAt",
+                    "isArray": false,
+                    "type": "AWSDateTime",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "registrationDocument": {
+                    "name": "registrationDocument",
+                    "isArray": false,
+                    "type": "String",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "insuranceDocument": {
+                    "name": "insuranceDocument",
+                    "isArray": false,
+                    "type": "String",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "fleet": {
+                    "name": "fleet",
+                    "isArray": false,
+                    "type": {
+                        "model": "Fleet"
+                    },
+                    "isRequired": false,
+                    "attributes": [],
+                    "association": {
+                        "connectionType": "BELONGS_TO",
+                        "targetNames": [
+                            "fleetID"
+                        ]
+                    }
+                },
+                "assignedCourier": {
+                    "name": "assignedCourier",
+                    "isArray": false,
+                    "type": {
+                        "model": "Courier"
+                    },
+                    "isRequired": false,
+                    "attributes": [],
+                    "association": {
+                        "connectionType": "BELONGS_TO",
+                        "targetNames": [
+                            "assignedCourierID"
+                        ]
+                    }
+                },
+                "assignedMembers": {
+                    "name": "assignedMembers",
+                    "isArray": true,
+                    "type": {
+                        "model": "FleetMember"
+                    },
+                    "isRequired": false,
+                    "attributes": [],
+                    "isArrayNullable": true,
+                    "association": {
+                        "connectionType": "HAS_MANY",
+                        "associatedWith": [
+                            "currentVehicle"
+                        ]
+                    }
+                },
+                "fleetOrders": {
+                    "name": "fleetOrders",
+                    "isArray": true,
+                    "type": {
+                        "model": "FleetOrder"
+                    },
+                    "isRequired": false,
+                    "attributes": [],
+                    "isArrayNullable": true,
+                    "association": {
+                        "connectionType": "HAS_MANY",
+                        "associatedWith": [
+                            "vehicle"
+                        ]
+                    }
+                },
+                "createdAt": {
+                    "name": "createdAt",
+                    "isArray": false,
+                    "type": "AWSDateTime",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "updatedAt": {
+                    "name": "updatedAt",
+                    "isArray": false,
+                    "type": "AWSDateTime",
+                    "isRequired": false,
+                    "attributes": []
+                }
+            },
+            "syncable": true,
+            "pluralName": "FleetVehicles",
+            "attributes": [
+                {
+                    "type": "model",
+                    "properties": {}
+                },
+                {
+                    "type": "key",
+                    "properties": {
+                        "name": "byFleet",
+                        "fields": [
+                            "fleetID"
+                        ]
+                    }
+                },
+                {
+                    "type": "key",
+                    "properties": {
+                        "name": "byAssignedCourier",
+                        "fields": [
+                            "assignedCourierID"
+                        ]
+                    }
+                },
+                {
+                    "type": "auth",
+                    "properties": {
+                        "rules": [
+                            {
+                                "allow": "private",
+                                "provider": "iam",
+                                "operations": [
+                                    "create",
+                                    "read",
+                                    "update",
+                                    "delete"
                                 ]
                             }
                         ]
@@ -292,6 +1696,21 @@ export const schema = {
                     "type": "ID",
                     "isRequired": true,
                     "attributes": []
+                },
+                "user": {
+                    "name": "user",
+                    "isArray": false,
+                    "type": {
+                        "model": "User"
+                    },
+                    "isRequired": false,
+                    "attributes": [],
+                    "association": {
+                        "connectionType": "BELONGS_TO",
+                        "targetNames": [
+                            "userID"
+                        ]
+                    }
                 },
                 "paystackEnvironment": {
                     "name": "paystackEnvironment",
@@ -1518,6 +2937,27 @@ export const schema = {
                     "isRequired": true,
                     "attributes": []
                 },
+                "senderName": {
+                    "name": "senderName",
+                    "isArray": false,
+                    "type": "String",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "senderNumber": {
+                    "name": "senderNumber",
+                    "isArray": false,
+                    "type": "String",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "senderNumber2": {
+                    "name": "senderNumber2",
+                    "isArray": false,
+                    "type": "String",
+                    "isRequired": false,
+                    "attributes": []
+                },
                 "recipientName": {
                     "name": "recipientName",
                     "isArray": false,
@@ -2505,6 +3945,38 @@ export const schema = {
                         "connectionType": "BELONGS_TO",
                         "targetNames": [
                             "assignedCourierId"
+                        ]
+                    }
+                },
+                "fleetOrders": {
+                    "name": "fleetOrders",
+                    "isArray": true,
+                    "type": {
+                        "model": "FleetOrder"
+                    },
+                    "isRequired": false,
+                    "attributes": [],
+                    "isArrayNullable": true,
+                    "association": {
+                        "connectionType": "HAS_MANY",
+                        "associatedWith": [
+                            "order"
+                        ]
+                    }
+                },
+                "fleetTransactions": {
+                    "name": "fleetTransactions",
+                    "isArray": true,
+                    "type": {
+                        "model": "FleetTransaction"
+                    },
+                    "isRequired": false,
+                    "attributes": [],
+                    "isArrayNullable": true,
+                    "association": {
+                        "connectionType": "HAS_MANY",
+                        "associatedWith": [
+                            "order"
                         ]
                     }
                 },
@@ -3635,6 +5107,86 @@ export const schema = {
                     "isRequired": false,
                     "attributes": []
                 },
+                "availabilityStatus": {
+                    "name": "availabilityStatus",
+                    "isArray": false,
+                    "type": {
+                        "enum": "CourierAvailabilityStatus"
+                    },
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "lastLocationUpdateAt": {
+                    "name": "lastLocationUpdateAt",
+                    "isArray": false,
+                    "type": "AWSDateTime",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "fleetMemberships": {
+                    "name": "fleetMemberships",
+                    "isArray": true,
+                    "type": {
+                        "model": "FleetMember"
+                    },
+                    "isRequired": false,
+                    "attributes": [],
+                    "isArrayNullable": true,
+                    "association": {
+                        "connectionType": "HAS_MANY",
+                        "associatedWith": [
+                            "courier"
+                        ]
+                    }
+                },
+                "fleetVehicles": {
+                    "name": "fleetVehicles",
+                    "isArray": true,
+                    "type": {
+                        "model": "FleetVehicle"
+                    },
+                    "isRequired": false,
+                    "attributes": [],
+                    "isArrayNullable": true,
+                    "association": {
+                        "connectionType": "HAS_MANY",
+                        "associatedWith": [
+                            "assignedCourier"
+                        ]
+                    }
+                },
+                "fleetOrders": {
+                    "name": "fleetOrders",
+                    "isArray": true,
+                    "type": {
+                        "model": "FleetOrder"
+                    },
+                    "isRequired": false,
+                    "attributes": [],
+                    "isArrayNullable": true,
+                    "association": {
+                        "connectionType": "HAS_MANY",
+                        "associatedWith": [
+                            "courier"
+                        ]
+                    }
+                },
+                "fleetInvitations": {
+                    "name": "fleetInvitations",
+                    "isArray": true,
+                    "type": {
+                        "model": "FleetInvitation"
+                    },
+                    "isRequired": false,
+                    "attributes": [],
+                    "isArrayNullable": true,
+                    "association": {
+                        "connectionType": "HAS_MANY",
+                        "associatedWith": [
+                            "courier"
+                        ]
+                    }
+                },
                 "reviews": {
                     "name": "reviews",
                     "isArray": true,
@@ -3953,7 +5505,7 @@ export const schema = {
                     "association": {
                         "connectionType": "HAS_MANY",
                         "associatedWith": [
-                            "userID"
+                            "user"
                         ]
                     }
                 },
@@ -4001,6 +5553,126 @@ export const schema = {
         }
     },
     "enums": {
+        "FleetOrganisationType": {
+            "name": "FleetOrganisationType",
+            "values": [
+                "CORPORATE",
+                "REGISTERED_BUSINESS",
+                "INFORMAL_FLEET"
+            ]
+        },
+        "FleetLegalStatus": {
+            "name": "FleetLegalStatus",
+            "values": [
+                "REGISTERED",
+                "UNREGISTERED",
+                "REGISTRATION_IN_PROGRESS"
+            ]
+        },
+        "FleetVerificationStatus": {
+            "name": "FleetVerificationStatus",
+            "values": [
+                "UNVERIFIED",
+                "PENDING",
+                "VERIFIED",
+                "REJECTED"
+            ]
+        },
+        "FleetStatus": {
+            "name": "FleetStatus",
+            "values": [
+                "PENDING",
+                "ACTIVE",
+                "SUSPENDED",
+                "DEACTIVATED"
+            ]
+        },
+        "FleetRole": {
+            "name": "FleetRole",
+            "values": [
+                "OWNER",
+                "MANAGER",
+                "DISPATCHER",
+                "ACCOUNTANT",
+                "RIDER"
+            ]
+        },
+        "FleetMemberStatus": {
+            "name": "FleetMemberStatus",
+            "values": [
+                "INVITED",
+                "PENDING",
+                "ACTIVE",
+                "SUSPENDED",
+                "REMOVED"
+            ]
+        },
+        "FleetInvitationStatus": {
+            "name": "FleetInvitationStatus",
+            "values": [
+                "PENDING",
+                "ACCEPTED",
+                "DECLINED",
+                "EXPIRED",
+                "CANCELLED"
+            ]
+        },
+        "FleetVehicleStatus": {
+            "name": "FleetVehicleStatus",
+            "values": [
+                "AVAILABLE",
+                "ASSIGNED",
+                "IN_USE",
+                "MAINTENANCE",
+                "INACTIVE"
+            ]
+        },
+        "FleetAssignmentType": {
+            "name": "FleetAssignmentType",
+            "values": [
+                "MARKETPLACE_AUTO",
+                "FLEET_DISPATCH",
+                "PRIVATE"
+            ]
+        },
+        "FleetOrderSource": {
+            "name": "FleetOrderSource",
+            "values": [
+                "ATUA_MARKETPLACE",
+                "FLEET_CREATED",
+                "API"
+            ]
+        },
+        "FleetSubscriptionPlan": {
+            "name": "FleetSubscriptionPlan",
+            "values": [
+                "FREE",
+                "STARTER",
+                "GROWTH",
+                "BUSINESS",
+                "ENTERPRISE"
+            ]
+        },
+        "FleetSubscriptionStatus": {
+            "name": "FleetSubscriptionStatus",
+            "values": [
+                "ACTIVE",
+                "TRIALING",
+                "PAST_DUE",
+                "CANCELLED",
+                "EXPIRED"
+            ]
+        },
+        "CourierAvailabilityStatus": {
+            "name": "CourierAvailabilityStatus",
+            "values": [
+                "OFFLINE",
+                "AVAILABLE",
+                "BUSY",
+                "ON_DELIVERY",
+                "SUSPENDED"
+            ]
+        },
         "PaystackEnvironment": {
             "name": "PaystackEnvironment",
             "values": [
@@ -4486,5 +6158,5 @@ export const schema = {
         }
     },
     "codegenVersion": "3.4.4",
-    "version": "12d70129f949b8093f6882bb1d8a6ac0"
+    "version": "4d73e1cdab166af0bac3f320d2d532a6"
 };

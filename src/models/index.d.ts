@@ -1,6 +1,100 @@
 import { ModelInit, MutableModel, __modelMeta__, ManagedIdentifier } from "@aws-amplify/datastore";
 // @ts-ignore
-import { LazyLoading, LazyLoadingDisabled, AsyncCollection, AsyncItem } from "@aws-amplify/datastore";
+import { LazyLoading, LazyLoadingDisabled, AsyncItem, AsyncCollection } from "@aws-amplify/datastore";
+
+export enum FleetOrganisationType {
+  CORPORATE = "CORPORATE",
+  REGISTERED_BUSINESS = "REGISTERED_BUSINESS",
+  INFORMAL_FLEET = "INFORMAL_FLEET"
+}
+
+export enum FleetLegalStatus {
+  REGISTERED = "REGISTERED",
+  UNREGISTERED = "UNREGISTERED",
+  REGISTRATION_IN_PROGRESS = "REGISTRATION_IN_PROGRESS"
+}
+
+export enum FleetVerificationStatus {
+  UNVERIFIED = "UNVERIFIED",
+  PENDING = "PENDING",
+  VERIFIED = "VERIFIED",
+  REJECTED = "REJECTED"
+}
+
+export enum FleetStatus {
+  PENDING = "PENDING",
+  ACTIVE = "ACTIVE",
+  SUSPENDED = "SUSPENDED",
+  DEACTIVATED = "DEACTIVATED"
+}
+
+export enum FleetRole {
+  OWNER = "OWNER",
+  MANAGER = "MANAGER",
+  DISPATCHER = "DISPATCHER",
+  ACCOUNTANT = "ACCOUNTANT",
+  RIDER = "RIDER"
+}
+
+export enum FleetMemberStatus {
+  INVITED = "INVITED",
+  PENDING = "PENDING",
+  ACTIVE = "ACTIVE",
+  SUSPENDED = "SUSPENDED",
+  REMOVED = "REMOVED"
+}
+
+export enum FleetInvitationStatus {
+  PENDING = "PENDING",
+  ACCEPTED = "ACCEPTED",
+  DECLINED = "DECLINED",
+  EXPIRED = "EXPIRED",
+  CANCELLED = "CANCELLED"
+}
+
+export enum FleetVehicleStatus {
+  AVAILABLE = "AVAILABLE",
+  ASSIGNED = "ASSIGNED",
+  IN_USE = "IN_USE",
+  MAINTENANCE = "MAINTENANCE",
+  INACTIVE = "INACTIVE"
+}
+
+export enum FleetAssignmentType {
+  MARKETPLACE_AUTO = "MARKETPLACE_AUTO",
+  FLEET_DISPATCH = "FLEET_DISPATCH",
+  PRIVATE = "PRIVATE"
+}
+
+export enum FleetOrderSource {
+  ATUA_MARKETPLACE = "ATUA_MARKETPLACE",
+  FLEET_CREATED = "FLEET_CREATED",
+  API = "API"
+}
+
+export enum FleetSubscriptionPlan {
+  FREE = "FREE",
+  STARTER = "STARTER",
+  GROWTH = "GROWTH",
+  BUSINESS = "BUSINESS",
+  ENTERPRISE = "ENTERPRISE"
+}
+
+export enum FleetSubscriptionStatus {
+  ACTIVE = "ACTIVE",
+  TRIALING = "TRIALING",
+  PAST_DUE = "PAST_DUE",
+  CANCELLED = "CANCELLED",
+  EXPIRED = "EXPIRED"
+}
+
+export enum CourierAvailabilityStatus {
+  OFFLINE = "OFFLINE",
+  AVAILABLE = "AVAILABLE",
+  BUSY = "BUSY",
+  ON_DELIVERY = "ON_DELIVERY",
+  SUSPENDED = "SUSPENDED"
+}
 
 export enum PaystackEnvironment {
   TEST = "TEST",
@@ -304,98 +398,434 @@ export declare type ReversePayoutResponse = LazyLoading extends LazyLoadingDisab
 
 export declare const ReversePayoutResponse: (new (init: ModelInit<ReversePayoutResponse>) => ReversePayoutResponse)
 
-type EagerCompanyVehicle = {
+type EagerFleetWallet = {
   readonly [__modelMeta__]: {
-    identifier: ManagedIdentifier<CompanyVehicle, 'id'>;
-    readOnlyFields: 'createdAt' | 'updatedAt';
+    identifier: ManagedIdentifier<FleetWallet, 'id'>;
   };
   readonly id: string;
-  readonly vehicleType?: string | null;
-  readonly model?: string | null;
-  readonly plateNumber?: string | null;
-  readonly couriercompanyID: string;
+  readonly fleetID: string;
+  readonly availableBalance?: number | null;
+  readonly pendingBalance?: number | null;
+  readonly lifetimeEarnings?: number | null;
+  readonly fleet?: Fleet | null;
+  readonly transactions?: (FleetTransaction | null)[] | null;
   readonly createdAt?: string | null;
   readonly updatedAt?: string | null;
 }
 
-type LazyCompanyVehicle = {
+type LazyFleetWallet = {
   readonly [__modelMeta__]: {
-    identifier: ManagedIdentifier<CompanyVehicle, 'id'>;
-    readOnlyFields: 'createdAt' | 'updatedAt';
+    identifier: ManagedIdentifier<FleetWallet, 'id'>;
   };
   readonly id: string;
-  readonly vehicleType?: string | null;
-  readonly model?: string | null;
-  readonly plateNumber?: string | null;
-  readonly couriercompanyID: string;
+  readonly fleetID: string;
+  readonly availableBalance?: number | null;
+  readonly pendingBalance?: number | null;
+  readonly lifetimeEarnings?: number | null;
+  readonly fleet: AsyncItem<Fleet | undefined>;
+  readonly transactions: AsyncCollection<FleetTransaction>;
   readonly createdAt?: string | null;
   readonly updatedAt?: string | null;
 }
 
-export declare type CompanyVehicle = LazyLoading extends LazyLoadingDisabled ? EagerCompanyVehicle : LazyCompanyVehicle
+export declare type FleetWallet = LazyLoading extends LazyLoadingDisabled ? EagerFleetWallet : LazyFleetWallet
 
-export declare const CompanyVehicle: (new (init: ModelInit<CompanyVehicle>) => CompanyVehicle) & {
-  copyOf(source: CompanyVehicle, mutator: (draft: MutableModel<CompanyVehicle>) => MutableModel<CompanyVehicle> | void): CompanyVehicle;
+export declare const FleetWallet: (new (init: ModelInit<FleetWallet>) => FleetWallet) & {
+  copyOf(source: FleetWallet, mutator: (draft: MutableModel<FleetWallet>) => MutableModel<FleetWallet> | void): FleetWallet;
 }
 
-type EagerCourierCompany = {
+type EagerFleetTransaction = {
   readonly [__modelMeta__]: {
-    identifier: ManagedIdentifier<CourierCompany, 'id'>;
-    readOnlyFields: 'createdAt' | 'updatedAt';
+    identifier: ManagedIdentifier<FleetTransaction, 'id'>;
   };
   readonly id: string;
-  readonly sub: string;
-  readonly firstName: string;
-  readonly lastName?: string | null;
-  readonly profilePic?: string | null;
-  readonly address?: string | null;
-  readonly lat?: number | null;
-  readonly lng?: number | null;
-  readonly landmark?: string | null;
+  readonly fleetWalletID: string;
+  readonly fleetID: string;
+  readonly orderID?: string | null;
+  readonly type: TransactionType | keyof typeof TransactionType;
+  readonly status: TransactionStatus | keyof typeof TransactionStatus;
+  readonly amount: number;
+  readonly description?: string | null;
+  readonly reference?: string | null;
+  readonly fleet?: Fleet | null;
+  readonly fleetWallet?: FleetWallet | null;
+  readonly order?: Order | null;
+  readonly createdAt?: string | null;
+  readonly updatedAt?: string | null;
+}
+
+type LazyFleetTransaction = {
+  readonly [__modelMeta__]: {
+    identifier: ManagedIdentifier<FleetTransaction, 'id'>;
+  };
+  readonly id: string;
+  readonly fleetWalletID: string;
+  readonly fleetID: string;
+  readonly orderID?: string | null;
+  readonly type: TransactionType | keyof typeof TransactionType;
+  readonly status: TransactionStatus | keyof typeof TransactionStatus;
+  readonly amount: number;
+  readonly description?: string | null;
+  readonly reference?: string | null;
+  readonly fleet: AsyncItem<Fleet | undefined>;
+  readonly fleetWallet: AsyncItem<FleetWallet | undefined>;
+  readonly order: AsyncItem<Order | undefined>;
+  readonly createdAt?: string | null;
+  readonly updatedAt?: string | null;
+}
+
+export declare type FleetTransaction = LazyLoading extends LazyLoadingDisabled ? EagerFleetTransaction : LazyFleetTransaction
+
+export declare const FleetTransaction: (new (init: ModelInit<FleetTransaction>) => FleetTransaction) & {
+  copyOf(source: FleetTransaction, mutator: (draft: MutableModel<FleetTransaction>) => MutableModel<FleetTransaction> | void): FleetTransaction;
+}
+
+type EagerFleetSubscription = {
+  readonly [__modelMeta__]: {
+    identifier: ManagedIdentifier<FleetSubscription, 'id'>;
+  };
+  readonly id: string;
+  readonly fleetID: string;
+  readonly plan: FleetSubscriptionPlan | keyof typeof FleetSubscriptionPlan;
+  readonly status: FleetSubscriptionStatus | keyof typeof FleetSubscriptionStatus;
+  readonly billingInterval?: string | null;
+  readonly amount?: number | null;
+  readonly currency?: string | null;
+  readonly provider?: string | null;
+  readonly providerReference?: string | null;
+  readonly startedAt?: string | null;
+  readonly currentPeriodStart?: string | null;
+  readonly currentPeriodEnd?: string | null;
+  readonly cancelledAt?: string | null;
+  readonly fleet?: Fleet | null;
+  readonly createdAt?: string | null;
+  readonly updatedAt?: string | null;
+}
+
+type LazyFleetSubscription = {
+  readonly [__modelMeta__]: {
+    identifier: ManagedIdentifier<FleetSubscription, 'id'>;
+  };
+  readonly id: string;
+  readonly fleetID: string;
+  readonly plan: FleetSubscriptionPlan | keyof typeof FleetSubscriptionPlan;
+  readonly status: FleetSubscriptionStatus | keyof typeof FleetSubscriptionStatus;
+  readonly billingInterval?: string | null;
+  readonly amount?: number | null;
+  readonly currency?: string | null;
+  readonly provider?: string | null;
+  readonly providerReference?: string | null;
+  readonly startedAt?: string | null;
+  readonly currentPeriodStart?: string | null;
+  readonly currentPeriodEnd?: string | null;
+  readonly cancelledAt?: string | null;
+  readonly fleet: AsyncItem<Fleet | undefined>;
+  readonly createdAt?: string | null;
+  readonly updatedAt?: string | null;
+}
+
+export declare type FleetSubscription = LazyLoading extends LazyLoadingDisabled ? EagerFleetSubscription : LazyFleetSubscription
+
+export declare const FleetSubscription: (new (init: ModelInit<FleetSubscription>) => FleetSubscription) & {
+  copyOf(source: FleetSubscription, mutator: (draft: MutableModel<FleetSubscription>) => MutableModel<FleetSubscription> | void): FleetSubscription;
+}
+
+type EagerFleetOrder = {
+  readonly [__modelMeta__]: {
+    identifier: ManagedIdentifier<FleetOrder, 'id'>;
+  };
+  readonly id: string;
+  readonly fleetID: string;
+  readonly orderID: string;
+  readonly courierID?: string | null;
+  readonly vehicleID?: string | null;
+  readonly source: FleetOrderSource | keyof typeof FleetOrderSource;
+  readonly assignmentType: FleetAssignmentType | keyof typeof FleetAssignmentType;
+  readonly assignedAt?: string | null;
+  readonly completedAt?: string | null;
+  readonly fleetEarnings?: number | null;
+  readonly fleet?: Fleet | null;
+  readonly order?: Order | null;
+  readonly courier?: Courier | null;
+  readonly vehicle?: FleetVehicle | null;
+  readonly createdAt?: string | null;
+  readonly updatedAt?: string | null;
+}
+
+type LazyFleetOrder = {
+  readonly [__modelMeta__]: {
+    identifier: ManagedIdentifier<FleetOrder, 'id'>;
+  };
+  readonly id: string;
+  readonly fleetID: string;
+  readonly orderID: string;
+  readonly courierID?: string | null;
+  readonly vehicleID?: string | null;
+  readonly source: FleetOrderSource | keyof typeof FleetOrderSource;
+  readonly assignmentType: FleetAssignmentType | keyof typeof FleetAssignmentType;
+  readonly assignedAt?: string | null;
+  readonly completedAt?: string | null;
+  readonly fleetEarnings?: number | null;
+  readonly fleet: AsyncItem<Fleet | undefined>;
+  readonly order: AsyncItem<Order | undefined>;
+  readonly courier: AsyncItem<Courier | undefined>;
+  readonly vehicle: AsyncItem<FleetVehicle | undefined>;
+  readonly createdAt?: string | null;
+  readonly updatedAt?: string | null;
+}
+
+export declare type FleetOrder = LazyLoading extends LazyLoadingDisabled ? EagerFleetOrder : LazyFleetOrder
+
+export declare const FleetOrder: (new (init: ModelInit<FleetOrder>) => FleetOrder) & {
+  copyOf(source: FleetOrder, mutator: (draft: MutableModel<FleetOrder>) => MutableModel<FleetOrder> | void): FleetOrder;
+}
+
+type EagerFleet = {
+  readonly [__modelMeta__]: {
+    identifier: ManagedIdentifier<Fleet, 'id'>;
+  };
+  readonly id: string;
+  readonly name: string;
+  readonly businessName?: string | null;
+  readonly organisationType: FleetOrganisationType | keyof typeof FleetOrganisationType;
+  readonly legalStatus: FleetLegalStatus | keyof typeof FleetLegalStatus;
+  readonly verificationStatus: FleetVerificationStatus | keyof typeof FleetVerificationStatus;
+  readonly registrationNumber?: string | null;
+  readonly registrationCountry?: string | null;
+  readonly registrationAuthority?: string | null;
+  readonly isRecognisedBrand?: boolean | null;
+  readonly brandWebsite?: string | null;
+  readonly verificationNotes?: string | null;
+  readonly logo?: string | null;
   readonly phoneNumber?: string | null;
   readonly email?: string | null;
-  readonly adminFirstName?: string | null;
-  readonly adminLastName?: string | null;
-  readonly adminPhoneNumber?: string | null;
-  readonly bankName?: string | null;
-  readonly CompanyVehicles?: (CompanyVehicle | null)[] | null;
-  readonly accountNumber?: string | null;
-  readonly push_token?: string | null;
-  readonly createdAt?: string | null;
-  readonly updatedAt?: string | null;
-}
-
-type LazyCourierCompany = {
-  readonly [__modelMeta__]: {
-    identifier: ManagedIdentifier<CourierCompany, 'id'>;
-    readOnlyFields: 'createdAt' | 'updatedAt';
-  };
-  readonly id: string;
-  readonly sub: string;
-  readonly firstName: string;
-  readonly lastName?: string | null;
-  readonly profilePic?: string | null;
   readonly address?: string | null;
+  readonly state?: string | null;
+  readonly city?: string | null;
+  readonly landmark?: string | null;
   readonly lat?: number | null;
   readonly lng?: number | null;
-  readonly landmark?: string | null;
-  readonly phoneNumber?: string | null;
-  readonly email?: string | null;
-  readonly adminFirstName?: string | null;
-  readonly adminLastName?: string | null;
-  readonly adminPhoneNumber?: string | null;
-  readonly bankName?: string | null;
-  readonly CompanyVehicles: AsyncCollection<CompanyVehicle>;
-  readonly accountNumber?: string | null;
-  readonly push_token?: string | null;
+  readonly status: FleetStatus | keyof typeof FleetStatus;
+  readonly ownerUserID: string;
+  readonly subscriptionPlan?: FleetSubscriptionPlan | keyof typeof FleetSubscriptionPlan | null;
+  readonly subscriptionStatus?: FleetSubscriptionStatus | keyof typeof FleetSubscriptionStatus | null;
+  readonly subscriptionStartedAt?: string | null;
+  readonly subscriptionRenewsAt?: string | null;
+  readonly trialEndsAt?: string | null;
+  readonly members?: (FleetMember | null)[] | null;
+  readonly vehicles?: (FleetVehicle | null)[] | null;
+  readonly invitations?: (FleetInvitation | null)[] | null;
+  readonly fleetOrders?: (FleetOrder | null)[] | null;
+  readonly walletID?: string | null;
+  readonly wallets?: (FleetWallet | null)[] | null;
+  readonly transactions?: (FleetTransaction | null)[] | null;
+  readonly subscriptions?: (FleetSubscription | null)[] | null;
   readonly createdAt?: string | null;
   readonly updatedAt?: string | null;
 }
 
-export declare type CourierCompany = LazyLoading extends LazyLoadingDisabled ? EagerCourierCompany : LazyCourierCompany
+type LazyFleet = {
+  readonly [__modelMeta__]: {
+    identifier: ManagedIdentifier<Fleet, 'id'>;
+  };
+  readonly id: string;
+  readonly name: string;
+  readonly businessName?: string | null;
+  readonly organisationType: FleetOrganisationType | keyof typeof FleetOrganisationType;
+  readonly legalStatus: FleetLegalStatus | keyof typeof FleetLegalStatus;
+  readonly verificationStatus: FleetVerificationStatus | keyof typeof FleetVerificationStatus;
+  readonly registrationNumber?: string | null;
+  readonly registrationCountry?: string | null;
+  readonly registrationAuthority?: string | null;
+  readonly isRecognisedBrand?: boolean | null;
+  readonly brandWebsite?: string | null;
+  readonly verificationNotes?: string | null;
+  readonly logo?: string | null;
+  readonly phoneNumber?: string | null;
+  readonly email?: string | null;
+  readonly address?: string | null;
+  readonly state?: string | null;
+  readonly city?: string | null;
+  readonly landmark?: string | null;
+  readonly lat?: number | null;
+  readonly lng?: number | null;
+  readonly status: FleetStatus | keyof typeof FleetStatus;
+  readonly ownerUserID: string;
+  readonly subscriptionPlan?: FleetSubscriptionPlan | keyof typeof FleetSubscriptionPlan | null;
+  readonly subscriptionStatus?: FleetSubscriptionStatus | keyof typeof FleetSubscriptionStatus | null;
+  readonly subscriptionStartedAt?: string | null;
+  readonly subscriptionRenewsAt?: string | null;
+  readonly trialEndsAt?: string | null;
+  readonly members: AsyncCollection<FleetMember>;
+  readonly vehicles: AsyncCollection<FleetVehicle>;
+  readonly invitations: AsyncCollection<FleetInvitation>;
+  readonly fleetOrders: AsyncCollection<FleetOrder>;
+  readonly walletID?: string | null;
+  readonly wallets: AsyncCollection<FleetWallet>;
+  readonly transactions: AsyncCollection<FleetTransaction>;
+  readonly subscriptions: AsyncCollection<FleetSubscription>;
+  readonly createdAt?: string | null;
+  readonly updatedAt?: string | null;
+}
 
-export declare const CourierCompany: (new (init: ModelInit<CourierCompany>) => CourierCompany) & {
-  copyOf(source: CourierCompany, mutator: (draft: MutableModel<CourierCompany>) => MutableModel<CourierCompany> | void): CourierCompany;
+export declare type Fleet = LazyLoading extends LazyLoadingDisabled ? EagerFleet : LazyFleet
+
+export declare const Fleet: (new (init: ModelInit<Fleet>) => Fleet) & {
+  copyOf(source: Fleet, mutator: (draft: MutableModel<Fleet>) => MutableModel<Fleet> | void): Fleet;
+}
+
+type EagerFleetMember = {
+  readonly [__modelMeta__]: {
+    identifier: ManagedIdentifier<FleetMember, 'id'>;
+  };
+  readonly id: string;
+  readonly fleetID: string;
+  readonly courierID: string;
+  readonly role: FleetRole | keyof typeof FleetRole;
+  readonly status: FleetMemberStatus | keyof typeof FleetMemberStatus;
+  readonly currentVehicleID?: string | null;
+  readonly invitedByID?: string | null;
+  readonly approvedByID?: string | null;
+  readonly joinedAt?: string | null;
+  readonly leftAt?: string | null;
+  readonly fleet?: Fleet | null;
+  readonly courier?: Courier | null;
+  readonly currentVehicle?: FleetVehicle | null;
+  readonly createdAt?: string | null;
+  readonly updatedAt?: string | null;
+}
+
+type LazyFleetMember = {
+  readonly [__modelMeta__]: {
+    identifier: ManagedIdentifier<FleetMember, 'id'>;
+  };
+  readonly id: string;
+  readonly fleetID: string;
+  readonly courierID: string;
+  readonly role: FleetRole | keyof typeof FleetRole;
+  readonly status: FleetMemberStatus | keyof typeof FleetMemberStatus;
+  readonly currentVehicleID?: string | null;
+  readonly invitedByID?: string | null;
+  readonly approvedByID?: string | null;
+  readonly joinedAt?: string | null;
+  readonly leftAt?: string | null;
+  readonly fleet: AsyncItem<Fleet | undefined>;
+  readonly courier: AsyncItem<Courier | undefined>;
+  readonly currentVehicle: AsyncItem<FleetVehicle | undefined>;
+  readonly createdAt?: string | null;
+  readonly updatedAt?: string | null;
+}
+
+export declare type FleetMember = LazyLoading extends LazyLoadingDisabled ? EagerFleetMember : LazyFleetMember
+
+export declare const FleetMember: (new (init: ModelInit<FleetMember>) => FleetMember) & {
+  copyOf(source: FleetMember, mutator: (draft: MutableModel<FleetMember>) => MutableModel<FleetMember> | void): FleetMember;
+}
+
+type EagerFleetInvitation = {
+  readonly [__modelMeta__]: {
+    identifier: ManagedIdentifier<FleetInvitation, 'id'>;
+  };
+  readonly id: string;
+  readonly fleetID: string;
+  readonly courierID?: string | null;
+  readonly phoneNumber?: string | null;
+  readonly email?: string | null;
+  readonly role: FleetRole | keyof typeof FleetRole;
+  readonly status: FleetInvitationStatus | keyof typeof FleetInvitationStatus;
+  readonly invitationCode: string;
+  readonly invitedByID: string;
+  readonly expiresAt: string;
+  readonly acceptedAt?: string | null;
+  readonly fleet?: Fleet | null;
+  readonly courier?: Courier | null;
+  readonly createdAt?: string | null;
+  readonly updatedAt?: string | null;
+}
+
+type LazyFleetInvitation = {
+  readonly [__modelMeta__]: {
+    identifier: ManagedIdentifier<FleetInvitation, 'id'>;
+  };
+  readonly id: string;
+  readonly fleetID: string;
+  readonly courierID?: string | null;
+  readonly phoneNumber?: string | null;
+  readonly email?: string | null;
+  readonly role: FleetRole | keyof typeof FleetRole;
+  readonly status: FleetInvitationStatus | keyof typeof FleetInvitationStatus;
+  readonly invitationCode: string;
+  readonly invitedByID: string;
+  readonly expiresAt: string;
+  readonly acceptedAt?: string | null;
+  readonly fleet: AsyncItem<Fleet | undefined>;
+  readonly courier: AsyncItem<Courier | undefined>;
+  readonly createdAt?: string | null;
+  readonly updatedAt?: string | null;
+}
+
+export declare type FleetInvitation = LazyLoading extends LazyLoadingDisabled ? EagerFleetInvitation : LazyFleetInvitation
+
+export declare const FleetInvitation: (new (init: ModelInit<FleetInvitation>) => FleetInvitation) & {
+  copyOf(source: FleetInvitation, mutator: (draft: MutableModel<FleetInvitation>) => MutableModel<FleetInvitation> | void): FleetInvitation;
+}
+
+type EagerFleetVehicle = {
+  readonly [__modelMeta__]: {
+    identifier: ManagedIdentifier<FleetVehicle, 'id'>;
+  };
+  readonly id: string;
+  readonly fleetID: string;
+  readonly vehicleType: string;
+  readonly vehicleClass?: string | null;
+  readonly make?: string | null;
+  readonly model?: string | null;
+  readonly year?: number | null;
+  readonly plateNumber: string;
+  readonly colour?: string | null;
+  readonly status: FleetVehicleStatus | keyof typeof FleetVehicleStatus;
+  readonly assignedCourierID?: string | null;
+  readonly assignedAt?: string | null;
+  readonly registrationDocument?: string | null;
+  readonly insuranceDocument?: string | null;
+  readonly fleet?: Fleet | null;
+  readonly assignedCourier?: Courier | null;
+  readonly assignedMembers?: (FleetMember | null)[] | null;
+  readonly fleetOrders?: (FleetOrder | null)[] | null;
+  readonly createdAt?: string | null;
+  readonly updatedAt?: string | null;
+}
+
+type LazyFleetVehicle = {
+  readonly [__modelMeta__]: {
+    identifier: ManagedIdentifier<FleetVehicle, 'id'>;
+  };
+  readonly id: string;
+  readonly fleetID: string;
+  readonly vehicleType: string;
+  readonly vehicleClass?: string | null;
+  readonly make?: string | null;
+  readonly model?: string | null;
+  readonly year?: number | null;
+  readonly plateNumber: string;
+  readonly colour?: string | null;
+  readonly status: FleetVehicleStatus | keyof typeof FleetVehicleStatus;
+  readonly assignedCourierID?: string | null;
+  readonly assignedAt?: string | null;
+  readonly registrationDocument?: string | null;
+  readonly insuranceDocument?: string | null;
+  readonly fleet: AsyncItem<Fleet | undefined>;
+  readonly assignedCourier: AsyncItem<Courier | undefined>;
+  readonly assignedMembers: AsyncCollection<FleetMember>;
+  readonly fleetOrders: AsyncCollection<FleetOrder>;
+  readonly createdAt?: string | null;
+  readonly updatedAt?: string | null;
+}
+
+export declare type FleetVehicle = LazyLoading extends LazyLoadingDisabled ? EagerFleetVehicle : LazyFleetVehicle
+
+export declare const FleetVehicle: (new (init: ModelInit<FleetVehicle>) => FleetVehicle) & {
+  copyOf(source: FleetVehicle, mutator: (draft: MutableModel<FleetVehicle>) => MutableModel<FleetVehicle> | void): FleetVehicle;
 }
 
 type EagerPaymentMethod = {
@@ -405,6 +835,7 @@ type EagerPaymentMethod = {
   readonly id: string;
   readonly owner: string;
   readonly userID: string;
+  readonly user?: User | null;
   readonly paystackEnvironment?: PaystackEnvironment | keyof typeof PaystackEnvironment | null;
   readonly provider: string;
   readonly authorizationCode: string;
@@ -432,6 +863,7 @@ type LazyPaymentMethod = {
   readonly id: string;
   readonly owner: string;
   readonly userID: string;
+  readonly user: AsyncItem<User | undefined>;
   readonly paystackEnvironment?: PaystackEnvironment | keyof typeof PaystackEnvironment | null;
   readonly provider: string;
   readonly authorizationCode: string;
@@ -762,6 +1194,9 @@ type EagerOrder = {
     readOnlyFields: 'createdAt' | 'updatedAt';
   };
   readonly id: string;
+  readonly senderName?: string | null;
+  readonly senderNumber?: string | null;
+  readonly senderNumber2?: string | null;
   readonly recipientName?: string | null;
   readonly recipientNumber?: string | null;
   readonly recipientNumber2?: string | null;
@@ -893,6 +1328,8 @@ type EagerOrder = {
   readonly reports?: (CourierReport | null)[] | null;
   readonly offers?: (Offer | null)[] | null;
   readonly assignedCourier?: Courier | null;
+  readonly fleetOrders?: (FleetOrder | null)[] | null;
+  readonly fleetTransactions?: (FleetTransaction | null)[] | null;
   readonly payments?: (Payment | null)[] | null;
   readonly createdAt?: string | null;
   readonly updatedAt?: string | null;
@@ -904,6 +1341,9 @@ type LazyOrder = {
     readOnlyFields: 'createdAt' | 'updatedAt';
   };
   readonly id: string;
+  readonly senderName?: string | null;
+  readonly senderNumber?: string | null;
+  readonly senderNumber2?: string | null;
   readonly recipientName?: string | null;
   readonly recipientNumber?: string | null;
   readonly recipientNumber2?: string | null;
@@ -1035,6 +1475,8 @@ type LazyOrder = {
   readonly reports: AsyncCollection<CourierReport>;
   readonly offers: AsyncCollection<Offer>;
   readonly assignedCourier: AsyncItem<Courier | undefined>;
+  readonly fleetOrders: AsyncCollection<FleetOrder>;
+  readonly fleetTransactions: AsyncCollection<FleetTransaction>;
   readonly payments: AsyncCollection<Payment>;
   readonly createdAt?: string | null;
   readonly updatedAt?: string | null;
@@ -1302,6 +1744,12 @@ type EagerCourier = {
   readonly averageRating?: number | null;
   readonly reviewCount?: number | null;
   readonly totalReports?: number | null;
+  readonly availabilityStatus?: CourierAvailabilityStatus | keyof typeof CourierAvailabilityStatus | null;
+  readonly lastLocationUpdateAt?: string | null;
+  readonly fleetMemberships?: (FleetMember | null)[] | null;
+  readonly fleetVehicles?: (FleetVehicle | null)[] | null;
+  readonly fleetOrders?: (FleetOrder | null)[] | null;
+  readonly fleetInvitations?: (FleetInvitation | null)[] | null;
   readonly reviews?: (CourierReview | null)[] | null;
   readonly reports?: (CourierReport | null)[] | null;
   readonly statusKey?: string | null;
@@ -1367,6 +1815,12 @@ type LazyCourier = {
   readonly averageRating?: number | null;
   readonly reviewCount?: number | null;
   readonly totalReports?: number | null;
+  readonly availabilityStatus?: CourierAvailabilityStatus | keyof typeof CourierAvailabilityStatus | null;
+  readonly lastLocationUpdateAt?: string | null;
+  readonly fleetMemberships: AsyncCollection<FleetMember>;
+  readonly fleetVehicles: AsyncCollection<FleetVehicle>;
+  readonly fleetOrders: AsyncCollection<FleetOrder>;
+  readonly fleetInvitations: AsyncCollection<FleetInvitation>;
   readonly reviews: AsyncCollection<CourierReview>;
   readonly reports: AsyncCollection<CourierReport>;
   readonly statusKey?: string | null;
