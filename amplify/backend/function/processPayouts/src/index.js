@@ -3484,6 +3484,88 @@ const markPayoutFailedWithReason = async ({
 };
 
 /* ==========================================================
+   REQUEST PAYOUT REVERSAL
+========================================================== */
+
+const requestPayoutReversal = async ({
+  payout,
+  transaction,
+  transfer = null,
+  eventType = "transfer.failed",
+  failureReason,
+}) => {
+  if (!payout?.id || !payout?.walletID || !payout?.reference) {
+    throw new Error(
+      "Cannot reverse payout: payout ID, wallet ID, and reference are required.",
+    );
+  }
+
+  if (!transaction?.id || transaction.walletID !== payout.walletID) {
+    throw new Error(
+      "Cannot reverse payout: a valid debit transaction for the payout wallet is required.",
+    );
+  }
+
+  const mutation = /* GraphQL */ `
+    mutation ReversePayout($input: ReversePayoutInput!) {
+      reversePayout(input: $input) {
+        success
+        payoutID
+        transactionID
+        walletID
+        payoutStatus
+        transactionStatus
+        restoredAmount
+        alreadyReversed
+        message
+      }
+    }
+  `;
+
+  const input = {
+    payoutID: payout.id,
+    transactionID: transaction.id,
+    walletID: payout.walletID,
+    reference: payout.reference,
+    restorationAmount: Number(transaction.amount),
+    eventType,
+    transferCode:
+      transfer?.transfer_code ||
+      transfer?.transferCode ||
+      payout.transferCode ||
+      null,
+    transferID:
+      transfer?.id != null ? String(transfer.id) : payout.transferID || null,
+    failureReason: failureReason || "Paystack transfer failed.",
+  };
+
+  const data = await graphqlRequest(mutation, { input }, "ReversePayout");
+
+  const result = data?.reversePayout;
+
+  if (
+    !result?.success ||
+    result.payoutStatus !== "FAILED" ||
+    result.transactionStatus !== "REVERSED"
+  ) {
+    throw new Error(
+      result?.message ||
+        "Payout reversal did not confirm the expected final statuses.",
+    );
+  }
+
+  console.log("PAYOUT REVERSAL CONFIRMED:", {
+    payoutID: result.payoutID,
+    transactionID: result.transactionID,
+    walletID: result.walletID,
+    restoredAmount: result.restoredAmount,
+    alreadyReversed: result.alreadyReversed,
+  });
+
+  return result;
+};
+
+/* ==========================================================
    PART 4 — PAYOUT EXECUTION
 ========================================================== */
 
@@ -3721,8 +3803,8 @@ const processCourierPayout = async ({
   ======================================================== */
 
   let walletReserved = false;
-
   let transaction = null;
+  let transferStarted = false;
 
   try {
     const reservedWallet = await reserveWalletBalance({
@@ -3816,6 +3898,8 @@ const processCourierPayout = async ({
 
         secretKey: resolvedSecretKey,
       });
+
+      transferStarted = true;
     } catch (transferError) {
       /*
        * A network error is different from a definite
@@ -3911,147 +3995,56 @@ const processCourierPayout = async ({
           verifiedStatus === "abandoned";
 
         if (verifiedIsFailure) {
-          payout = await markPayoutFailedWithReason({
-            payout,
-
-            reason:
-              "Paystack transfer was rejected or failed during verification.",
-
-            transfer: verification,
-          });
-
-          /*
-           * Restore the complete amount originally removed
-           * from the courier wallet.
-           */
           try {
-            await restorePayoutWallet({
-              wallet,
-
-              amountToRestore: financials.totalWalletDebit,
+            const reversal = await requestPayoutReversal({
+              payout,
+              transaction,
+              transfer: verification,
+              eventType:
+                verifiedStatus === "reversed"
+                  ? "transfer.reversed"
+                  : "transfer.failed",
+              failureReason:
+                "Paystack transfer was rejected or failed during verification.",
             });
-          } catch (restoreError) {
-            /*
-             * The transfer definitely failed, but the wallet
-             * could not yet be restored.
-             *
-             * DO NOT mark the Transaction REVERSED.
-             */
+
+            return {
+              success: false,
+              status: "FAILED",
+              transferStarted: true,
+              courierID,
+              payout,
+              transaction,
+              transfer: verification,
+              payoutSource: normalizedSource,
+              payoutMethod: normalizedMethod,
+              financials,
+              reversal,
+              message:
+                "Paystack transfer failure was confirmed and the payout reversal was completed.",
+            };
+          } catch (reversalError) {
             console.error(
-              "CRITICAL: Paystack verification confirmed failure, but wallet restoration failed:",
-              restoreError,
+              "CRITICAL: Confirmed Paystack failure could not be fully reversed:",
+              reversalError,
             );
 
             return {
               success: false,
-
               status: "FAILED_RECONCILIATION_REQUIRED",
-
               transferStarted: true,
-
               courierID,
-
               payout,
-
               transaction,
-
               transfer: verification,
-
               payoutSource: normalizedSource,
-
               payoutMethod: normalizedMethod,
-
               financials,
-
               message:
-                "Paystack transfer failed during verification, but wallet restoration also failed. Manual reconciliation is required.",
+                "Paystack failure was confirmed, but the reversal did not complete. Reconciliation is required.",
+              error: reversalError.message,
             };
           }
-
-          /*
-           * Wallet restoration succeeded.
-           *
-           * Now the Transaction can safely become REVERSED.
-           */
-          try {
-            transaction =
-              (await markTransactionReversedByReference(reference)) ||
-              transaction;
-
-            console.log(
-              "PAYOUT TRANSACTION MARKED REVERSED AFTER VERIFIED TRANSFER FAILURE:",
-              {
-                reference,
-
-                payoutID: payout?.id,
-
-                restoredAmount: financials.totalWalletDebit,
-              },
-            );
-          } catch (transactionError) {
-            /*
-             * Wallet is already restored.
-             *
-             * DO NOT restore it again.
-             *
-             * Reconciliation can safely finish the Transaction
-             * transition later.
-             */
-            console.error(
-              "CRITICAL: WALLET WAS RESTORED BUT TRANSACTION COULD NOT BE MARKED REVERSED:",
-              transactionError,
-            );
-
-            return {
-              success: false,
-
-              status: "FAILED_RECONCILIATION_REQUIRED",
-
-              transferStarted: true,
-
-              courierID,
-
-              payout,
-
-              transaction,
-
-              transfer: verification,
-
-              payoutSource: normalizedSource,
-
-              payoutMethod: normalizedMethod,
-
-              financials,
-
-              message:
-                "Paystack transfer failed during verification and wallet was restored, but the transaction could not be marked as reversed. Manual reconciliation is required.",
-            };
-          }
-
-          return {
-            success: false,
-
-            status: "FAILED",
-
-            transferStarted: true,
-
-            courierID,
-
-            payout,
-
-            transaction,
-
-            transfer: verification,
-
-            payoutSource: normalizedSource,
-
-            payoutMethod: normalizedMethod,
-
-            financials,
-
-            message:
-              "Paystack transfer failed during verification, wallet balance was restored, and the transaction was reversed.",
-          };
         }
 
         /*
@@ -4216,158 +4209,55 @@ const processCourierPayout = async ({
      */
 
     if (transferIsFailed) {
-      payout = await markPayoutFailedWithReason({
-        payout,
-
-        reason: "Paystack transfer failed after initiation.",
-
-        transfer,
-      });
-
-      /*
-       * Restore the COMPLETE amount originally removed from
-       * the courier wallet.
-       *
-       * This is financials.totalWalletDebit, not merely the
-       * Paystack payout amount.
-       */
       try {
-        await restorePayoutWallet({
-          wallet,
-
-          amountToRestore: financials.totalWalletDebit,
+        const reversal = await requestPayoutReversal({
+          payout,
+          transaction,
+          transfer,
+          eventType:
+            transferStatus === "reversed"
+              ? "transfer.reversed"
+              : "transfer.failed",
+          failureReason: "Paystack transfer failed after initiation.",
         });
-      } catch (restoreError) {
-        /*
-         * Wallet restoration failed.
-         *
-         * Therefore the Transaction MUST NOT be marked
-         * REVERSED because the courier's money has not
-         * actually been returned.
-         */
+
+        return {
+          success: false,
+          status: "FAILED",
+          transferStarted: true,
+          courierID,
+          payout,
+          transaction,
+          transfer,
+          payoutSource: normalizedSource,
+          payoutMethod: normalizedMethod,
+          financials,
+          reversal,
+          message:
+            "Paystack transfer failure was confirmed and the payout reversal was completed.",
+        };
+      } catch (reversalError) {
         console.error(
-          "CRITICAL: Paystack transfer failed but wallet restoration failed:",
-          restoreError,
+          "CRITICAL: Paystack transfer failed but reversal did not complete:",
+          reversalError,
         );
 
         return {
           success: false,
-
           status: "FAILED_RECONCILIATION_REQUIRED",
-
           transferStarted: true,
-
           courierID,
-
           payout,
-
           transaction,
-
           transfer,
-
           payoutSource: normalizedSource,
-
           payoutMethod: normalizedMethod,
-
           financials,
-
           message:
-            "Paystack transfer failed, but wallet restoration also failed. Manual reconciliation is required.",
+            "Paystack transfer failure was confirmed, but the reversal did not complete. Reconciliation is required.",
+          error: reversalError.message,
         };
       }
-
-      /*
-       * Wallet restoration succeeded.
-       *
-       * Only NOW is it correct to change the Transaction
-       * from PENDING → REVERSED.
-       */
-      try {
-        transaction =
-          (await markTransactionReversedByReference(reference)) || transaction;
-
-        console.log(
-          "PAYOUT TRANSACTION MARKED REVERSED AFTER SUCCESSFUL WALLET RESTORATION:",
-          {
-            reference,
-
-            payoutID: payout?.id,
-
-            restoredAmount: financials.totalWalletDebit,
-          },
-        );
-      } catch (transactionError) {
-        /*
-         * VERY IMPORTANT:
-         *
-         * The wallet has already been restored.
-         *
-         * Therefore DO NOT restore the wallet again.
-         *
-         * The correct state is:
-         *
-         *     Payout      → FAILED
-         *     Wallet      → RESTORED
-         *     Transaction → still PENDING
-         *
-         * until reconciliation changes the Transaction to
-         * REVERSED.
-         */
-        console.error(
-          "CRITICAL: WALLET WAS RESTORED BUT TRANSACTION COULD NOT BE MARKED REVERSED:",
-          transactionError,
-        );
-
-        return {
-          success: false,
-
-          status: "FAILED_RECONCILIATION_REQUIRED",
-
-          transferStarted: true,
-
-          courierID,
-
-          payout,
-
-          transaction,
-
-          transfer,
-
-          payoutSource: normalizedSource,
-
-          payoutMethod: normalizedMethod,
-
-          financials,
-
-          message:
-            "Paystack transfer failed and wallet was restored, but the transaction could not be marked as reversed. Manual reconciliation is required.",
-        };
-      }
-
-      return {
-        success: false,
-
-        status: "FAILED",
-
-        transferStarted: true,
-
-        courierID,
-
-        payout,
-
-        transaction,
-
-        transfer,
-
-        payoutSource: normalizedSource,
-
-        payoutMethod: normalizedMethod,
-
-        financials,
-
-        message:
-          "Paystack transfer failed, wallet balance was restored, and the transaction was reversed.",
-      };
     }
 
     /* ======================================================
@@ -4501,147 +4391,133 @@ const processCourierPayout = async ({
 ====================================================== */
 
     /*
-     * The payout itself has definitely failed.
+     * If Paystack transfer initiation has started, an
+     * application error does NOT prove the transfer failed.
      *
-     * We mark the Payout record as FAILED.
-     *
-     * IMPORTANT:
-     *
-     * We do NOT immediately mark the Transaction as FAILED.
-     *
-     * The Transaction represents the wallet debit.
-     *
-     * If we successfully restore the wallet, the correct
-     * final Transaction status is REVERSED.
-     *
-     * Therefore:
-     *
-     *     Payout    → FAILED
-     *     Wallet    → restored
-     *     Transaction → REVERSED
-     *
-     * If wallet restoration fails, we do NOT mark the
-     * transaction as REVERSED because the courier's money
-     * has not actually been returned yet.
+     * Keep the payout PROCESSING. Do not restore the wallet
+     * until Paystack's transfer outcome has been verified.
      */
+    if (transferStarted) {
+      console.error(
+        "PAYOUT ERROR AFTER TRANSFER INITIATION; WALLET NOT RESTORED:",
+        {
+          reference,
+          payoutID: payout?.id,
+          transactionID: transaction?.id,
+          error: error?.message,
+        },
+      );
 
-    try {
-      payout = await markPayoutFailedWithReason({
+      try {
+        payout = await updatePayoutStatus({
+          payout,
+          status: PAYOUT_STATUS.PROCESSING,
+        });
+      } catch (statusError) {
+        console.error(
+          "Could not retain payout in PROCESSING state:",
+          statusError,
+        );
+      }
+
+      return {
+        success: false,
+        status: "PROCESSING",
+        transferStarted: true,
+        courierID,
         payout,
-
-        reason: error?.message || "Payout processing failed.",
-
-        transfer: null,
-      });
-    } catch (payoutError) {
-      console.error("Could not mark payout as failed:", payoutError);
+        transaction,
+        payoutSource: normalizedSource,
+        payoutMethod: normalizedMethod,
+        financials,
+        message:
+          "An error occurred after transfer initiation. The wallet was not restored because the Paystack outcome must be verified.",
+      };
     }
 
     /*
-     * Restore wallet only if the payout was definitely
-     * not successfully transferred.
+     * The wallet was reserved, but no debit transaction
+     * is available to identify the exact amount to reverse.
+     * Do not blindly credit the wallet.
      */
-    if (walletReserved) {
-      try {
-        await restorePayoutWallet({
-          wallet,
-
+    if (walletReserved && !transaction) {
+      console.error(
+        "CRITICAL: WALLET RESERVED BUT DEBIT TRANSACTION IS MISSING:",
+        {
+          courierID,
+          walletID: wallet?.id,
+          payoutID: payout?.id,
+          reference,
           amountToRestore: financials.totalWalletDebit,
+        },
+      );
 
-          // payoutID: payout?.id,
+      return {
+        success: false,
+        status: "FAILED_RECONCILIATION_REQUIRED",
+        transferStarted: false,
+        courierID,
+        payout,
+        transaction: null,
+        payoutSource: normalizedSource,
+        payoutMethod: normalizedMethod,
+        financials,
+        message:
+          "Wallet balance was reserved, but the debit transaction could not be confirmed. Reconcile the wallet and transaction records before restoring the balance.",
+      };
+    }
 
-          // reference,
+    /*
+     * A debit transaction exists and transfer initiation
+     * has not started. Request reversal through reversePayout
+     * instead of restoring the wallet directly.
+     */
+    if (walletReserved && transaction) {
+      try {
+        const reversal = await requestPayoutReversal({
+          payout,
+          transaction,
+          transfer: null,
+          eventType: "transfer.failed",
+          failureReason:
+            error?.message || "Payout failed before transfer initiation.",
         });
 
-        /*
-         * Wallet restoration succeeded.
-         *
-         * Therefore the courier's wallet debit has now
-         * effectively been reversed.
-         */
         walletReserved = false;
 
-        try {
-          await markTransactionReversedByReference(reference);
-
-          console.log(
-            "PAYOUT TRANSACTION MARKED REVERSED AFTER SUCCESSFUL WALLET RESTORATION:",
-            {
-              reference,
-              payoutID: payout?.id,
-              restoredAmount: financials.totalWalletDebit,
-            },
-          );
-        } catch (transactionError) {
-          /*
-           * VERY IMPORTANT:
-           *
-           * The wallet has already been restored.
-           *
-           * Therefore we must NOT attempt to restore it
-           * again just because the Transaction status update
-           * failed.
-           *
-           * Manual reconciliation may be required to change
-           * the Transaction to REVERSED.
-           */
-          console.error(
-            "CRITICAL: WALLET WAS RESTORED BUT TRANSACTION COULD NOT BE MARKED REVERSED:",
-            transactionError,
-          );
-
-          return {
-            success: false,
-
-            status: "FAILED_RECONCILIATION_REQUIRED",
-
-            transferStarted: false,
-
-            courierID,
-
-            payout,
-
-            transaction,
-
-            payoutSource: normalizedSource,
-
-            payoutMethod: normalizedMethod,
-
-            financials,
-
-            message:
-              "Payout failed and wallet was restored, but the transaction could not be marked as reversed. Manual reconciliation is required.",
-          };
-        }
-      } catch (restoreError) {
-        console.error("CRITICAL: wallet restoration failed:", restoreError);
-
-        /*
-         * DO NOT mark the Transaction as REVERSED.
-         *
-         * The money has NOT been confirmed as restored.
-         */
         return {
           success: false,
-
-          status: "FAILED_RECONCILIATION_REQUIRED",
-
+          status: "FAILED",
           transferStarted: false,
-
           courierID,
-
           payout,
-
           transaction,
-
           payoutSource: normalizedSource,
-
           payoutMethod: normalizedMethod,
-
           financials,
-
+          reversal,
           message:
-            "Payout failed, but wallet restoration also failed. Manual reconciliation is required.",
+            "Payout failed before transfer initiation and the payout reversal was completed.",
+        };
+      } catch (reversalError) {
+        console.error(
+          "CRITICAL: Pre-transfer payout reversal did not complete:",
+          reversalError,
+        );
+
+        return {
+          success: false,
+          status: "FAILED_RECONCILIATION_REQUIRED",
+          transferStarted: false,
+          courierID,
+          payout,
+          transaction,
+          payoutSource: normalizedSource,
+          payoutMethod: normalizedMethod,
+          financials,
+          message:
+            "Payout failed before transfer initiation, but the wallet reversal did not complete. Reconciliation is required.",
+          error: reversalError.message,
         };
       }
     }

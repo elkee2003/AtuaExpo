@@ -1,9 +1,11 @@
 import * as Clipboard from "expo-clipboard";
 
+import { Ionicons } from "@expo/vector-icons";
 import {
   ActivityIndicator,
   Alert,
   Image,
+  Linking,
   Modal,
   ScrollView,
   Share,
@@ -19,11 +21,11 @@ import { getUrl } from "aws-amplify/storage";
 import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
 import Collapsible from "react-native-collapsible";
-import MapView, { Marker } from "react-native-maps";
 import PagerView from "react-native-pager-view";
 import Placeholder from "../../../assets/images/placeholder.png";
+import OrderMap from "./OrderMap";
 
-import { Order } from "@/src/models";
+import { Order, Payment } from "@/src/models";
 import styles from "./styles";
 
 /* ========================================================================= */
@@ -49,6 +51,8 @@ const OrderDetails = ({ orderId: receivedOrderId }) => {
 
   const [order, setOrder] = useState(null);
   const [courier, setCourier] = useState(null);
+  const [paymentRecord, setPaymentRecord] = useState(null);
+  const [paymentLink, setPaymentLink] = useState(null);
   const [loading, setLoading] = useState(true);
 
   // Always store a resolved image URL string here.
@@ -65,6 +69,7 @@ const OrderDetails = ({ orderId: receivedOrderId }) => {
     route: true,
     load: false,
     pricing: false,
+    payment: true,
     evidence: false,
   });
 
@@ -163,8 +168,74 @@ const OrderDetails = ({ orderId: receivedOrderId }) => {
     await copyToClipboard(trackingUrl, "Tracking link copied");
   };
 
+  /** Format enum values into readable labels. */
+  const formatEnumLabel = (value) => {
+    if (!value) {
+      return "Not specified";
+    }
+
+    return String(value)
+      .replace(/_/g, " ")
+      .toLowerCase()
+      .replace(/\b\w/g, (character) => character.toUpperCase());
+  };
+
+  /** Share a saved Paystack checkout link using the native share sheet. */
+  const sharePaymentLink = async () => {
+    if (!paymentLink) {
+      Alert.alert(
+        "Payment link unavailable",
+        "No saved payment link was found.",
+      );
+      return;
+    }
+
+    try {
+      await Share.share({
+        title: "Atua payment link",
+        message: `Complete the payment for Atua order #${order?.id || ""}:\n\n${paymentLink}`,
+        url: paymentLink,
+      });
+    } catch (error) {
+      if (error?.message !== "User did not share") {
+        console.error("Unable to share payment link:", error);
+        Alert.alert("Share failed", "Unable to share the payment link.");
+      }
+    }
+  };
+
+  /** Open only a valid HTTPS payment URL. */
+  const openPaymentLink = async () => {
+    if (!paymentLink) {
+      Alert.alert(
+        "Payment link unavailable",
+        "No saved payment link was found.",
+      );
+      return;
+    }
+
+    try {
+      const parsedUrl = new URL(paymentLink);
+      if (parsedUrl.protocol !== "https:") {
+        throw new Error("Payment link must use HTTPS.");
+      }
+      await Linking.openURL(parsedUrl.toString());
+    } catch (error) {
+      console.error("Unable to open payment link:", error);
+      Alert.alert(
+        "Unable to open link",
+        "The saved payment link is invalid or could not be opened.",
+      );
+    }
+  };
+
   /**
    * Format Nigerian Naira.
+   */
+
+  /**
+   * Format Nigerian Naira.
+   * Uses the correct Naira currency symbol.
    */
   const formatCurrency = (value) => {
     if (value === null || value === undefined || value === "") {
@@ -359,6 +430,8 @@ const OrderDetails = ({ orderId: receivedOrderId }) => {
         if (isMounted) {
           setOrder(null);
           setCourier(null);
+          setPaymentRecord(null);
+          setPaymentLink(null);
           setProfileImage(null);
           setEvidence([]);
           setLoading(false);
@@ -384,6 +457,8 @@ const OrderDetails = ({ orderId: receivedOrderId }) => {
         if (!orderData) {
           setOrder(null);
           setCourier(null);
+          setPaymentRecord(null);
+          setPaymentLink(null);
           setProfileImage(null);
           setEvidence([]);
 
@@ -391,6 +466,40 @@ const OrderDetails = ({ orderId: receivedOrderId }) => {
         }
 
         setOrder(orderData);
+
+        // Find the latest reusable pending Paystack checkout URL for this order.
+        // Payment lookup is isolated so a missing/failed payment query does not
+        // prevent the rest of the order details from loading.
+        try {
+          const paymentRecords = await DataStore.query(Payment, (payment) =>
+            payment.orderID.eq(orderData.id),
+          );
+
+          const reusablePayment = (paymentRecords || [])
+            .filter(
+              (payment) =>
+                payment.provider === "PAYSTACK" &&
+                payment.status === "PENDING" &&
+                typeof payment.checkoutUrl === "string" &&
+                payment.checkoutUrl.startsWith("https://"),
+            )
+            .sort(
+              (a, b) =>
+                new Date(b.createdAt || 0).getTime() -
+                new Date(a.createdAt || 0).getTime(),
+            )[0];
+
+          if (isMounted) {
+            setPaymentRecord(reusablePayment || null);
+            setPaymentLink(reusablePayment?.checkoutUrl || null);
+          }
+        } catch (paymentError) {
+          console.error("Unable to load payment details:", paymentError);
+          if (isMounted) {
+            setPaymentRecord(null);
+            setPaymentLink(null);
+          }
+        }
 
         /**
          * Load assigned courier through the model relationship.
@@ -435,6 +544,8 @@ const OrderDetails = ({ orderId: receivedOrderId }) => {
         if (isMounted) {
           setOrder(null);
           setCourier(null);
+          setPaymentRecord(null);
+          setPaymentLink(null);
           setProfileImage(null);
           setEvidence([]);
         }
@@ -560,7 +671,7 @@ const OrderDetails = ({ orderId: receivedOrderId }) => {
               onPress={() => router.back()}
               activeOpacity={0.75}
             >
-              <Text style={styles.backIcon}>‹</Text>
+              <Ionicons name="chevron-back" size={25} color="#071A3D" />
             </TouchableOpacity>
 
             <View style={styles.headerTitleContainer}>
@@ -570,7 +681,7 @@ const OrderDetails = ({ orderId: receivedOrderId }) => {
             </View>
 
             <View style={styles.headerLogo}>
-              <Text style={styles.headerLogoText}>A</Text>
+              <Ionicons name="cube-outline" size={24} color="#FFFFFF" />
             </View>
           </View>
 
@@ -628,63 +739,13 @@ const OrderDetails = ({ orderId: receivedOrderId }) => {
             </View>
 
             <View style={styles.overviewPackageIcon}>
-              <Text style={styles.overviewPackageEmoji}>📦</Text>
+              <Ionicons name="cube-outline" size={28} color="#071A3D" />
             </View>
           </View>
 
           {/* MAP */}
           {hasValidCoords && (
-            <View style={styles.mapContainer}>
-              <MapView
-                style={styles.map}
-                initialRegion={{
-                  latitude: (order.originLat + order.destinationLat) / 2,
-
-                  longitude: (order.originLng + order.destinationLng) / 2,
-
-                  latitudeDelta: 0.05,
-                  longitudeDelta: 0.05,
-                }}
-                showsUserLocation={false}
-                showsCompass={false}
-                toolbarEnabled={false}
-                loadingEnabled
-              >
-                <Marker
-                  coordinate={{
-                    latitude: order.originLat,
-                    longitude: order.originLng,
-                  }}
-                  title="Pickup location"
-                  description={order.originAddress || ""}
-                >
-                  <View style={styles.pickupMarker}>
-                    <View style={styles.pickupMarkerInner} />
-                  </View>
-                </Marker>
-
-                <Marker
-                  coordinate={{
-                    latitude: order.destinationLat,
-                    longitude: order.destinationLng,
-                  }}
-                  title="Dropoff location"
-                  description={order.destinationAddress || ""}
-                >
-                  <View style={styles.dropoffMarker}>
-                    <Text style={styles.dropoffMarkerText}>●</Text>
-                  </View>
-                </Marker>
-              </MapView>
-
-              <View style={styles.mapOverlayBadge}>
-                <View style={styles.mapOverlayDot} />
-
-                <Text style={styles.mapOverlayText}>
-                  {isDelivered ? "Delivered" : "Delivery route"}
-                </Text>
-              </View>
-            </View>
+            <OrderMap order={order} isDelivered={isDelivered} styles={styles} />
           )}
 
           {/* ROUTE SUMMARY */}
@@ -772,7 +833,7 @@ const OrderDetails = ({ orderId: receivedOrderId }) => {
                     }
                     activeOpacity={0.8}
                   >
-                    <Text style={styles.contactButtonIcon}>☎</Text>
+                    <Ionicons name="call-outline" size={19} color="#087477" />
                   </TouchableOpacity>
                 )}
               </View>
@@ -793,7 +854,7 @@ const OrderDetails = ({ orderId: receivedOrderId }) => {
                     {courier.phoneNumber}
                   </Text>
 
-                  <Text style={styles.phoneCopyIcon}>⧉</Text>
+                  <Ionicons name="copy-outline" size={18} color="#0A9396" />
                 </View>
               </TouchableOpacity>
             )}
@@ -868,7 +929,7 @@ const OrderDetails = ({ orderId: receivedOrderId }) => {
         <Section
           title="Route Details"
           eyebrow="PICKUP & DROPOFF"
-          icon="⌁"
+          icon="↔"
           open={sections.route}
           toggle={() => toggleSection("route")}
         >
@@ -893,7 +954,7 @@ const OrderDetails = ({ orderId: receivedOrderId }) => {
               {/* CARD HEADER */}
               <View style={styles.trackingLinkHeader}>
                 <View style={styles.trackingLinkIcon}>
-                  <Text style={styles.trackingLinkIconText}>↗</Text>
+                  <Ionicons name="navigate-outline" size={21} color="#087477" />
                 </View>
 
                 <View style={styles.trackingLinkHeaderText}>
@@ -999,6 +1060,128 @@ const OrderDetails = ({ orderId: receivedOrderId }) => {
                 <Text style={styles.verificationCopy}>⧉</Text>
               </TouchableOpacity>
             </View>
+          )}
+        </Section>
+
+        {/* ================================================================= */}
+        {/* PAYMENT AND COLLECTION                                            */}
+        {/* ================================================================= */}
+
+        <Section
+          title="Payment & Collection"
+          eyebrow="PAYMENT INFORMATION"
+          icon="₦"
+          open={sections.payment}
+          toggle={() => toggleSection("payment")}
+        >
+          <DetailRow
+            label="Who pays"
+            value={formatEnumLabel(order.paymentResponsibility)}
+          />
+
+          <DetailRow
+            label="Payment timing"
+            value={formatEnumLabel(order.paymentTiming)}
+          />
+
+          <DetailRow
+            label="Payment method"
+            value={formatEnumLabel(order.paymentMethod)}
+          />
+
+          <DetailRow
+            label="Payment status"
+            value={formatEnumLabel(order.paymentStatus)}
+          />
+
+          {paymentRecord?.amount !== null &&
+            paymentRecord?.amount !== undefined && (
+              <DetailRow
+                label="Payment amount"
+                value={formatCurrency(paymentRecord.amount)}
+              />
+            )}
+
+          {paymentLink && order.paymentStatus !== "PAID" && (
+            <View style={styles.trackingLinkContent}>
+              <Text style={styles.trackingLinkEyebrow}>
+                SAVED PAYSTACK PAYMENT LINK
+              </Text>
+              <Text style={styles.trackingLinkDescription}>
+                Copy or share this saved link with the person making the
+                payment.
+              </Text>
+              <View style={styles.trackingLinkPreview}>
+                <Text style={styles.trackingLinkText} numberOfLines={3}>
+                  {paymentLink}
+                </Text>
+              </View>
+              <View style={styles.trackingLinkActions}>
+                <TouchableOpacity
+                  style={[
+                    styles.trackingLinkActionButton,
+                    styles.trackingLinkCopyButton,
+                  ]}
+                  onPress={() =>
+                    copyToClipboard(paymentLink, "Payment link copied")
+                  }
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.trackingLinkCopyButtonText}>
+                    Copy Payment Link
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.trackingLinkActionButton,
+                    styles.trackingLinkShareButton,
+                  ]}
+                  onPress={sharePaymentLink}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.trackingLinkShareButtonText}>
+                    Share Link
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.trackingLinkActionButton,
+                    styles.trackingLinkShareButton,
+                  ]}
+                  onPress={openPaymentLink}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.trackingLinkShareButtonText}>
+                    Open Link
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+
+          {!paymentLink &&
+            order.paymentMethod === "PAYSTACK" &&
+            order.paymentStatus !== "PAID" && (
+              <Text style={styles.evidenceDescription}>
+                No reusable pending payment link was found for this order.
+                Generate a link from the payment screen again or verify the
+                existing payment attempt.
+              </Text>
+            )}
+
+          {order.fundsStatus && (
+            <DetailRow
+              label="Funds status"
+              value={formatEnumLabel(order.fundsStatus)}
+            />
+          )}
+
+          {order.fundsHoldReason && (
+            <DetailRow
+              label="Funds hold reason"
+              value={order.fundsHoldReason}
+              multiline
+            />
           )}
         </Section>
 
@@ -1116,7 +1299,7 @@ const OrderDetails = ({ orderId: receivedOrderId }) => {
                   />
 
                   <View style={styles.evidenceOverlay}>
-                    <Text style={styles.evidenceOverlayText}>⤢</Text>
+                    <Text style={styles.evidenceOverlayText}>⌕</Text>
                   </View>
 
                   <View style={styles.evidenceNumber}>
@@ -1175,7 +1358,7 @@ const OrderDetails = ({ orderId: receivedOrderId }) => {
             >
               <Text style={styles.primaryButtonText}>Track Order</Text>
 
-              <Text style={styles.primaryButtonArrow}>→</Text>
+              <Text style={styles.primaryButtonArrow}>↗</Text>
             </TouchableOpacity>
           )}
 
@@ -1227,7 +1410,7 @@ const OrderDetails = ({ orderId: receivedOrderId }) => {
               onPress={() => setShowViewer(false)}
               activeOpacity={0.8}
             >
-              <Text style={styles.closeText}>✕</Text>
+              <Text style={styles.closeText}>x</Text>
             </TouchableOpacity>
           </View>
 
@@ -1502,7 +1685,7 @@ const Section = ({ title, eyebrow, icon, open, toggle, children }) => {
         <View
           style={[styles.chevronContainer, open && styles.chevronContainerOpen]}
         >
-          <Text style={styles.chevron}>{open ? "−" : "+"}</Text>
+          <Text style={styles.chevron}>{open ? "-" : "+"}</Text>
         </View>
       </TouchableOpacity>
 

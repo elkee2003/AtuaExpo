@@ -225,6 +225,54 @@
       "providerPlugin": "awscloudformation",
       "service": "Lambda"
     },
+    "initializeAtuaPayment": {
+      "build": true,
+      "dependsOn": [
+        {
+          "attributes": [
+            "GraphQLAPIIdOutput",
+            "GraphQLAPIEndpointOutput",
+            "GraphQLAPIKeyOutput"
+          ],
+          "category": "api",
+          "resourceName": "Atua"
+        }
+      ],
+      "providerPlugin": "awscloudformation",
+      "service": "Lambda"
+    },
+    "initializeCourierDebtPayment": {
+      "build": true,
+      "dependsOn": [
+        {
+          "attributes": [
+            "GraphQLAPIIdOutput",
+            "GraphQLAPIEndpointOutput",
+            "GraphQLAPIKeyOutput"
+          ],
+          "category": "api",
+          "resourceName": "Atua"
+        }
+      ],
+      "providerPlugin": "awscloudformation",
+      "service": "Lambda"
+    },
+    "initializeDeliveryPayment": {
+      "build": true,
+      "dependsOn": [
+        {
+          "attributes": [
+            "GraphQLAPIIdOutput",
+            "GraphQLAPIEndpointOutput",
+            "GraphQLAPIKeyOutput"
+          ],
+          "category": "api",
+          "resourceName": "Atua"
+        }
+      ],
+      "providerPlugin": "awscloudformation",
+      "service": "Lambda"
+    },
     "paystackWebhook": {
       "build": true,
       "dependsOn": [
@@ -273,7 +321,39 @@
       "providerPlugin": "awscloudformation",
       "service": "Lambda"
     },
+    "reconcileCourierBalance": {
+      "build": true,
+      "dependsOn": [
+        {
+          "attributes": [
+            "GraphQLAPIIdOutput",
+            "GraphQLAPIEndpointOutput",
+            "GraphQLAPIKeyOutput"
+          ],
+          "category": "api",
+          "resourceName": "Atua"
+        }
+      ],
+      "providerPlugin": "awscloudformation",
+      "service": "Lambda"
+    },
     "reconcilePayouts": {
+      "build": true,
+      "dependsOn": [
+        {
+          "attributes": [
+            "GraphQLAPIIdOutput",
+            "GraphQLAPIEndpointOutput",
+            "GraphQLAPIKeyOutput"
+          ],
+          "category": "api",
+          "resourceName": "Atua"
+        }
+      ],
+      "providerPlugin": "awscloudformation",
+      "service": "Lambda"
+    },
+    "recordCashCollection": {
       "build": true,
       "dependsOn": [
         {
@@ -353,7 +433,55 @@
       "providerPlugin": "awscloudformation",
       "service": "Lambda"
     },
+    "selectDeliveryPaymentMethod": {
+      "build": true,
+      "dependsOn": [
+        {
+          "attributes": [
+            "GraphQLAPIIdOutput",
+            "GraphQLAPIEndpointOutput",
+            "GraphQLAPIKeyOutput"
+          ],
+          "category": "api",
+          "resourceName": "Atua"
+        }
+      ],
+      "providerPlugin": "awscloudformation",
+      "service": "Lambda"
+    },
+    "settleCourierBalance": {
+      "build": true,
+      "dependsOn": [
+        {
+          "attributes": [
+            "GraphQLAPIIdOutput",
+            "GraphQLAPIEndpointOutput",
+            "GraphQLAPIKeyOutput"
+          ],
+          "category": "api",
+          "resourceName": "Atua"
+        }
+      ],
+      "providerPlugin": "awscloudformation",
+      "service": "Lambda"
+    },
     "verifyAtuaPayment": {
+      "build": true,
+      "dependsOn": [
+        {
+          "attributes": [
+            "GraphQLAPIIdOutput",
+            "GraphQLAPIEndpointOutput",
+            "GraphQLAPIKeyOutput"
+          ],
+          "category": "api",
+          "resourceName": "Atua"
+        }
+      ],
+      "providerPlugin": "awscloudformation",
+      "service": "Lambda"
+    },
+    "verifyCourierDebtPayment": {
       "build": true,
       "dependsOn": [
         {
@@ -555,6 +683,78 @@
         }
       ]
     },
+    "AMPLIFY_function_initializeAtuaPayment_deploymentBucketName": {
+      "usedBy": [
+        {
+          "category": "function",
+          "resourceName": "initializeAtuaPayment"
+        }
+      ]
+    },
+    "AMPLIFY_function_initializeAtuaPayment_s3Key": {
+      "usedBy": [
+        {
+          "category": "function",
+          "resourceName": "initializeAtuaPayment"
+        }
+      ]
+    },
+    "AMPLIFY_function_initializeAtuaPayment_secretsPathAmplifyAppId": {
+      "usedBy": [
+        {
+          "category": "function",
+          "resourceName": "initializeAtuaPayment"
+        }
+      ]
+    },
+    "AMPLIFY_function_initializeCourierDebtPayment_deploymentBucketName": {
+      "usedBy": [
+        {
+          "category": "function",
+          "resourceName": "initializeCourierDebtPayment"
+        }
+      ]
+    },
+    "AMPLIFY_function_initializeCourierDebtPayment_s3Key": {
+      "usedBy": [
+        {
+          "category": "function",
+          "resourceName": "initializeCourierDebtPayment"
+        }
+      ]
+    },
+    "AMPLIFY_function_initializeCourierDebtPayment_secretsPathAmplifyAppId": {
+      "usedBy": [
+        {
+          "category": "function",
+          "resourceName": "initializeCourierDebtPayment"
+        }
+      ]
+    },
+    "AMPLIFY_function_initializeDeliveryPayment_deploymentBucketName": {
+      "usedBy": [
+        {
+          "category": "function",
+          "resourceName": "initializeDeliveryPayment"
+        }
+      ]
+    },
+    "AMPLIFY_function_initializeDeliveryPayment_s3Key": {
+      "usedBy": [
+        {
+          "category": "function",
+          "resourceName": "initializeDeliveryPayment"
+        }
+      ]
+    },
+    "AMPLIFY_function_initializeDeliveryPayment_secretsPathAmplifyAppId": {
+      "usedBy": [
+        {
+          "category": "function",
+          "resourceName": "initializeDeliveryPayment"
+        }
+      ]
+    },
     "AMPLIFY_function_paystackWebhook_deploymentBucketName": {
       "usedBy": [
         {
@@ -643,6 +843,30 @@
         }
       ]
     },
+    "AMPLIFY_function_reconcileCourierBalance_deploymentBucketName": {
+      "usedBy": [
+        {
+          "category": "function",
+          "resourceName": "reconcileCourierBalance"
+        }
+      ]
+    },
+    "AMPLIFY_function_reconcileCourierBalance_reconciliationCurrency": {
+      "usedBy": [
+        {
+          "category": "function",
+          "resourceName": "reconcileCourierBalance"
+        }
+      ]
+    },
+    "AMPLIFY_function_reconcileCourierBalance_s3Key": {
+      "usedBy": [
+        {
+          "category": "function",
+          "resourceName": "reconcileCourierBalance"
+        }
+      ]
+    },
     "AMPLIFY_function_reconcilePayouts_deploymentBucketName": {
       "usedBy": [
         {
@@ -664,6 +888,22 @@
         {
           "category": "function",
           "resourceName": "reconcilePayouts"
+        }
+      ]
+    },
+    "AMPLIFY_function_recordCashCollection_deploymentBucketName": {
+      "usedBy": [
+        {
+          "category": "function",
+          "resourceName": "recordCashCollection"
+        }
+      ]
+    },
+    "AMPLIFY_function_recordCashCollection_s3Key": {
+      "usedBy": [
+        {
+          "category": "function",
+          "resourceName": "recordCashCollection"
         }
       ]
     },
@@ -731,6 +971,38 @@
         }
       ]
     },
+    "AMPLIFY_function_selectDeliveryPaymentMethod_deploymentBucketName": {
+      "usedBy": [
+        {
+          "category": "function",
+          "resourceName": "selectDeliveryPaymentMethod"
+        }
+      ]
+    },
+    "AMPLIFY_function_selectDeliveryPaymentMethod_s3Key": {
+      "usedBy": [
+        {
+          "category": "function",
+          "resourceName": "selectDeliveryPaymentMethod"
+        }
+      ]
+    },
+    "AMPLIFY_function_settleCourierBalance_deploymentBucketName": {
+      "usedBy": [
+        {
+          "category": "function",
+          "resourceName": "settleCourierBalance"
+        }
+      ]
+    },
+    "AMPLIFY_function_settleCourierBalance_s3Key": {
+      "usedBy": [
+        {
+          "category": "function",
+          "resourceName": "settleCourierBalance"
+        }
+      ]
+    },
     "AMPLIFY_function_verifyAtuaPayment_deploymentBucketName": {
       "usedBy": [
         {
@@ -752,6 +1024,30 @@
         {
           "category": "function",
           "resourceName": "verifyAtuaPayment"
+        }
+      ]
+    },
+    "AMPLIFY_function_verifyCourierDebtPayment_deploymentBucketName": {
+      "usedBy": [
+        {
+          "category": "function",
+          "resourceName": "verifyCourierDebtPayment"
+        }
+      ]
+    },
+    "AMPLIFY_function_verifyCourierDebtPayment_s3Key": {
+      "usedBy": [
+        {
+          "category": "function",
+          "resourceName": "verifyCourierDebtPayment"
+        }
+      ]
+    },
+    "AMPLIFY_function_verifyCourierDebtPayment_secretsPathAmplifyAppId": {
+      "usedBy": [
+        {
+          "category": "function",
+          "resourceName": "verifyCourierDebtPayment"
         }
       ]
     }

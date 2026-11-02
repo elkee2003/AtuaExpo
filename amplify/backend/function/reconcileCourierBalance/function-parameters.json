@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "api": {
+      "Atua": [
+        "Query",
+        "Mutation"
+      ]
+    }
+  },
+  "lambdaLayers": [],
+  "environmentVariableList": [
+    {
+      "cloudFormationParameterName": "reconciliationCurrency",
+      "environmentVariableName": "RECONCILIATION_CURRENCY"
+    }
+  ]
+}

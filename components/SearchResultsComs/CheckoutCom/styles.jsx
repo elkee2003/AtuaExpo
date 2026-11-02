@@ -25,6 +25,57 @@ const styles = StyleSheet.create({
     paddingBottom: 120,
   },
 
+  paymentDescription: {
+    fontSize: 12,
+    color: "#6B7280",
+    lineHeight: 18,
+    marginTop: -2,
+    marginBottom: 12,
+  },
+
+  paymentOption: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 14,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    borderRadius: 14,
+    backgroundColor: "#FFFFFF",
+    marginBottom: 10,
+    gap: 12,
+  },
+
+  paymentOptionSelected: {
+    borderColor: "#111827",
+    backgroundColor: "#F3F4F6",
+  },
+
+  paymentOptionIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    backgroundColor: "#F3F4F6",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  paymentOptionContent: {
+    flex: 1,
+  },
+
+  paymentOptionTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#111827",
+    marginBottom: 4,
+  },
+
+  paymentOptionDescription: {
+    fontSize: 12,
+    color: "#6B7280",
+    lineHeight: 17,
+  },
+
   card: {
     backgroundColor: "#FFFFFF",
     borderRadius: 20,
@@ -106,6 +157,58 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: "800",
     color: "#111827",
+  },
+
+  // Payment Responsibility
+  paymentResponsibilityCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 20,
+    padding: 20,
+    marginBottom: 18,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    shadowColor: "#000",
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+
+  paymentResponsibilityRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    marginBottom: 12,
+  },
+
+  paymentResponsibilityIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    backgroundColor: "#F3F4F6",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  paymentResponsibilityContent: {
+    flex: 1,
+  },
+
+  paymentResponsibilityLabel: {
+    fontSize: 12,
+    color: "#6B7280",
+    marginBottom: 4,
+  },
+
+  paymentResponsibilityValue: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#111827",
+  },
+
+  paymentResponsibilityDescription: {
+    fontSize: 13,
+    color: "#6B7280",
+    lineHeight: 19,
   },
 
   bottomContainer: {

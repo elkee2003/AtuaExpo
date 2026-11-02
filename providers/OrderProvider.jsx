@@ -4,6 +4,10 @@ const OrderContext = createContext({});
 
 const OrderProvider = ({ children }) => {
   // BASIC INFO
+  // PAYMENT RESPONSIBILITY
+  const [paymentResponsibility, setPaymentResponsibility] = useState("SENDER");
+  const [paymentTiming, setPaymentTiming] = useState("BEFORE_PICKUP");
+  const [paymentMethod, setPaymentMethod] = useState("PAYSTACK");
   const [senderName, setSenderName] = useState("");
   const [senderNumber, setSenderNumber] = useState("");
   const [senderNumber2, setSenderNumber2] = useState("");
@@ -126,6 +130,9 @@ const OrderProvider = ({ children }) => {
   // Function to reset all fields:
   const resetAllOrderFields = () => {
     // BASIC INFO
+    setPaymentResponsibility("SENDER");
+    setPaymentTiming("BEFORE_PICKUP");
+    setPaymentMethod("PAYSTACK");
     setSenderName("");
     setSenderNumber("");
     setSenderNumber2("");
@@ -202,6 +209,12 @@ const OrderProvider = ({ children }) => {
   return (
     <OrderContext.Provider
       value={{
+        paymentResponsibility,
+        setPaymentResponsibility,
+        paymentTiming,
+        setPaymentTiming,
+        paymentMethod,
+        setPaymentMethod,
         senderName,
         senderNumber,
         senderNumber2,

@@ -96,6 +96,25 @@ export enum CourierAvailabilityStatus {
   SUSPENDED = "SUSPENDED"
 }
 
+export enum OrderBookingSource {
+  APP = "APP",
+  WEBSITE = "WEBSITE",
+  SUPPORT = "SUPPORT"
+}
+
+export enum OrderPaymentResponsibility {
+  SENDER = "SENDER",
+  RECEIVER = "RECEIVER"
+}
+
+export enum ReceiverConfirmationStatus {
+  PENDING = "PENDING",
+  CONFIRMED = "CONFIRMED",
+  DECLINED = "DECLINED",
+  UNREACHABLE = "UNREACHABLE",
+  EXPIRED = "EXPIRED"
+}
+
 export enum PaystackEnvironment {
   TEST = "TEST",
   LIVE = "LIVE"
@@ -251,6 +270,39 @@ export enum CancellationStatus {
   REJECTED = "REJECTED"
 }
 
+export enum OrderPaymentTiming {
+  BEFORE_PICKUP = "BEFORE_PICKUP",
+  AT_PICKUP = "AT_PICKUP",
+  ON_DELIVERY = "ON_DELIVERY"
+}
+
+export enum OrderPaymentMethod {
+  PAYSTACK = "PAYSTACK",
+  CASH = "CASH"
+}
+
+export enum CourierReconciliationStatus {
+  PENDING = "PENDING",
+  CALCULATED = "CALCULATED",
+  APPROVED = "APPROVED",
+  SETTLED = "SETTLED",
+  REVERSED = "REVERSED"
+}
+
+export enum CourierReconciliationDirection {
+  ATUA_OWES_COURIER = "ATUA_OWES_COURIER",
+  COURIER_OWES_ATUA = "COURIER_OWES_ATUA",
+  BALANCED = "BALANCED"
+}
+
+export enum CashCollectionStatus {
+  NOT_REQUIRED = "NOT_REQUIRED",
+  PENDING = "PENDING",
+  CONFIRMED = "CONFIRMED",
+  DISPUTED = "DISPUTED",
+  REVERSED = "REVERSED"
+}
+
 export enum OrderStatus {
   BIDDING = "BIDDING",
   AWAITING_PAYMENT = "AWAITING_PAYMENT",
@@ -355,6 +407,158 @@ type LazyDeleteSavedPaymentMethodResult = {
 export declare type DeleteSavedPaymentMethodResult = LazyLoading extends LazyLoadingDisabled ? EagerDeleteSavedPaymentMethodResult : LazyDeleteSavedPaymentMethodResult
 
 export declare const DeleteSavedPaymentMethodResult: (new (init: ModelInit<DeleteSavedPaymentMethodResult>) => DeleteSavedPaymentMethodResult)
+
+type EagerInitializeAtuaPaymentResult = {
+  readonly success: boolean;
+  readonly message: string;
+  readonly orderId?: string | null;
+  readonly paymentId?: string | null;
+  readonly reference?: string | null;
+  readonly checkoutUrl?: string | null;
+  readonly amount?: number | null;
+  readonly currency?: string | null;
+  readonly payerEmail?: string | null;
+  readonly paymentResponsibility?: OrderPaymentResponsibility | keyof typeof OrderPaymentResponsibility | null;
+}
+
+type LazyInitializeAtuaPaymentResult = {
+  readonly success: boolean;
+  readonly message: string;
+  readonly orderId?: string | null;
+  readonly paymentId?: string | null;
+  readonly reference?: string | null;
+  readonly checkoutUrl?: string | null;
+  readonly amount?: number | null;
+  readonly currency?: string | null;
+  readonly payerEmail?: string | null;
+  readonly paymentResponsibility?: OrderPaymentResponsibility | keyof typeof OrderPaymentResponsibility | null;
+}
+
+export declare type InitializeAtuaPaymentResult = LazyLoading extends LazyLoadingDisabled ? EagerInitializeAtuaPaymentResult : LazyInitializeAtuaPaymentResult
+
+export declare const InitializeAtuaPaymentResult: (new (init: ModelInit<InitializeAtuaPaymentResult>) => InitializeAtuaPaymentResult)
+
+type EagerInitializeDeliveryPaymentResult = {
+  readonly success: boolean;
+  readonly message: string;
+  readonly orderId?: string | null;
+  readonly paymentId?: string | null;
+  readonly reference?: string | null;
+  readonly checkoutUrl?: string | null;
+  readonly amount?: number | null;
+}
+
+type LazyInitializeDeliveryPaymentResult = {
+  readonly success: boolean;
+  readonly message: string;
+  readonly orderId?: string | null;
+  readonly paymentId?: string | null;
+  readonly reference?: string | null;
+  readonly checkoutUrl?: string | null;
+  readonly amount?: number | null;
+}
+
+export declare type InitializeDeliveryPaymentResult = LazyLoading extends LazyLoadingDisabled ? EagerInitializeDeliveryPaymentResult : LazyInitializeDeliveryPaymentResult
+
+export declare const InitializeDeliveryPaymentResult: (new (init: ModelInit<InitializeDeliveryPaymentResult>) => InitializeDeliveryPaymentResult)
+
+type EagerRecordCashCollectionResult = {
+  readonly success: boolean;
+  readonly message: string;
+  readonly orderId?: string | null;
+  readonly cashCollectionID?: string | null;
+  readonly amount?: number | null;
+  readonly confirmedAt?: string | null;
+}
+
+type LazyRecordCashCollectionResult = {
+  readonly success: boolean;
+  readonly message: string;
+  readonly orderId?: string | null;
+  readonly cashCollectionID?: string | null;
+  readonly amount?: number | null;
+  readonly confirmedAt?: string | null;
+}
+
+export declare type RecordCashCollectionResult = LazyLoading extends LazyLoadingDisabled ? EagerRecordCashCollectionResult : LazyRecordCashCollectionResult
+
+export declare const RecordCashCollectionResult: (new (init: ModelInit<RecordCashCollectionResult>) => RecordCashCollectionResult)
+
+type EagerSelectDeliveryPaymentMethodResult = {
+  readonly success: boolean;
+  readonly message: string;
+  readonly orderId?: string | null;
+  readonly paymentMethod?: OrderPaymentMethod | keyof typeof OrderPaymentMethod | null;
+}
+
+type LazySelectDeliveryPaymentMethodResult = {
+  readonly success: boolean;
+  readonly message: string;
+  readonly orderId?: string | null;
+  readonly paymentMethod?: OrderPaymentMethod | keyof typeof OrderPaymentMethod | null;
+}
+
+export declare type SelectDeliveryPaymentMethodResult = LazyLoading extends LazyLoadingDisabled ? EagerSelectDeliveryPaymentMethodResult : LazySelectDeliveryPaymentMethodResult
+
+export declare const SelectDeliveryPaymentMethodResult: (new (init: ModelInit<SelectDeliveryPaymentMethodResult>) => SelectDeliveryPaymentMethodResult)
+
+type EagerInitializeCourierDebtPaymentResult = {
+  readonly success: boolean;
+  readonly message: string;
+  readonly courierID?: string | null;
+  readonly walletID?: string | null;
+  readonly debtPaymentID?: string | null;
+  readonly reference?: string | null;
+  readonly checkoutUrl?: string | null;
+  readonly amount?: number | null;
+  readonly currency?: string | null;
+}
+
+type LazyInitializeCourierDebtPaymentResult = {
+  readonly success: boolean;
+  readonly message: string;
+  readonly courierID?: string | null;
+  readonly walletID?: string | null;
+  readonly debtPaymentID?: string | null;
+  readonly reference?: string | null;
+  readonly checkoutUrl?: string | null;
+  readonly amount?: number | null;
+  readonly currency?: string | null;
+}
+
+export declare type InitializeCourierDebtPaymentResult = LazyLoading extends LazyLoadingDisabled ? EagerInitializeCourierDebtPaymentResult : LazyInitializeCourierDebtPaymentResult
+
+export declare const InitializeCourierDebtPaymentResult: (new (init: ModelInit<InitializeCourierDebtPaymentResult>) => InitializeCourierDebtPaymentResult)
+
+type EagerVerifyCourierDebtPaymentResult = {
+  readonly success: boolean;
+  readonly message: string;
+  readonly verified?: boolean | null;
+  readonly alreadyPaid?: boolean | null;
+  readonly reference?: string | null;
+  readonly amount?: number | null;
+  readonly currency?: string | null;
+  readonly previousDebt?: number | null;
+  readonly remainingDebt?: number | null;
+  readonly paidAt?: string | null;
+}
+
+type LazyVerifyCourierDebtPaymentResult = {
+  readonly success: boolean;
+  readonly message: string;
+  readonly verified?: boolean | null;
+  readonly alreadyPaid?: boolean | null;
+  readonly reference?: string | null;
+  readonly amount?: number | null;
+  readonly currency?: string | null;
+  readonly previousDebt?: number | null;
+  readonly remainingDebt?: number | null;
+  readonly paidAt?: string | null;
+}
+
+export declare type VerifyCourierDebtPaymentResult = LazyLoading extends LazyLoadingDisabled ? EagerVerifyCourierDebtPaymentResult : LazyVerifyCourierDebtPaymentResult
+
+export declare const VerifyCourierDebtPaymentResult: (new (init: ModelInit<VerifyCourierDebtPaymentResult>) => VerifyCourierDebtPaymentResult)
 
 type EagerProcessPayoutsResponse = {
   readonly statusCode: number;
@@ -1007,6 +1211,7 @@ type EagerWallet = {
   readonly availableBalance?: number | null;
   readonly pendingBalance?: number | null;
   readonly lifetimeEarnings?: number | null;
+  readonly outstandingDebt?: number | null;
   readonly transactions?: (Transaction | null)[] | null;
   readonly createdAt?: string | null;
   readonly updatedAt?: string | null;
@@ -1023,6 +1228,7 @@ type LazyWallet = {
   readonly availableBalance?: number | null;
   readonly pendingBalance?: number | null;
   readonly lifetimeEarnings?: number | null;
+  readonly outstandingDebt?: number | null;
   readonly transactions: AsyncCollection<Transaction>;
   readonly createdAt?: string | null;
   readonly updatedAt?: string | null;
@@ -1041,7 +1247,11 @@ type EagerPayment = {
   };
   readonly id: string;
   readonly orderID: string;
-  readonly userID: string;
+  readonly userID?: string | null;
+  readonly payerPhone?: string | null;
+  readonly payerEmail?: string | null;
+  readonly paidAt?: string | null;
+  readonly checkoutUrl?: string | null;
   readonly amount: number;
   readonly currency?: string | null;
   readonly status?: PaymentStatus | keyof typeof PaymentStatus | null;
@@ -1061,7 +1271,11 @@ type LazyPayment = {
   };
   readonly id: string;
   readonly orderID: string;
-  readonly userID: string;
+  readonly userID?: string | null;
+  readonly payerPhone?: string | null;
+  readonly payerEmail?: string | null;
+  readonly paidAt?: string | null;
+  readonly checkoutUrl?: string | null;
   readonly amount: number;
   readonly currency?: string | null;
   readonly status?: PaymentStatus | keyof typeof PaymentStatus | null;
@@ -1188,6 +1402,156 @@ export declare const OrderCancellation: (new (init: ModelInit<OrderCancellation>
   copyOf(source: OrderCancellation, mutator: (draft: MutableModel<OrderCancellation>) => MutableModel<OrderCancellation> | void): OrderCancellation;
 }
 
+type EagerCourierDebtPayment = {
+  readonly [__modelMeta__]: {
+    identifier: ManagedIdentifier<CourierDebtPayment, 'id'>;
+  };
+  readonly id: string;
+  readonly courierID: string;
+  readonly walletID: string;
+  readonly amount: number;
+  readonly currency: string;
+  readonly provider: string;
+  readonly reference: string;
+  readonly status: string;
+  readonly checkoutUrl?: string | null;
+  readonly paidAt?: string | null;
+  readonly failureReason?: string | null;
+  readonly createdAt?: string | null;
+  readonly updatedAt?: string | null;
+}
+
+type LazyCourierDebtPayment = {
+  readonly [__modelMeta__]: {
+    identifier: ManagedIdentifier<CourierDebtPayment, 'id'>;
+  };
+  readonly id: string;
+  readonly courierID: string;
+  readonly walletID: string;
+  readonly amount: number;
+  readonly currency: string;
+  readonly provider: string;
+  readonly reference: string;
+  readonly status: string;
+  readonly checkoutUrl?: string | null;
+  readonly paidAt?: string | null;
+  readonly failureReason?: string | null;
+  readonly createdAt?: string | null;
+  readonly updatedAt?: string | null;
+}
+
+export declare type CourierDebtPayment = LazyLoading extends LazyLoadingDisabled ? EagerCourierDebtPayment : LazyCourierDebtPayment
+
+export declare const CourierDebtPayment: (new (init: ModelInit<CourierDebtPayment>) => CourierDebtPayment) & {
+  copyOf(source: CourierDebtPayment, mutator: (draft: MutableModel<CourierDebtPayment>) => MutableModel<CourierDebtPayment> | void): CourierDebtPayment;
+}
+
+type EagerCourierReconciliation = {
+  readonly [__modelMeta__]: {
+    identifier: ManagedIdentifier<CourierReconciliation, 'id'>;
+  };
+  readonly id: string;
+  readonly courierID: string;
+  readonly courier?: Courier | null;
+  readonly reconciliationReference: string;
+  readonly periodStart: string;
+  readonly periodEnd: string;
+  readonly onlineCourierEarnings: number;
+  readonly cashCollectedAmount: number;
+  readonly amountCourierOwesAtua: number;
+  readonly amountAtuaOwesCourier: number;
+  readonly previousSettlements: number;
+  readonly adjustments: number;
+  readonly netAmount: number;
+  readonly direction: CourierReconciliationDirection | keyof typeof CourierReconciliationDirection;
+  readonly status: CourierReconciliationStatus | keyof typeof CourierReconciliationStatus;
+  readonly walletDebtRecovered?: number | null;
+  readonly remainingDebt?: number | null;
+  readonly calculatedAt: string;
+  readonly approvedAt?: string | null;
+  readonly settledAt?: string | null;
+  readonly settlementReference?: string | null;
+  readonly notes?: string | null;
+  readonly createdAt?: string | null;
+  readonly updatedAt?: string | null;
+}
+
+type LazyCourierReconciliation = {
+  readonly [__modelMeta__]: {
+    identifier: ManagedIdentifier<CourierReconciliation, 'id'>;
+  };
+  readonly id: string;
+  readonly courierID: string;
+  readonly courier: AsyncItem<Courier | undefined>;
+  readonly reconciliationReference: string;
+  readonly periodStart: string;
+  readonly periodEnd: string;
+  readonly onlineCourierEarnings: number;
+  readonly cashCollectedAmount: number;
+  readonly amountCourierOwesAtua: number;
+  readonly amountAtuaOwesCourier: number;
+  readonly previousSettlements: number;
+  readonly adjustments: number;
+  readonly netAmount: number;
+  readonly direction: CourierReconciliationDirection | keyof typeof CourierReconciliationDirection;
+  readonly status: CourierReconciliationStatus | keyof typeof CourierReconciliationStatus;
+  readonly walletDebtRecovered?: number | null;
+  readonly remainingDebt?: number | null;
+  readonly calculatedAt: string;
+  readonly approvedAt?: string | null;
+  readonly settledAt?: string | null;
+  readonly settlementReference?: string | null;
+  readonly notes?: string | null;
+  readonly createdAt?: string | null;
+  readonly updatedAt?: string | null;
+}
+
+export declare type CourierReconciliation = LazyLoading extends LazyLoadingDisabled ? EagerCourierReconciliation : LazyCourierReconciliation
+
+export declare const CourierReconciliation: (new (init: ModelInit<CourierReconciliation>) => CourierReconciliation) & {
+  copyOf(source: CourierReconciliation, mutator: (draft: MutableModel<CourierReconciliation>) => MutableModel<CourierReconciliation> | void): CourierReconciliation;
+}
+
+type EagerCashCollection = {
+  readonly [__modelMeta__]: {
+    identifier: ManagedIdentifier<CashCollection, 'id'>;
+  };
+  readonly id: string;
+  readonly orderID: string;
+  readonly courierID: string;
+  readonly amount: number;
+  readonly status: CashCollectionStatus | keyof typeof CashCollectionStatus;
+  readonly idempotencyKey: string;
+  readonly confirmedAt: string;
+  readonly reconciledAt?: string | null;
+  readonly reconciliationReference?: string | null;
+  readonly createdAt?: string | null;
+  readonly updatedAt?: string | null;
+}
+
+type LazyCashCollection = {
+  readonly [__modelMeta__]: {
+    identifier: ManagedIdentifier<CashCollection, 'id'>;
+  };
+  readonly id: string;
+  readonly orderID: string;
+  readonly courierID: string;
+  readonly amount: number;
+  readonly status: CashCollectionStatus | keyof typeof CashCollectionStatus;
+  readonly idempotencyKey: string;
+  readonly confirmedAt: string;
+  readonly reconciledAt?: string | null;
+  readonly reconciliationReference?: string | null;
+  readonly createdAt?: string | null;
+  readonly updatedAt?: string | null;
+}
+
+export declare type CashCollection = LazyLoading extends LazyLoadingDisabled ? EagerCashCollection : LazyCashCollection
+
+export declare const CashCollection: (new (init: ModelInit<CashCollection>) => CashCollection) & {
+  copyOf(source: CashCollection, mutator: (draft: MutableModel<CashCollection>) => MutableModel<CashCollection> | void): CashCollection;
+}
+
 type EagerOrder = {
   readonly [__modelMeta__]: {
     identifier: ManagedIdentifier<Order, 'id'>;
@@ -1214,6 +1578,10 @@ type EagerOrder = {
   readonly transportationType?: string | null;
   readonly vehicleClass?: string | null;
   readonly status?: OrderStatus | keyof typeof OrderStatus | null;
+  readonly supportCreatedByID?: string | null;
+  readonly receiverConfirmationStatus?: ReceiverConfirmationStatus | keyof typeof ReceiverConfirmationStatus | null;
+  readonly receiverConfirmedAt?: string | null;
+  readonly receiverPaymentExpiresAt?: string | null;
   readonly cancellationStatus?: CancellationStatus | keyof typeof CancellationStatus | null;
   readonly refundStatus?: RefundStatus | keyof typeof RefundStatus | null;
   readonly cancellationFee?: number | null;
@@ -1298,6 +1666,15 @@ type EagerOrder = {
   readonly paymentStatus?: OrderPaymentStatus | keyof typeof OrderPaymentStatus | null;
   readonly paymentID?: string | null;
   readonly paymentReference?: string | null;
+  readonly bookingSource?: OrderBookingSource | keyof typeof OrderBookingSource | null;
+  readonly paymentResponsibility?: OrderPaymentResponsibility | keyof typeof OrderPaymentResponsibility | null;
+  readonly paymentTiming?: OrderPaymentTiming | keyof typeof OrderPaymentTiming | null;
+  readonly paymentMethod?: OrderPaymentMethod | keyof typeof OrderPaymentMethod | null;
+  readonly cashCollectionStatus?: CashCollectionStatus | keyof typeof CashCollectionStatus | null;
+  readonly cashCollectedByCourierId?: string | null;
+  readonly cashCollectedAmount?: number | null;
+  readonly cashCollectedAt?: string | null;
+  readonly cashCollectionID?: string | null;
   readonly payoutStatus?: OrderPayoutStatus | keyof typeof OrderPayoutStatus | null;
   readonly fundsStatus?: FundsStatus | keyof typeof FundsStatus | null;
   readonly earningsAllocationStatus?: EarningsAllocationStatus | keyof typeof EarningsAllocationStatus | null;
@@ -1312,6 +1689,7 @@ type EagerOrder = {
   readonly fundsReleasedAt?: string | null;
   readonly fundsReleaseType?: string | null;
   readonly orderEnvironment?: OrderEnvironment | keyof typeof OrderEnvironment | null;
+  readonly isMarketplaceEligible?: boolean | null;
   readonly assignedCourierId?: string | null;
   readonly assignmentExpiresAt?: string | null;
   readonly assignmentAttempts?: number | null;
@@ -1361,6 +1739,10 @@ type LazyOrder = {
   readonly transportationType?: string | null;
   readonly vehicleClass?: string | null;
   readonly status?: OrderStatus | keyof typeof OrderStatus | null;
+  readonly supportCreatedByID?: string | null;
+  readonly receiverConfirmationStatus?: ReceiverConfirmationStatus | keyof typeof ReceiverConfirmationStatus | null;
+  readonly receiverConfirmedAt?: string | null;
+  readonly receiverPaymentExpiresAt?: string | null;
   readonly cancellationStatus?: CancellationStatus | keyof typeof CancellationStatus | null;
   readonly refundStatus?: RefundStatus | keyof typeof RefundStatus | null;
   readonly cancellationFee?: number | null;
@@ -1445,6 +1827,15 @@ type LazyOrder = {
   readonly paymentStatus?: OrderPaymentStatus | keyof typeof OrderPaymentStatus | null;
   readonly paymentID?: string | null;
   readonly paymentReference?: string | null;
+  readonly bookingSource?: OrderBookingSource | keyof typeof OrderBookingSource | null;
+  readonly paymentResponsibility?: OrderPaymentResponsibility | keyof typeof OrderPaymentResponsibility | null;
+  readonly paymentTiming?: OrderPaymentTiming | keyof typeof OrderPaymentTiming | null;
+  readonly paymentMethod?: OrderPaymentMethod | keyof typeof OrderPaymentMethod | null;
+  readonly cashCollectionStatus?: CashCollectionStatus | keyof typeof CashCollectionStatus | null;
+  readonly cashCollectedByCourierId?: string | null;
+  readonly cashCollectedAmount?: number | null;
+  readonly cashCollectedAt?: string | null;
+  readonly cashCollectionID?: string | null;
   readonly payoutStatus?: OrderPayoutStatus | keyof typeof OrderPayoutStatus | null;
   readonly fundsStatus?: FundsStatus | keyof typeof FundsStatus | null;
   readonly earningsAllocationStatus?: EarningsAllocationStatus | keyof typeof EarningsAllocationStatus | null;
@@ -1459,6 +1850,7 @@ type LazyOrder = {
   readonly fundsReleasedAt?: string | null;
   readonly fundsReleaseType?: string | null;
   readonly orderEnvironment?: OrderEnvironment | keyof typeof OrderEnvironment | null;
+  readonly isMarketplaceEligible?: boolean | null;
   readonly assignedCourierId?: string | null;
   readonly assignmentExpiresAt?: string | null;
   readonly assignmentAttempts?: number | null;
@@ -1746,6 +2138,7 @@ type EagerCourier = {
   readonly totalReports?: number | null;
   readonly availabilityStatus?: CourierAvailabilityStatus | keyof typeof CourierAvailabilityStatus | null;
   readonly lastLocationUpdateAt?: string | null;
+  readonly reconciliations?: (CourierReconciliation | null)[] | null;
   readonly fleetMemberships?: (FleetMember | null)[] | null;
   readonly fleetVehicles?: (FleetVehicle | null)[] | null;
   readonly fleetOrders?: (FleetOrder | null)[] | null;
@@ -1817,6 +2210,7 @@ type LazyCourier = {
   readonly totalReports?: number | null;
   readonly availabilityStatus?: CourierAvailabilityStatus | keyof typeof CourierAvailabilityStatus | null;
   readonly lastLocationUpdateAt?: string | null;
+  readonly reconciliations: AsyncCollection<CourierReconciliation>;
   readonly fleetMemberships: AsyncCollection<FleetMember>;
   readonly fleetVehicles: AsyncCollection<FleetVehicle>;
   readonly fleetOrders: AsyncCollection<FleetOrder>;

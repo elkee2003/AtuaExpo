@@ -391,6 +391,64 @@ export default StyleSheet.create({
   },
 
   /* =========================================================
+     PAYMENT RESPONSIBILITY
+  ========================================================= */
+
+  payerBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-start",
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 10,
+    borderWidth: 1,
+    gap: 6,
+  },
+
+  payerBadgeSender: {
+    backgroundColor: "#F0FDF4",
+    borderColor: "#BBF7D0",
+  },
+
+  payerBadgeReceiver: {
+    backgroundColor: "#FFFBEB",
+    borderColor: "#FDE68A",
+  },
+
+  payerBadgeText: {
+    fontSize: 10,
+    fontWeight: "800",
+  },
+
+  payerBadgeTextSender: {
+    color: "#166534",
+  },
+
+  payerBadgeTextReceiver: {
+    color: "#92400E",
+  },
+
+  payerNotice: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+    marginTop: 12,
+    padding: 11,
+    backgroundColor: "#FFFBEB",
+    borderWidth: 1,
+    borderColor: "#FDE68A",
+    borderRadius: 12,
+  },
+
+  payerNoticeText: {
+    flex: 1,
+    fontSize: 10,
+    lineHeight: 16,
+    fontWeight: "500",
+    color: "#92400E",
+  },
+
+  /* =========================================================
      PRICE CARD
   ========================================================= */
 

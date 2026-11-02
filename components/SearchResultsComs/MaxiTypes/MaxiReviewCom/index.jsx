@@ -27,6 +27,10 @@ export default function MaxiReviewScreen() {
   const [selectedIndex, setSelectedIndex] = useState(0);
 
   const {
+    paymentResponsibility,
+    paymentTiming,
+    paymentMethod,
+
     senderName,
     senderNumber,
     senderNumber2,
@@ -537,6 +541,121 @@ export default function MaxiReviewScreen() {
         </View>
 
         {/* =========================================================
+            PAYMENT ARRANGEMENT
+        ========================================================= */}
+        <View style={styles.card}>
+          <View style={styles.cardHeader}>
+            <View style={styles.sectionIcon}>
+              <Ionicons name="wallet-outline" size={17} color="#F97316" />
+            </View>
+
+            <View>
+              <Text style={styles.sectionTitle}>Payment Arrangement</Text>
+              <Text style={styles.sectionSubtitle}>
+                Who pays, how they pay, and when payment is due
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.detailRows}>
+            {/* Payer */}
+            <View style={styles.detailRow}>
+              <Text style={styles.fieldLabel}>PAYER</Text>
+
+              <View
+                style={[
+                  styles.payerBadge,
+                  paymentResponsibility === "RECEIVER"
+                    ? styles.payerBadgeReceiver
+                    : styles.payerBadgeSender,
+                ]}
+              >
+                <Ionicons
+                  name={
+                    paymentResponsibility === "RECEIVER"
+                      ? "person-outline"
+                      : "person-circle-outline"
+                  }
+                  size={14}
+                  color={
+                    paymentResponsibility === "RECEIVER" ? "#92400E" : "#166534"
+                  }
+                />
+
+                <Text
+                  style={[
+                    styles.payerBadgeText,
+                    paymentResponsibility === "RECEIVER"
+                      ? styles.payerBadgeTextReceiver
+                      : styles.payerBadgeTextSender,
+                  ]}
+                >
+                  {paymentResponsibility === "RECEIVER"
+                    ? "Receiver pays"
+                    : "Sender pays"}
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.rowDivider} />
+
+            {/* Payment method */}
+            <View style={styles.detailRow}>
+              <Text style={styles.fieldLabel}>METHOD</Text>
+              <Text style={styles.fieldValue}>
+                {paymentMethod === "PAYSTACK"
+                  ? "Electronic payment (Paystack)"
+                  : paymentMethod === "CASH"
+                    ? "Cash"
+                    : "Not selected"}
+              </Text>
+            </View>
+
+            <View style={styles.rowDivider} />
+
+            {/* Payment timing */}
+            <View style={styles.detailRow}>
+              <Text style={styles.fieldLabel}>WHEN TO PAY</Text>
+              <Text style={styles.fieldValue}>
+                {paymentTiming === "BEFORE_PICKUP"
+                  ? "Before pickup"
+                  : paymentTiming === "AT_PICKUP"
+                    ? "At pickup"
+                    : paymentTiming === "ON_DELIVERY"
+                      ? "On delivery"
+                      : "Not selected"}
+              </Text>
+            </View>
+          </View>
+
+          {paymentResponsibility === "RECEIVER" && (
+            <View style={styles.payerNotice}>
+              <Ionicons
+                name="information-circle-outline"
+                size={16}
+                color="#92400E"
+              />
+
+              <Text style={styles.payerNoticeText}>
+                {paymentMethod === "PAYSTACK" &&
+                paymentTiming === "BEFORE_PICKUP"
+                  ? "The receiver must complete electronic payment before pickup. Ensure their phone number is correct."
+                  : paymentMethod === "PAYSTACK" &&
+                      paymentTiming === "ON_DELIVERY"
+                    ? "The receiver is responsible for electronic payment on delivery. Payment must be verified before the order is treated as paid."
+                    : paymentMethod === "CASH" &&
+                        paymentTiming === "ON_DELIVERY"
+                      ? "The receiver is expected to pay cash on delivery. The payment must be recorded separately from electronic payments."
+                      : paymentMethod === null &&
+                          paymentTiming === "ON_DELIVERY"
+                        ? "The receiver will choose whether to pay by cash or electronic payment on delivery."
+                        : "The receiver is responsible for the delivery payment. Confirm the selected timing and method before continuing."}
+              </Text>
+            </View>
+          )}
+        </View>
+
+        {/* =========================================================
             PRICE / OFFER
         ========================================================= */}
         <View style={styles.priceCard}>
@@ -592,7 +711,9 @@ export default function MaxiReviewScreen() {
                 style={styles.offerInput}
                 keyboardType="numeric"
                 value={initialOfferPrice?.toString()}
-                onChangeText={(value) => setInitialOfferPrice(Number(value))}
+                onChangeText={(value) =>
+                  setInitialOfferPrice(value === "" ? 0 : Number(value))
+                }
               />
             </View>
 

@@ -1,0 +1,13 @@
+{
+  "name": "reconcilecourierbalance",
+  "version": "2.0.0",
+  "description": "Reconcile outstanding courier earnings and cash collections",
+  "main": "index.js",
+  "license": "Apache-2.0",
+  "dependencies": {
+    "aws4": "^1.13.2"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.92"
+  }
+}

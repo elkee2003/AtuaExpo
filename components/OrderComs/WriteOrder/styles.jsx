@@ -112,6 +112,95 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "600",
   },
+
+  paymentDescription: {
+    fontSize: 13,
+    color: "#6B7280",
+    lineHeight: 19,
+    marginBottom: 14,
+  },
+
+  paymentSubheading: {
+    marginTop: 22,
+    marginBottom: 12,
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#111827",
+  },
+
+  paymentOptionIconSelected: {
+    backgroundColor: "#E5E7EB",
+  },
+
+  paymentOption: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 10,
+  },
+
+  paymentOptionSelected: {
+    borderColor: "#111827",
+    backgroundColor: "#F3F4F6",
+  },
+
+  paymentOptionIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: "#F3F4F6",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 12,
+  },
+
+  paymentOptionContent: {
+    flex: 1,
+  },
+
+  paymentOptionTitle: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#111827",
+  },
+
+  paymentOptionDescription: {
+    fontSize: 12,
+    color: "#6B7280",
+    lineHeight: 17,
+    marginTop: 4,
+    flexShrink: 1,
+  },
+
+  paymentNotice: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+    padding: 14,
+    marginTop: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#FDE68A",
+    backgroundColor: "#FFFBEB",
+  },
+
+  paymentNoticeTitle: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#92400E",
+    marginBottom: 6,
+  },
+
+  paymentNoticeText: {
+    fontSize: 12,
+    color: "#78350F",
+    lineHeight: 18,
+    marginBottom: 6,
+  },
 });
 
 export default styles;

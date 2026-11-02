@@ -94,6 +94,14 @@ const OrderHistoryList = ({ order, refreshOrders }) => {
   const isAwaitingPayment =
     isMicroOrMoto && order?.status === "AWAITING_PAYMENT";
 
+  // Only show the Pay button when the sender is responsible.
+  // Keep legacy orders without paymentResponsibility treated as
+  // sender-pay orders so existing orders do not lose their Pay button.
+  const isSenderResponsible =
+    String(order?.paymentResponsibility || "SENDER").toUpperCase() === "SENDER";
+
+  const canSenderPay = isAwaitingPayment && isSenderResponsible;
+
   // ==========================================================
   // DELETE ELIGIBILITY
   // ==========================================================
@@ -443,11 +451,16 @@ const OrderHistoryList = ({ order, refreshOrders }) => {
 
           {isAwaitingPayment && (
             <View style={styles.paymentNotice}>
-              <Text style={styles.paymentNoticeTitle}>Payment Required</Text>
+              <Text style={styles.paymentNoticeTitle}>
+                {isSenderResponsible
+                  ? "Payment Required"
+                  : "Awaiting Receiver Payment"}
+              </Text>
 
               <Text style={styles.paymentNoticeText}>
-                This order has not been paid for yet. Complete payment to
-                continue with your delivery.
+                {isSenderResponsible
+                  ? "This order has not been paid for yet. Complete payment to continue with your delivery."
+                  : "The receiver is responsible for paying for this delivery. You do not need to make this payment."}
               </Text>
             </View>
           )}
@@ -491,7 +504,7 @@ const OrderHistoryList = ({ order, refreshOrders }) => {
               when status is AWAITING_PAYMENT.
           ================================================= */}
 
-          {isAwaitingPayment && (
+          {canSenderPay && (
             <TouchableOpacity
               style={styles.payButton}
               disabled={actionLoading}

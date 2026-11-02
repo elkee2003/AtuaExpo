@@ -1,6 +1,6 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { router } from "expo-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   KeyboardAvoidingView,
   Platform,
@@ -17,6 +17,13 @@ import styles from "./styles";
 
 const WriteOrder = () => {
   const {
+    paymentResponsibility,
+    setPaymentResponsibility,
+    paymentTiming,
+    setPaymentTiming,
+    paymentMethod,
+    setPaymentMethod,
+
     senderName,
     senderNumber,
     senderNumber2,
@@ -42,23 +49,56 @@ const WriteOrder = () => {
 
   // useEffect to autofill sender details
 
+  // Tracks whether sender autofill has been attempted.
+  const hasAutofilledSender = useRef(false);
+
   useEffect(() => {
-    if (!dbUser) return;
+    if (!dbUser || hasAutofilledSender.current) return;
 
     const fullName = [dbUser.firstName, dbUser.lastName]
       .filter(Boolean)
       .join(" ")
       .trim();
 
-    // Populate sender details only when the fields are empty.
+    const phone = dbUser.phoneNumber?.trim() || "";
+
+    // Wait until at least one sender detail is available.
+    if (!fullName && !phone) return;
+
+    // Mark the autofill as completed so clearing fields won't refill them.
+    hasAutofilledSender.current = true;
+
     if (!senderName?.trim() && fullName) {
       setSenderName(fullName);
     }
 
-    if (!senderNumber?.trim() && dbUser.phoneNumber) {
-      setSenderNumber(dbUser.phoneNumber);
+    if (!senderNumber?.trim() && phone) {
+      setSenderNumber(phone);
     }
   }, [dbUser, senderName, senderNumber, setSenderName, setSenderNumber]);
+
+  const selectPaymentResponsibility = (responsibility) => {
+    // Always update all related payment fields together.
+    // Do not leave values from the previous selection behind.
+
+    if (responsibility === "SENDER") {
+      setPaymentResponsibility("SENDER");
+      setPaymentTiming("BEFORE_PICKUP");
+      setPaymentMethod("PAYSTACK");
+      return;
+    }
+
+    if (responsibility === "RECEIVER") {
+      setPaymentResponsibility("RECEIVER");
+      setPaymentTiming("ON_DELIVERY");
+      setPaymentMethod(null);
+    }
+  };
+
+  const selectPaymentArrangement = (timing, method) => {
+    setPaymentTiming(timing);
+    setPaymentMethod(method);
+  };
 
   const validate = () => {
     let hasError = false;
@@ -134,6 +174,89 @@ const WriteOrder = () => {
 
             <Text style={styles.title}>New Delivery</Text>
             <Text style={styles.subtitle}>Enter Package Details</Text>
+          </View>
+
+          {/* Payment Arrangement */}
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Who will pay for this delivery?</Text>
+
+            <Text style={styles.paymentDescription}>
+              Choose who is responsible for paying the delivery fee.
+            </Text>
+
+            <PaymentOption
+              selected={paymentResponsibility === "SENDER"}
+              icon="person-outline"
+              title="I'll pay"
+              description="You pay the delivery fee. You can pay electronically before pickup or pay cash when the courier collects your package."
+              onPress={() => selectPaymentResponsibility("SENDER")}
+            />
+
+            <PaymentOption
+              selected={paymentResponsibility === "RECEIVER"}
+              icon="person-add-outline"
+              title="The receiver will pay"
+              description="The receiver can pay electronically or in cash when the courier arrives. You remain responsible if the receiver refuses or fails to pay."
+              onPress={() => selectPaymentResponsibility("RECEIVER")}
+            />
+
+            {paymentResponsibility === "SENDER" ? (
+              <>
+                <Text style={[styles.label, styles.paymentSubheading]}>
+                  How would you like to pay?
+                </Text>
+
+                <PaymentOption
+                  selected={
+                    paymentTiming === "BEFORE_PICKUP" &&
+                    paymentMethod === "PAYSTACK"
+                  }
+                  icon="card-outline"
+                  title="Pay electronically"
+                  description="Pay securely through Paystack before pickup. Payment must be verified before the order proceeds."
+                  onPress={() =>
+                    selectPaymentArrangement("BEFORE_PICKUP", "PAYSTACK")
+                  }
+                />
+
+                <PaymentOption
+                  selected={
+                    paymentTiming === "AT_PICKUP" && paymentMethod === "CASH"
+                  }
+                  icon="cash-outline"
+                  title="Pay cash at pickup"
+                  description="Pay the courier in cash when your package is collected."
+                  onPress={() => selectPaymentArrangement("AT_PICKUP", "CASH")}
+                />
+              </>
+            ) : (
+              <View style={styles.paymentNotice}>
+                <Ionicons
+                  name="information-circle-outline"
+                  size={22}
+                  color="#92400E"
+                />
+
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.paymentNoticeTitle}>
+                    Important: You remain responsible
+                  </Text>
+
+                  <Text style={styles.paymentNoticeText}>
+                    Selecting receiver payment does not transfer your
+                    responsibility for the delivery fee. If the receiver refuses
+                    or fails to pay, you, as the sender, must settle the
+                    outstanding delivery fee with Atua.
+                  </Text>
+
+                  <Text style={styles.paymentNoticeText}>
+                    The receiver can pay electronically or in cash when the
+                    courier arrives. Electronic payments must be verified before
+                    they are treated as paid.
+                  </Text>
+                </View>
+              </View>
+            )}
           </View>
 
           {/* Form Card */}
@@ -277,5 +400,38 @@ const WriteOrder = () => {
     </SafeAreaView>
   );
 };
+
+// Add PaymentOption here
+const PaymentOption = ({ selected, icon, title, description, onPress }) => (
+  <TouchableOpacity
+    style={[styles.paymentOption, selected && styles.paymentOptionSelected]}
+    onPress={onPress}
+    activeOpacity={0.8}
+  >
+    <View
+      style={[
+        styles.paymentOptionIcon,
+        selected && styles.paymentOptionIconSelected,
+      ]}
+    >
+      <Ionicons
+        name={icon}
+        size={20}
+        color={selected ? "#111827" : "#6B7280"}
+      />
+    </View>
+
+    <View style={styles.paymentOptionContent}>
+      <Text style={styles.paymentOptionTitle}>{title}</Text>
+      <Text style={styles.paymentOptionDescription}>{description}</Text>
+    </View>
+
+    <Ionicons
+      name={selected ? "checkmark-circle" : "ellipse-outline"}
+      size={22}
+      color={selected ? "#111827" : "#9CA3AF"}
+    />
+  </TouchableOpacity>
+);
 
 export default WriteOrder;

@@ -6,11 +6,37 @@ import { useOrderContext } from "@/providers/OrderProvider";
 import { MediaUploadStatus, Offer, Order } from "@/src/models";
 import { uploadEvidence } from "@/utils/uploadEvidence";
 import { DataStore } from "aws-amplify/datastore";
+import * as Crypto from "expo-crypto";
 import { router } from "expo-router";
 import { useState } from "react";
 import { Alert, Text, TouchableOpacity, View } from "react-native";
 import MaxiReviewScreen from "../MaxiReviewCom";
 import styles from "./styles";
+
+// FOR CASH ORDER GENERATION OF VERIFICATION CODE
+const generateVerificationCode = async () => {
+  const range = 900000;
+  const maxValue = 4294967296; // 2^32
+
+  // Reject values that would introduce modulo bias.
+  const limit = Math.floor(maxValue / range) * range;
+
+  while (true) {
+    const randomBytes = await Crypto.getRandomBytesAsync(4);
+
+    // Convert 4 cryptographically secure random bytes
+    // into an unsigned 32-bit integer.
+    const randomValue =
+      randomBytes[0] * 0x1000000 +
+      randomBytes[1] * 0x10000 +
+      randomBytes[2] * 0x100 +
+      randomBytes[3];
+
+    if (randomValue < limit) {
+      return String(100000 + (randomValue % range));
+    }
+  }
+};
 
 const MaxiSubmit = () => {
   const [submitting, setSubmitting] = useState(false);
@@ -33,6 +59,10 @@ const MaxiSubmit = () => {
   } = useLocationContext();
 
   const {
+    paymentResponsibility,
+    paymentTiming,
+    paymentMethod,
+
     senderName,
     senderNumber,
     senderNumber2,
@@ -111,6 +141,25 @@ const MaxiSubmit = () => {
         return;
       }
 
+      const validPaymentArrangement =
+        (paymentResponsibility === "SENDER" &&
+          paymentTiming === "BEFORE_PICKUP" &&
+          paymentMethod === "PAYSTACK") ||
+        (paymentResponsibility === "SENDER" &&
+          paymentTiming === "AT_PICKUP" &&
+          paymentMethod === "CASH") ||
+        (paymentResponsibility === "RECEIVER" &&
+          paymentTiming === "ON_DELIVERY" &&
+          paymentMethod == null);
+
+      if (!validPaymentArrangement) {
+        Alert.alert(
+          "Payment Arrangement Required",
+          "Please go back and select who will pay for the delivery.",
+        );
+        return;
+      }
+
       const pricing = freightPricingEngine({
         type: vehicleClass,
         distanceKm: totalKm,
@@ -149,6 +198,17 @@ const MaxiSubmit = () => {
 
       const mediaStatus = hasSenderMedia ? MediaUploadStatus.PENDING : null;
 
+      // Generate a delivery verification code at order creation when:
+      // 1. The sender is paying cash, OR
+      // 2. The receiver is responsible for payment, regardless
+      //    of whether they will eventually pay cash or electronically.
+      const shouldGenerateVerificationCode =
+        paymentMethod === "CASH" || paymentResponsibility === "RECEIVER";
+
+      const deliveryVerificationCode = shouldGenerateVerificationCode
+        ? await generateVerificationCode()
+        : undefined;
+
       // 1️⃣ Create order instantly
       const newOrder = await DataStore.save(
         new Order({
@@ -156,8 +216,16 @@ const MaxiSubmit = () => {
 
           // REAL customer orders = PRODUCTION
           // Test orders = TEST
-          orderEnvironment: "TEST",
-          // orderEnvironment: "PRODUCTION",
+          // orderEnvironment: "TEST",
+          orderEnvironment: "PRODUCTION",
+
+          // Booking source
+          bookingSource: "APP",
+
+          // Payment arrangement
+          paymentResponsibility,
+          paymentTiming,
+          paymentMethod,
 
           // Sender
           senderName: senderName?.trim() || null,
@@ -203,6 +271,8 @@ const MaxiSubmit = () => {
           estimatedMaxPrice: parseFloat(estimatedMaxPrice),
 
           initialOfferPrice: parseFloat(initialOfferPrice),
+
+          deliveryVerificationCode,
 
           // lastOfferBy: "USER",
 
@@ -260,10 +330,15 @@ const MaxiSubmit = () => {
       router.replace(`/screens/orderTrackingScreen/${newOrder.id}`);
 
       // 2️⃣ Upload evidence in background
+
+      // Start the upload immediately. Navigation away from this screen
+      // does not itself cancel this promise.
       if (hasSenderMedia) {
-        setTimeout(() => {
-          uploadEvidence(newOrder, mediaPhotos, mediaVideo);
-        }, 0);
+        void uploadEvidence(newOrder, mediaPhotos, mediaVideo).catch(
+          (error) => {
+            console.error("Evidence upload failed:", error);
+          },
+        );
       }
 
       resetAllOrderFields();

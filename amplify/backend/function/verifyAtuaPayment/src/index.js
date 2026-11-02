@@ -239,7 +239,7 @@ const ORDER_FIELDS = `
 
   deliveryVerificationCode
 
-    recipientTrackingToken
+  recipientTrackingToken
   recipientTrackingEnabled
   recipientTrackingRevokedAt
 
@@ -337,6 +337,15 @@ const ORDER_FIELDS = `
   maxiCountIncrementedAt
 
   userID
+
+  bookingSource
+  paymentResponsibility
+  paymentTiming
+  paymentMethod
+  supportCreatedByID
+  receiverConfirmationStatus
+  receiverConfirmedAt
+  receiverPaymentExpiresAt
 
   createdAt
   updatedAt
@@ -689,6 +698,112 @@ const getPaymentByReference = async (reference) => {
 };
 
 /* ==========================================================
+   MARK VERIFIED PAYMENT AS SUCCESSFUL
+========================================================== */
+
+const markPaymentAsSuccessful = async ({ payment, order, transaction }) => {
+  if (!payment?.id || !order?.id || !transaction?.reference) {
+    throw new Error("Payment, Order, or transaction reference is missing.");
+  }
+
+  // Ensure this Payment belongs to this exact Order and user.
+  if (
+    payment.orderID !== order.id ||
+    payment.userID !== order.userID ||
+    payment.reference !== transaction.reference ||
+    payment.provider !== "PAYSTACK"
+  ) {
+    throw new Error(
+      "Payment does not match the verified Order and transaction.",
+    );
+  }
+
+  const expectedAmount = Number(order.totalPrice);
+  const recordedAmount = Number(payment.amount);
+  const expectedAmountInKobo = Math.round(expectedAmount * 100);
+
+  if (
+    transaction.status !== "success" ||
+    transaction.currency !== "NGN" ||
+    payment.currency !== "NGN" ||
+    !Number.isFinite(recordedAmount) ||
+    recordedAmount !== expectedAmount ||
+    Number(transaction.amount) !== expectedAmountInKobo
+  ) {
+    throw new Error(
+      "Payment amount, currency, or transaction status is invalid.",
+    );
+  }
+
+  if (payment.status === "SUCCESS") {
+    return payment;
+  }
+
+  if (payment.status !== "PENDING") {
+    throw new Error(`Cannot finalize Payment with status: ${payment.status}`);
+  }
+
+  const mutation = `
+    mutation MarkPaymentAsSuccessful($input: UpdatePaymentInput!) {
+      updatePayment(input: $input) {
+        id
+        orderID
+        userID
+        amount
+        currency
+        status
+        paymentMethod
+        provider
+        reference
+        paidAt
+        updatedAt
+        _version
+        _lastChangedAt
+        _deleted
+      }
+    }
+  `;
+
+  const input = {
+    id: payment.id,
+    status: "SUCCESS",
+    paidAt: transaction.paid_at || new Date().toISOString(),
+  };
+
+  if (Number.isInteger(payment._version)) {
+    input._version = payment._version;
+  }
+
+  const data = await graphqlRequest(
+    mutation,
+    { input },
+    "MarkPaymentAsSuccessful",
+  );
+
+  const updatedPayment = data?.updatePayment;
+
+  if (
+    !updatedPayment ||
+    updatedPayment.id !== payment.id ||
+    updatedPayment.status !== "SUCCESS" ||
+    updatedPayment.reference !== transaction.reference
+  ) {
+    throw new Error(
+      "Payment could not be confirmed as SUCCESS in the database.",
+    );
+  }
+
+  console.log("PAYMENT MARKED SUCCESSFUL:", {
+    paymentID: updatedPayment.id,
+    orderID: updatedPayment.orderID,
+    reference: updatedPayment.reference,
+    status: updatedPayment.status,
+  });
+
+  return updatedPayment;
+};
+
+/* ==========================================================
    CREATE PAYMENT
 ========================================================== */
 
@@ -858,17 +973,22 @@ const markOrderAsPaidFallback = async ({
    * --------------------------------------------------------
    * PAYMENT FINALIZATION STATUS
    * --------------------------------------------------------
+     /*
+   * Preserve the existing payment-before-pickup behaviour:
+   *   MAXI       -> ACCEPTED
+   *   MICRO/MOTO -> READY_FOR_PICKUP
    *
-   * MICRO and MOTO orders are paid before courier acceptance.
-   * Therefore, successful payment moves them to READY_FOR_PICKUP.
-   *
-   * MAXI orders are different.
-   * A MAXI order is already ACCEPTED when the accepted bid is
-   * chosen. Payment must NOT change it to READY_FOR_PICKUP.
-   * It must remain ACCEPTED.
+   * For payment on delivery, do not reset the order's status.
+   * The order may already be in transit or awaiting delivery.
    */
   const paymentFinalizedStatus =
-    order.transportationType === "MAXI" ? "ACCEPTED" : "READY_FOR_PICKUP";
+    String(order.paymentTiming || "BEFORE_PICKUP")
+      .trim()
+      .toUpperCase() === "ON_DELIVERY"
+      ? order.status
+      : order.transportationType === "MAXI"
+        ? "ACCEPTED"
+        : "READY_FOR_PICKUP";
 
   const input = {
     id: order.id,
@@ -1656,6 +1776,73 @@ exports.handler = async (event) => {
     }
 
     /* ======================================================
+       3A. VALIDATE PAYMENT METHOD, TIMING AND RESPONSIBILITY
+    ====================================================== */
+
+    /*
+     * Backward compatibility:
+     * Older orders may not have the new payment fields.
+     * Treat missing values as the old sender-pays-before-pickup
+     * Paystack flow so existing orders continue to work.
+     *
+     * Explicit CASH orders must never be marked PAID by
+     * this Paystack verification Lambda.
+     */
+
+    const paymentResponsibility = String(
+      order.paymentResponsibility || "SENDER",
+    )
+      .trim()
+      .toUpperCase();
+
+    const paymentTiming = String(order.paymentTiming || "BEFORE_PICKUP")
+      .trim()
+      .toUpperCase();
+
+    const paymentMethod = String(order.paymentMethod || "PAYSTACK")
+      .trim()
+      .toUpperCase();
+
+    if (paymentMethod !== "PAYSTACK") {
+      return failureResult(
+        "This order is not configured for Paystack payment verification.",
+        order.id,
+      );
+    }
+
+    const validResponsibility = ["SENDER", "RECEIVER"].includes(
+      paymentResponsibility,
+    );
+
+    if (!validResponsibility) {
+      return failureResult(
+        "Invalid payment responsibility for this order.",
+        order.id,
+      );
+    }
+
+    const isBeforePickupPayment =
+      paymentTiming === "BEFORE_PICKUP" &&
+      ["SENDER", "RECEIVER"].includes(paymentResponsibility);
+
+    const isReceiverPayOnDelivery =
+      paymentTiming === "ON_DELIVERY" && paymentResponsibility === "RECEIVER";
+
+    if (!isBeforePickupPayment && !isReceiverPayOnDelivery) {
+      return failureResult(
+        "This payment timing and responsibility combination is not supported by Paystack verification.",
+        order.id,
+      );
+    }
+
+    console.log("PAYMENT FLOW VALIDATED:", {
+      orderID: order.id,
+      paymentResponsibility,
+      paymentTiming,
+      paymentMethod,
+    });
+
+    /* ======================================================
        4. VALIDATE ORDER AMOUNT
     ====================================================== */
 
@@ -1786,72 +1973,112 @@ exports.handler = async (event) => {
     });
 
     /* ======================================================
-       12. CHECK EXISTING PAYMENT
+      12. CHECK EXISTING PAYMENT AND BIND IT TO THIS ORDER
     ====================================================== */
 
-    let payment = await getPaymentByReference(transaction.reference);
+    const verifiedReference = String(transaction.reference || "").trim();
+    const orderReference = String(order.paymentReference || "").trim();
+
+    if (verifiedReference !== reference) {
+      return failureResult("Payment reference does not match.", order.id);
+    }
+
+    let payment = await getPaymentByReference(verifiedReference);
 
     if (payment) {
-      console.log("EXISTING PAYMENT FOUND:", {
-        paymentID: payment.id,
-
-        orderID: payment.orderID,
-
-        userID: payment.userID,
-
-        reference: payment.reference,
-
-        status: payment.status,
-      });
-
-      /*
-       * Never allow the same Paystack reference to
-       * belong to another Order.
-       */
-
-      if (payment.orderID && payment.orderID !== order.id) {
-        console.error("PAYMENT REFERENCE BELONGS TO ANOTHER ORDER:", {
-          reference: transaction.reference,
-
-          existingOrderID: payment.orderID,
-
+      // A Payment record must never be reused for a different order.
+      if (payment.orderID !== order.id) {
+        console.error("PAYMENT ORDER MISMATCH:", {
+          reference: verifiedReference,
+          paymentOrderID: payment.orderID,
           requestedOrderID: order.id,
         });
 
         return failureResult(
-          "This payment reference has already been used for another order.",
+          "This payment reference does not belong to this order.",
           order.id,
         );
       }
+
+      // The payment must belong to the same customer recorded on the order.
+      if (payment.userID !== order.userID) {
+        console.error("PAYMENT USER MISMATCH:", {
+          reference: verifiedReference,
+          paymentUserID: payment.userID,
+          orderUserID: order.userID,
+        });
+
+        return failureResult(
+          "The payment record does not match this order's customer.",
+          order.id,
+        );
+      }
+
+      // If the order already has a reference, it must match.
+      if (orderReference && orderReference !== verifiedReference) {
+        return failureResult(
+          "This reference is not the current payment reference for this order.",
+          order.id,
+        );
+      }
+
+      console.log("EXISTING PAYMENT MATCHES ORDER:", {
+        paymentID: payment.id,
+        orderID: order.id,
+        reference: verifiedReference,
+        status: payment.status,
+      });
     } else {
       /*
-       * The webhook may not have created the Payment yet.
-       *
-       * verifyAtuaPayment is allowed to create it because
-       * this is the fallback path.
+       * Fallback creation is allowed only if the order already records
+       * this exact reference. Never create a Payment merely because
+       * Paystack reports a successful transaction for the same amount.
        */
+      if (!orderReference || orderReference !== verifiedReference) {
+        console.error("UNBOUND PAYMENT REFERENCE:", {
+          orderID: order.id,
+          orderReference,
+          verifiedReference,
+        });
+
+        return failureResult(
+          "This payment reference is not registered to this order.",
+          order.id,
+        );
+      }
 
       payment = await createPayment({
         order,
-
         transaction,
       });
 
+      // Another invocation (for example, the webhook) may have created it
+      // between our initial lookup and the create attempt.
       if (!payment?.id) {
-        /*
-         * Race-condition protection.
-         *
-         * The webhook may have created the Payment between
-         * our lookup and creation attempt.
-         */
+        payment = await getPaymentByReference(verifiedReference);
+      }
 
-        payment = await getPaymentByReference(transaction.reference);
-
-        if (!payment?.id) {
-          throw new Error("Payment record could not be created or found.");
-        }
+      if (
+        !payment?.id ||
+        payment.orderID !== order.id ||
+        payment.userID !== order.userID ||
+        payment.reference !== verifiedReference
+      ) {
+        throw new Error(
+          "The Payment record could not be confirmed against the correct order.",
+        );
       }
     }
+
+    /* ======================================================
+       12A. MARK VERIFIED PAYMENT AS SUCCESSFUL
+    ====================================================== */
+
+    payment = await markPaymentAsSuccessful({
+      payment,
+      order,
+      transaction,
+    });
 
     /* ======================================================
        13. RELOAD ORDER
@@ -2293,7 +2520,13 @@ exports.handler = async (event) => {
     }
 
     const expectedFallbackStatus =
-      order.transportationType === "MAXI" ? "ACCEPTED" : "READY_FOR_PICKUP";
+      String(order.paymentTiming || "BEFORE_PICKUP")
+        .trim()
+        .toUpperCase() === "ON_DELIVERY"
+        ? order.status
+        : order.transportationType === "MAXI"
+          ? "ACCEPTED"
+          : "READY_FOR_PICKUP";
 
     if (countUpdatedOrder.status !== expectedFallbackStatus) {
       throw new Error(

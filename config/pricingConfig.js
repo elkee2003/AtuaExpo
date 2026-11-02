@@ -86,8 +86,8 @@ export const PRICING_CONFIG = {
   CAR: {
     minFare: 8000,
     initialFare: 8000,
-    commissionRate: 0.15,
-    platformFee: 350,
+    commissionRate: 0.17,
+    platformFee: 550,
     distanceBands: [
       { upToKm: 3, ratePerKm: 300 },
       { upToKm: 5, ratePerKm: 350 },
@@ -101,8 +101,8 @@ export const PRICING_CONFIG = {
   WAGON: {
     minFare: 9500,
     initialFare: 9500,
-    commissionRate: 0.16,
-    platformFee: 400,
+    commissionRate: 0.17,
+    platformFee: 600,
     distanceBands: [
       { upToKm: 3, ratePerKm: 340 },
       { upToKm: 5, ratePerKm: 390 },
@@ -116,8 +116,8 @@ export const PRICING_CONFIG = {
   MINIBUS: {
     minFare: 11500,
     initialFare: 11500,
-    commissionRate: 0.17,
-    platformFee: 450,
+    commissionRate: 0.18,
+    platformFee: 650,
     distanceBands: [
       { upToKm: 3, ratePerKm: 400 },
       { upToKm: 5, ratePerKm: 450 },
@@ -131,8 +131,8 @@ export const PRICING_CONFIG = {
   PICKUP: {
     minFare: 13200,
     initialFare: 13200,
-    commissionRate: 0.18,
-    platformFee: 550,
+    commissionRate: 0.19,
+    platformFee: 750,
     distanceBands: [
       { upToKm: 3, ratePerKm: 910 },
       { upToKm: 5, ratePerKm: 1030 },
@@ -147,7 +147,7 @@ export const PRICING_CONFIG = {
     minFare: 18000,
     initialFare: 18000,
     commissionRate: 0.2,
-    platformFee: 770,
+    platformFee: 970,
     distanceBands: [
       { upToKm: 3, ratePerKm: 455 },
       { upToKm: 5, ratePerKm: 515 },
@@ -162,7 +162,7 @@ export const PRICING_CONFIG = {
     minFare: 22000,
     initialFare: 22000,
     commissionRate: 0.2,
-    platformFee: 850,
+    platformFee: 1050,
     distanceBands: [
       { upToKm: 3, ratePerKm: 500 },
       { upToKm: 5, ratePerKm: 560 },
@@ -177,7 +177,7 @@ export const PRICING_CONFIG = {
     minFare: 27000,
     initialFare: 27000,
     commissionRate: 0.21,
-    platformFee: 950,
+    platformFee: 1150,
     distanceBands: [
       { upToKm: 3, ratePerKm: 560 },
       { upToKm: 5, ratePerKm: 620 },
@@ -192,7 +192,7 @@ export const PRICING_CONFIG = {
     minFare: 35000,
     initialFare: 35000,
     commissionRate: 0.22,
-    platformFee: 1100,
+    platformFee: 1300,
     distanceBands: [
       { upToKm: 3, ratePerKm: 700 },
       { upToKm: 5, ratePerKm: 780 },
@@ -207,7 +207,7 @@ export const PRICING_CONFIG = {
     minFare: 38000,
     initialFare: 38000,
     commissionRate: 0.22,
-    platformFee: 1150,
+    platformFee: 1350,
     distanceBands: [
       { upToKm: 3, ratePerKm: 730 },
       { upToKm: 5, ratePerKm: 820 },
@@ -222,7 +222,7 @@ export const PRICING_CONFIG = {
     minFare: 40000,
     initialFare: 40000,
     commissionRate: 0.22,
-    platformFee: 1200,
+    platformFee: 1400,
     distanceBands: [
       { upToKm: 3, ratePerKm: 750 },
       { upToKm: 5, ratePerKm: 850 },
@@ -237,7 +237,7 @@ export const PRICING_CONFIG = {
     minFare: 48000,
     initialFare: 48000,
     commissionRate: 0.23,
-    platformFee: 1400,
+    platformFee: 1600,
     distanceBands: [
       { upToKm: 3, ratePerKm: 850 },
       { upToKm: 5, ratePerKm: 950 },
@@ -252,7 +252,7 @@ export const PRICING_CONFIG = {
     minFare: 52000,
     initialFare: 52000,
     commissionRate: 0.23,
-    platformFee: 1500,
+    platformFee: 1700,
     distanceBands: [
       { upToKm: 3, ratePerKm: 880 },
       { upToKm: 5, ratePerKm: 990 },
@@ -267,7 +267,7 @@ export const PRICING_CONFIG = {
     minFare: 55000,
     initialFare: 55000,
     commissionRate: 0.23,
-    platformFee: 1550,
+    platformFee: 1750,
     distanceBands: [
       { upToKm: 3, ratePerKm: 900 },
       { upToKm: 5, ratePerKm: 1020 },
@@ -282,7 +282,7 @@ export const PRICING_CONFIG = {
     minFare: 45000,
     initialFare: 45000,
     commissionRate: 0.23,
-    platformFee: 1300,
+    platformFee: 1500,
     distanceBands: [
       { upToKm: 3, ratePerKm: 800 },
       { upToKm: 5, ratePerKm: 900 },
@@ -297,7 +297,7 @@ export const PRICING_CONFIG = {
     minFare: 60000,
     initialFare: 60000,
     commissionRate: 0.24,
-    platformFee: 1700,
+    platformFee: 1900,
     distanceBands: [
       { upToKm: 3, ratePerKm: 950 },
       { upToKm: 5, ratePerKm: 1080 },

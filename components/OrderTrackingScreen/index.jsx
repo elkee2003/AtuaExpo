@@ -254,26 +254,6 @@ const OrderTrackingScreen = ({ orderId }) => {
   }).current;
 
   // =================================================
-  // RESET COURIER POSITION WHEN COURIER CHANGES
-  // =================================================
-  //
-  // When the order is reassigned to another courier,
-  // reset the marker initialization so the new courier
-  // does not animate from the previous courier's location.
-  //
-  // =================================================
-
-  useEffect(() => {
-    // Reset marker initialization whenever the
-    // assigned courier changes.
-    hasInitializedCourierPositionRef.current = false;
-
-    // Stop any previous courier animation.
-    courierAnim.latitude.stopAnimation();
-    courierAnim.longitude.stopAnimation();
-  }, [order?.assignedCourierId, courierAnim]);
-
-  // =================================================
   // BOTTOM SHEET
   // =================================================
 
@@ -302,6 +282,26 @@ const OrderTrackingScreen = ({ orderId }) => {
   const [offers, setOffers] = useState([]);
 
   const courierAcceptanceHandledRef = useRef(false);
+
+  // =================================================
+  // RESET COURIER POSITION WHEN COURIER CHANGES
+  // =================================================
+  //
+  // When the order is reassigned to another courier,
+  // reset the marker initialization so the new courier
+  // does not animate from the previous courier's location.
+  //
+  // =================================================
+
+  useEffect(() => {
+    // Reset marker initialization whenever the
+    // assigned courier changes.
+    hasInitializedCourierPositionRef.current = false;
+
+    // Stop any previous courier animation.
+    courierAnim.latitude.stopAnimation();
+    courierAnim.longitude.stopAnimation();
+  }, [order?.assignedCourierId, courierAnim]);
 
   // =================================================
   // ANIMATIONS
@@ -893,7 +893,8 @@ const OrderTrackingScreen = ({ orderId }) => {
   //   ↓
   // Show courier name + agreed price
   //   ↓
-  // Navigate to existing Payment screen
+  // Navigate to the appropriate payment screen
+  // based on the order's payment responsibility.
   // ============================================================
 
   useEffect(() => {
@@ -998,10 +999,19 @@ const OrderTrackingScreen = ({ orderId }) => {
           `${courierFirstName} has accepted your Maxi delivery offer for ₦${formattedPrice}. Please complete payment to continue.`,
           [
             {
-              text: "Continue to Payment",
+              text:
+                latestOrder.paymentResponsibility === "RECEIVER"
+                  ? "Continue to Receiver Payment"
+                  : "Continue to Payment",
+
               onPress: () => {
                 router.replace({
-                  pathname: "/screens/payment",
+                  pathname:
+                    latestOrder.transportationType === "MAXI" &&
+                    latestOrder.paymentResponsibility === "RECEIVER"
+                      ? "/screens/payment/receiverpayment"
+                      : "/screens/payment",
+
                   params: {
                     orderId: latestOrder.id,
                   },
@@ -2049,15 +2059,25 @@ const OrderTrackingScreen = ({ orderId }) => {
       }
 
       //---------------------------------
-      // Go to Payment
+      // NAVIGATE TO PAYMENT
       //---------------------------------
       // The accepted offer amount has already
       // been saved into Order.totalPrice.
-      // The existing Payment screen will use
-      // this totalPrice when loading the order.
+      //
+      // If the receiver is responsible for
+      // payment, navigate to ReceiverPayment.
+      // Otherwise, use the normal Payment screen.
+      //
+      // Both screens receive the Order ID and
+      // load the order's payment information.
 
       router.replace({
-        pathname: "/screens/payment",
+        pathname:
+          updatedOrder.transportationType === "MAXI" &&
+          updatedOrder.paymentResponsibility === "RECEIVER"
+            ? "/screens/payment/receiverpayment"
+            : "/screens/payment",
+
         params: {
           orderId: updatedOrder.id,
         },
