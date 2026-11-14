@@ -11,6 +11,11 @@
 
 const https = require("https");
 const aws4 = require("aws4");
+const crypto = require("crypto");
+
+/* ============================================================
+   CONFIGURATION
+============================================================ */
 
 const GRAPHQL_ENDPOINT = process.env.API_ATUA_GRAPHQLAPIENDPOINTOUTPUT;
 
@@ -22,16 +27,31 @@ const CURRENCY = process.env.RECONCILIATION_CURRENCY || "NGN";
 
 const PAGE_SIZE = 100;
 const REQUEST_TIMEOUT_MS = 20000;
+const MAX_PAGES = 10000;
 
 /*
- * IMPORTANT:
- * This Lambda calculates a reconciliation only.
- * It does not transfer money, settle wallet debt, mark courier
- * earnings as paid, or mark cash collections as reconciled.
+ * ACCOUNTING RULES
  *
- * The IAM role must be restricted to the operations required
- * by this function. Order reads use API-key authentication
- * because that is how the current Order model is configured.
+ * This Lambda calculates and records a reconciliation only.
+ *
+ * It must NOT:
+ * - Deduct Wallet.availableBalance.
+ * - Deduct Wallet.pendingBalance.
+ * - Deduct Wallet.lifetimeEarnings.
+ * - Reduce Wallet.outstandingDebt.
+ * - Create or settle CourierDebt records.
+ * - Transfer money to the courier.
+ * - Mark online earnings as paid.
+ * - Mark CashCollection records as reconciled.
+ * - Approve or settle a reconciliation.
+ *
+ * Online earnings owed by Atua and cash debt owed by the
+ * courier are separate obligations.
+ *
+ * Cash debt is:
+ * commissionAmount + platformFee + vatAmount
+ *
+ * Never offset online earnings against cash debt.
  */
 
 /* ============================================================
@@ -44,7 +64,11 @@ const graphqlRequest = async (query, variables = {}, authMode = "IAM") => {
   }
 
   const endpoint = new URL(GRAPHQL_ENDPOINT);
-  const body = JSON.stringify({ query, variables });
+
+  const body = JSON.stringify({
+    query,
+    variables,
+  });
 
   const baseHeaders = {
     "Content-Type": "application/json",
@@ -66,10 +90,6 @@ const graphqlRequest = async (query, variables = {}, authMode = "IAM") => {
       throw new Error("Missing AWS_REGION/REGION for IAM authentication.");
     }
 
-    /*
-     * AWS Lambda supplies temporary AWS credentials through
-     * environment variables. Do not hardcode credentials.
-     */
     const signedRequest = aws4.sign(
       {
         host: endpoint.host,
@@ -103,6 +123,7 @@ const graphqlRequest = async (query, variables = {}, authMode = "IAM") => {
         let responseText = "";
 
         res.setEncoding("utf8");
+
         res.on("data", (chunk) => {
           responseText += chunk;
         });
@@ -132,15 +153,14 @@ const graphqlRequest = async (query, variables = {}, authMode = "IAM") => {
     parsed = JSON.parse(response.body);
   } catch {
     throw new Error(
-      `AppSync returned a non-JSON response: ${response.body.slice(0, 300)}`,
+      "AppSync returned a non-JSON response: " + response.body.slice(0, 300),
     );
   }
 
   if (response.statusCode < 200 || response.statusCode >= 300) {
     throw new Error(
-      `AppSync HTTP ${response.statusCode}: ${JSON.stringify(
-        parsed.errors || parsed,
-      )}`,
+      `AppSync HTTP ${response.statusCode}: ` +
+        JSON.stringify(parsed.errors || parsed),
     );
   }
 
@@ -159,16 +179,26 @@ const graphqlRequest = async (query, variables = {}, authMode = "IAM") => {
 };
 
 /* ============================================================
-   PAGINATED MODEL QUERIES
+   PAGINATION
 ============================================================ */
 
-const fetchAllPages = async ({ query, variables, resultField, authMode }) => {
+const fetchAllPages = async ({
+  query,
+  variables,
+  resultField,
+  authMode = "IAM",
+}) => {
   const allItems = [];
+
   let nextToken = null;
   let pageCount = 0;
 
   do {
     pageCount += 1;
+
+    if (pageCount > MAX_PAGES) {
+      throw new Error("Pagination safety limit reached.");
+    }
 
     const data = await graphqlRequest(
       query,
@@ -189,22 +219,26 @@ const fetchAllPages = async ({ query, variables, resultField, authMode }) => {
     const items = Array.isArray(result.items) ? result.items : [];
 
     allItems.push(...items);
-    nextToken = result.nextToken || null;
 
-    if (pageCount > 10000) {
-      throw new Error("Pagination safety limit reached.");
-    }
+    nextToken = result.nextToken || null;
   } while (nextToken);
 
   return allItems;
 };
 
 /* ============================================================
-   LIST DELIVERED ORDERS FOR ONE COURIER
-
-   Use stored financial values. Never recalculate historical
-   earnings using today's pricing configuration.
+   1. LOAD DELIVERED ORDERS FOR COURIER
 ============================================================ */
+
+/*
+ * We use the stored financial values on each Order.
+ *
+ * We do not recalculate historical orders using the
+ * current pricing configuration.
+ *
+ * This query uses API_KEY authentication to preserve the
+ * existing Order access pattern in this Lambda.
+ */
 
 const LIST_COURIER_ORDERS = `
   query ListCourierOrders(
@@ -232,7 +266,6 @@ const LIST_COURIER_ORDERS = `
         unloadingCompletedAt
         createdAt
         updatedAt
-        _deleted
       }
       nextToken
     }
@@ -256,14 +289,13 @@ const listCourierOrders = async (courierID) => {
   return orders.filter(
     (order) =>
       order &&
-      !order._deleted &&
       order.assignedCourierId === courierID &&
       order.status === "DELIVERED",
   );
 };
 
 /* ============================================================
-   LIST CASH COLLECTIONS FOR ONE COURIER
+   2. LOAD CASH COLLECTIONS FOR COURIER
 ============================================================ */
 
 const LIST_CASH_COLLECTIONS = `
@@ -287,9 +319,11 @@ const LIST_CASH_COLLECTIONS = `
         reconciledAt
         reconciliationReference
         idempotencyKey
+        courierDebtID
+        atuaShareAmount
+        debtAppliedAt
         createdAt
         updatedAt
-        _deleted
       }
       nextToken
     }
@@ -311,13 +345,12 @@ const listCashCollections = async (courierID) => {
   });
 
   return collections.filter(
-    (collection) =>
-      collection && !collection._deleted && collection.courierID === courierID,
+    (collection) => collection && collection.courierID === courierID,
   );
 };
 
 /* ============================================================
-   LIST EXISTING RECONCILIATIONS
+   3. LOAD EXISTING RECONCILIATIONS
 ============================================================ */
 
 const LIST_RECONCILIATIONS = `
@@ -347,9 +380,9 @@ const LIST_RECONCILIATIONS = `
         direction
         status
         calculatedAt
+        notes
         createdAt
         updatedAt
-        _deleted
       }
       nextToken
     }
@@ -370,13 +403,46 @@ const listReconciliations = async (courierID) => {
     authMode: "IAM",
   });
 
-  return records.filter(
-    (record) => record && !record._deleted && record.courierID === courierID,
-  );
+  return records.filter((record) => record && record.courierID === courierID);
 };
 
 /* ============================================================
-   CREATE RECONCILIATION
+   4. GET RECONCILIATION BY ID
+============================================================ */
+
+const GET_RECONCILIATION = `
+  query GetCourierReconciliation($id: ID!) {
+    getCourierReconciliation(id: $id) {
+      id
+      courierID
+      reconciliationReference
+      periodStart
+      periodEnd
+      onlineCourierEarnings
+      cashCollectedAmount
+      amountCourierOwesAtua
+      amountAtuaOwesCourier
+      previousSettlements
+      adjustments
+      netAmount
+      direction
+      status
+      calculatedAt
+      notes
+      createdAt
+      updatedAt
+    }
+  }
+`;
+
+const getReconciliationByID = async (id) => {
+  const data = await graphqlRequest(GET_RECONCILIATION, { id }, "IAM");
+
+  return data.getCourierReconciliation || null;
+};
+
+/* ============================================================
+   5. CREATE RECONCILIATION
 ============================================================ */
 
 const CREATE_RECONCILIATION = `
@@ -419,7 +485,7 @@ const createReconciliation = async (input) => {
 };
 
 /* ============================================================
-   FINANCIAL AND PERIOD HELPERS
+   6. FINANCIAL HELPERS
 ============================================================ */
 
 const toFiniteNumber = (value) => {
@@ -432,8 +498,9 @@ const toFiniteNumber = (value) => {
   return Number.isFinite(number) ? number : null;
 };
 
-const roundMoney = (amount) =>
-  Math.round((amount + Number.EPSILON) * 100) / 100;
+const roundMoney = (amount) => {
+  return Math.round((amount + Number.EPSILON) * 100) / 100;
+};
 
 const isWithinPeriod = (value, startMs, endMs) => {
   if (!value) return false;
@@ -471,7 +538,19 @@ const parsePeriod = (periodStart, periodEnd) => {
   };
 };
 
-const makeReference = (courierID, startMs, endMs) => {
+/* ============================================================
+   7. DETERMINISTIC IDENTIFIERS
+============================================================ */
+
+const makeReconciliationID = (courierID, startMs, endMs) => {
+  const source = `${courierID}|${startMs}|${endMs}`;
+
+  const hash = crypto.createHash("sha256").update(source).digest("hex");
+
+  return `CR-${hash}`;
+};
+
+const makeReconciliationReference = (courierID, startMs, endMs) => {
   const safeCourierID = String(courierID)
     .replace(/[^a-zA-Z0-9_-]/g, "")
     .slice(0, 40);
@@ -479,23 +558,114 @@ const makeReference = (courierID, startMs, endMs) => {
   return `CR-${safeCourierID}-${startMs}-${endMs}`;
 };
 
-const samePeriod = (record, startMs, endMs) =>
-  Date.parse(record.periodStart) === startMs &&
-  Date.parse(record.periodEnd) === endMs;
+/* ============================================================
+   8. PERIOD COMPARISON
+============================================================ */
+
+const samePeriod = (record, startMs, endMs) => {
+  return (
+    Date.parse(record.periodStart) === startMs &&
+    Date.parse(record.periodEnd) === endMs
+  );
+};
 
 const periodsOverlap = (record, startMs, endMs) => {
   const existingStart = Date.parse(record.periodStart);
+
   const existingEnd = Date.parse(record.periodEnd);
 
   if (!Number.isFinite(existingStart) || !Number.isFinite(existingEnd)) {
-    return false;
+    throw new Error(
+      `Existing reconciliation ${record.id} has invalid period dates.`,
+    );
   }
 
+  /*
+   * Treat periods as inclusive.
+   * This prevents two reconciliations from sharing
+   * even a single timestamp.
+   */
   return startMs <= existingEnd && endMs >= existingStart;
 };
 
 /* ============================================================
-   MAIN RECONCILIATION
+   9. VALIDATE EXISTING RECONCILIATION
+============================================================ */
+
+const validateExistingReconciliation = (record, courierID, startMs, endMs) => {
+  if (!record) {
+    throw new Error("Expected reconciliation record was not found.");
+  }
+
+  if (record.courierID !== courierID) {
+    throw new Error("Reconciliation ID belongs to a different courier.");
+  }
+
+  if (!samePeriod(record, startMs, endMs)) {
+    throw new Error("Existing reconciliation ID has a different period.");
+  }
+
+  return record;
+};
+
+/* ============================================================
+   10. VALIDATE CASH COLLECTION FINANCIALS
+============================================================ */
+
+const calculateAtuaShare = (order, collection) => {
+  const commission = toFiniteNumber(order.commissionAmount);
+
+  const platformFee = toFiniteNumber(order.platformFee);
+
+  const vat = toFiniteNumber(order.vatAmount);
+
+  if (
+    commission === null ||
+    commission < 0 ||
+    platformFee === null ||
+    platformFee < 0 ||
+    vat === null ||
+    vat < 0
+  ) {
+    throw new Error(
+      `Order ${order.id} has missing or invalid commission, platformFee, or vatAmount.`,
+    );
+  }
+
+  const calculatedShare = roundMoney(commission + platformFee + vat);
+
+  /*
+   * recordCashCollection stores atuaShareAmount.
+   *
+   * When it is present, compare it with the amount
+   * calculated from the Order's stored financial fields.
+   * A mismatch should be investigated instead of silently
+   * choosing one value.
+   */
+  if (
+    collection.atuaShareAmount !== null &&
+    collection.atuaShareAmount !== undefined
+  ) {
+    const storedShare = toFiniteNumber(collection.atuaShareAmount);
+
+    if (storedShare === null || storedShare < 0) {
+      throw new Error(
+        `Cash collection ${collection.id} has an invalid atuaShareAmount.`,
+      );
+    }
+
+    if (Math.abs(roundMoney(storedShare) - calculatedShare) > 0.01) {
+      throw new Error(
+        `Cash collection ${collection.id} has an atuaShareAmount that does not match its Order financial breakdown.`,
+      );
+    }
+  }
+
+  return calculatedShare;
+};
+
+/* ============================================================
+   11. MAIN RECONCILIATION
 ============================================================ */
 
 const reconcileCourierBalance = async ({
@@ -515,11 +685,7 @@ const reconcileCourierBalance = async ({
   );
 
   /* ----------------------------------------------------------
-     1. Prevent ordinary duplicate and overlapping runs.
-
-     NOTE:
-     This pre-check is not a database transaction. Concurrent
-     invocations can still race. See deployment notes below.
+     STEP 1: CHECK EXISTING RECONCILIATIONS
   ---------------------------------------------------------- */
 
   const existingRecords = await listReconciliations(courierID);
@@ -529,15 +695,28 @@ const reconcileCourierBalance = async ({
   );
 
   if (samePeriodRecord) {
-    return {
-      success: true,
-      reusedExistingRecord: true,
-      message:
-        "A reconciliation already exists for this courier and period. No new record was created.",
-      currency: CURRENCY,
-      reconciliation: samePeriodRecord,
-    };
+    validateExistingReconciliation(samePeriodRecord, courierID, startMs, endMs);
+
+    /*
+     * Do not silently return a potentially stale snapshot.
+     *
+     * If a reconciliation already exists for this exact
+     * period, review it before creating another one.
+     *
+     * This Lambda does not overwrite historical financial
+     * snapshots or change approved/settled records.
+     */
+    throw new Error(
+      `A reconciliation already exists for this exact period (${samePeriodRecord.reconciliationReference}, status: ${samePeriodRecord.status}). Review that record before attempting another reconciliation.`,
+    );
   }
+
+  /*
+   * Prevent overlapping reconciliations.
+   *
+   * REVERSED records do not block a new reconciliation.
+   * All other existing records block overlapping periods.
+   */
 
   const blockingStatuses = ["PENDING", "CALCULATED", "APPROVED", "SETTLED"];
 
@@ -557,7 +736,7 @@ const reconcileCourierBalance = async ({
   }
 
   /* ----------------------------------------------------------
-     2. Load source records.
+     STEP 2: LOAD SOURCE RECORDS
   ---------------------------------------------------------- */
 
   const [orders, collections] = await Promise.all([
@@ -568,20 +747,24 @@ const reconcileCourierBalance = async ({
   const ordersByID = new Map(orders.map((order) => [order.id, order]));
 
   /* ----------------------------------------------------------
-     3. Calculate online-paid courier earnings.
+     STEP 3: CALCULATE ONLINE COURIER EARNINGS
 
-     Requirements:
-       - Delivered order assigned to this courier
-       - PAYSTACK payment method
-       - Payment status PAID
-       - Payout status NOT_PAID
-       - Delivery completed inside the requested period
-       - Valid stored courierEarnings
+     Include only:
+     - Delivered orders.
+     - Assigned to this courier.
+     - PAYSTACK payment method.
+     - Payment status PAID.
+     - Payout status NOT_PAID.
+     - Delivery completed within the period.
+     - Valid stored courierEarnings.
+
+     These are earnings Atua owes the courier.
+
+     They must never be deducted from cash debt.
   ---------------------------------------------------------- */
 
   let onlineCourierEarnings = 0;
   let onlineOrderCount = 0;
-  let skippedOnlineOrderCount = 0;
 
   const eligibleOnlineOrderIDs = [];
 
@@ -594,57 +777,63 @@ const reconcileCourierBalance = async ({
       continue;
     }
 
-    /*
-     * unloadingCompletedAt is the closest explicit delivery
-     * event timestamp available in the supplied Order schema.
-     * Do not substitute createdAt: that is the booking time.
-     */
+    if (!order.unloadingCompletedAt) {
+      throw new Error(
+        `Eligible online order ${order.id} has no unloadingCompletedAt timestamp.`,
+      );
+    }
+
+    const deliveryTimestamp = Date.parse(order.unloadingCompletedAt);
+
+    if (!Number.isFinite(deliveryTimestamp)) {
+      throw new Error(
+        `Online order ${order.id} has an invalid unloadingCompletedAt timestamp.`,
+      );
+    }
+
     if (!isWithinPeriod(order.unloadingCompletedAt, startMs, endMs)) {
-      if (!order.unloadingCompletedAt) {
-        skippedOnlineOrderCount += 1;
-
-        console.warn(
-          "Online order has no unloadingCompletedAt; excluded from period calculation:",
-          order.id,
-        );
-      }
-
       continue;
     }
 
     const earnings = toFiniteNumber(order.courierEarnings);
 
     if (earnings === null || earnings < 0) {
-      skippedOnlineOrderCount += 1;
-
-      console.warn("Online order has invalid courierEarnings:", order.id);
-
-      continue;
+      throw new Error(
+        `Online order ${order.id} has invalid courierEarnings. Reconciliation stopped.`,
+      );
     }
 
     onlineCourierEarnings += earnings;
+
     onlineOrderCount += 1;
+
     eligibleOnlineOrderIDs.push(order.id);
   }
 
   onlineCourierEarnings = roundMoney(onlineCourierEarnings);
 
   /* ----------------------------------------------------------
-     4. Calculate confirmed cash collections.
+     STEP 4: CALCULATE CASH COLLECTIONS
 
-     The courier does not owe Atua the entire customer payment.
-     Atua's share is:
-       commissionAmount + platformFee + vatAmount
+     Only confirmed physical cash collections count.
 
-     A cash collection is counted only once per order.
+     The full amount collected is reported separately.
+
+     The amount owed to Atua is:
+       commissionAmount
+       + platformFee
+       + vatAmount
+
+     Do not use the full cash collection amount as Atua's
+     share, and do not offset this debt against online earnings.
   ---------------------------------------------------------- */
 
   let cashCollectedAmount = 0;
   let amountCourierOwesAtua = 0;
   let cashCollectionCount = 0;
-  let skippedCashCollectionCount = 0;
 
   const eligibleCashCollectionIDs = [];
+
   const processedCashOrderIDs = new Set();
 
   for (const collection of collections) {
@@ -652,38 +841,55 @@ const reconcileCourierBalance = async ({
       continue;
     }
 
+    /*
+     * Collections already reconciled by a previous
+     * settlement/reconciliation process must not be
+     * counted again.
+     */
     if (collection.reconciledAt) {
       continue;
+    }
+
+    if (!collection.confirmedAt) {
+      throw new Error(
+        `Confirmed cash collection ${collection.id} has no confirmedAt timestamp.`,
+      );
+    }
+
+    const collectionTimestamp = Date.parse(collection.confirmedAt);
+
+    if (!Number.isFinite(collectionTimestamp)) {
+      throw new Error(
+        `Cash collection ${collection.id} has an invalid confirmedAt timestamp.`,
+      );
     }
 
     if (!isWithinPeriod(collection.confirmedAt, startMs, endMs)) {
       continue;
     }
 
+    if (!collection.orderID) {
+      throw new Error(`Cash collection ${collection.id} has no orderID.`);
+    }
+
+    /*
+     * A single order should have one confirmed cash
+     * collection record under the current collection flow.
+     *
+     * Do not silently count duplicates.
+     */
     if (processedCashOrderIDs.has(collection.orderID)) {
-      skippedCashCollectionCount += 1;
-
-      console.error(
-        "Duplicate confirmed cash collection found for order:",
-        collection.orderID,
-        "Collection:",
-        collection.id,
+      throw new Error(
+        `Multiple confirmed cash collections exist for order ${collection.orderID}. Review the duplicate collection records before reconciliation.`,
       );
-
-      continue;
     }
 
     const order = ordersByID.get(collection.orderID);
 
     if (!order) {
-      skippedCashCollectionCount += 1;
-
-      console.error(
-        "Cash collection has no matching delivered order for this courier:",
-        collection.id,
+      throw new Error(
+        `Cash collection ${collection.id} has no matching delivered order assigned to this courier.`,
       );
-
-      continue;
     }
 
     if (
@@ -691,73 +897,49 @@ const reconcileCourierBalance = async ({
       order.paymentMethod !== "CASH" ||
       order.assignedCourierId !== courierID
     ) {
-      skippedCashCollectionCount += 1;
-
-      console.error(
-        "Cash collection does not match a delivered CASH order assigned to this courier:",
-        collection.id,
-        order.id,
+      throw new Error(
+        `Cash collection ${collection.id} does not match a delivered CASH order assigned to this courier.`,
       );
-
-      continue;
     }
 
     const collectedAmount = toFiniteNumber(collection.amount);
 
     const totalPrice = toFiniteNumber(order.totalPrice);
 
-    const commission = toFiniteNumber(order.commissionAmount);
-
-    const platformFee = toFiniteNumber(order.platformFee);
-
-    const vat = toFiniteNumber(order.vatAmount);
-
     if (
       collectedAmount === null ||
       collectedAmount <= 0 ||
       totalPrice === null ||
-      totalPrice <= 0 ||
-      commission === null ||
-      commission < 0 ||
-      platformFee === null ||
-      platformFee < 0 ||
-      vat === null ||
-      vat < 0
+      totalPrice <= 0
     ) {
-      skippedCashCollectionCount += 1;
-
-      console.error(
-        "Cash collection has incomplete or invalid financial fields:",
-        collection.id,
-        order.id,
+      throw new Error(
+        `Cash collection ${collection.id} or Order ${order.id} has an invalid amount or totalPrice.`,
       );
-
-      continue;
     }
 
     /*
-     * Do not silently include a partial or mismatched collection
-     * in a balance calculation. Require manual review.
+     * This version expects full cash collection.
      *
-     * If your business intentionally supports partial cash
-     * payments, implement an explicit partial-payment ledger
-     * before relaxing this check.
+     * If partial cash collection is introduced later,
+     * it should be handled explicitly in the payment
+     * and collection ledger.
      */
     if (Math.abs(roundMoney(collectedAmount) - roundMoney(totalPrice)) > 0.01) {
       throw new Error(
-        `Cash collection ${collection.id} for order ${order.id} ` +
-          "does not match the order total. Review this record before reconciliation.",
+        `Cash collection ${collection.id} for order ${order.id} does not match the order total. Review this record before reconciliation.`,
       );
     }
 
-    const atuaShare = roundMoney(commission + platformFee + vat);
+    const atuaShare = calculateAtuaShare(order, collection);
 
     cashCollectedAmount += collectedAmount;
+
     amountCourierOwesAtua += atuaShare;
 
     cashCollectionCount += 1;
 
     eligibleCashCollectionIDs.push(collection.id);
+
     processedCashOrderIDs.add(collection.orderID);
   }
 
@@ -766,15 +948,33 @@ const reconcileCourierBalance = async ({
   amountCourierOwesAtua = roundMoney(amountCourierOwesAtua);
 
   /* ----------------------------------------------------------
-     5. Calculate the net position.
+     STEP 5: CALCULATE ATUA'S ONLINE OBLIGATION
 
-     This is a GROSS offset calculation:
-       online courier earnings minus Atua's share of cash jobs.
+     This is the amount Atua owes the courier from eligible
+     online-paid deliveries.
 
-     It does not deduct previous settlements or wallet recoveries.
-     ---------------------------------------------------------- */
+     It remains independent of the cash debt.
+  ---------------------------------------------------------- */
 
   const amountAtuaOwesCourier = onlineCourierEarnings;
+
+  /* ----------------------------------------------------------
+     STEP 6: LEGACY NET SUMMARY
+
+     The schema retains:
+       netAmount
+       direction
+
+     These are reporting fields only.
+
+     They are NOT the authoritative cash debt amount.
+
+     The settlement process must use:
+       amountCourierOwesAtua
+
+     It must never use netAmount to reduce cash debt by
+     onlineCourierEarnings.
+  ---------------------------------------------------------- */
 
   const difference = roundMoney(amountAtuaOwesCourier - amountCourierOwesAtua);
 
@@ -791,95 +991,213 @@ const reconcileCourierBalance = async ({
   const netAmount = roundMoney(Math.abs(difference));
 
   /* ----------------------------------------------------------
-     6. Create the audit record.
-
-     This does not:
-       - Transfer money
-       - Recover wallet debt
-       - Mark online earnings as paid
-       - Mark cash collections as reconciled
-       - Approve or settle the reconciliation
+     STEP 7: PREPARE AUDIT RECORD
   ---------------------------------------------------------- */
 
   const calculatedAt = new Date().toISOString();
 
-  const reconciliationReference = makeReference(courierID, startMs, endMs);
+  const reconciliationID = makeReconciliationID(courierID, startMs, endMs);
+
+  const reconciliationReference = makeReconciliationReference(
+    courierID,
+    startMs,
+    endMs,
+  );
 
   const notes = [
     "Calculated reconciliation only; no funds transferred.",
     "Online earnings use stored courierEarnings from eligible PAYSTACK orders.",
-    "Delivery period uses unloadingCompletedAt.",
-    "Cash amount owed to Atua is commission + platform fee + VAT.",
-    "Previous settlements and adjustments are not applied by this Lambda.",
+    "Online delivery period uses unloadingCompletedAt.",
+    "Cash collection amount is recorded independently.",
+    "Cash debt is commission + platform fee + VAT from eligible CASH deliveries.",
+    "Cash collection atuaShareAmount is checked against the Order financial breakdown when present.",
+    "Online courier earnings are not deducted from cash debt.",
+    "Cash collections already marked reconciledAt are excluded.",
+    "previousSettlements and adjustments are not applied by this Lambda.",
     `Online orders included: ${onlineOrderCount}.`,
     `Cash collections included: ${cashCollectionCount}.`,
-    `Online orders skipped: ${skippedOnlineOrderCount}.`,
-    `Cash collections skipped: ${skippedCashCollectionCount}.`,
     `Currency: ${CURRENCY}.`,
   ].join(" ");
 
   const input = {
+    id: reconciliationID,
+
     courierID,
+
     reconciliationReference,
+
     periodStart: normalizedStart,
+
     periodEnd: normalizedEnd,
+
     onlineCourierEarnings,
+
     cashCollectedAmount,
+
     amountCourierOwesAtua,
+
     amountAtuaOwesCourier,
+
+    /*
+     * These remain zero at calculation time.
+     * The settlement process must handle actual
+     * settlements and adjustments.
+     */
     previousSettlements: 0,
+
     adjustments: 0,
+
+    /*
+     * Legacy summary only.
+     * Never use this to offset cash debt.
+     */
     netAmount,
+
     direction,
+
     status: "CALCULATED",
+
     calculatedAt,
+
     notes,
   };
 
-  const reconciliation = await createReconciliation(input);
+  /* ----------------------------------------------------------
+     STEP 8: CREATE RECONCILIATION
+
+     The deterministic ID prevents duplicate records for
+     the exact same courier and period.
+
+     If a concurrent invocation creates the same record,
+     retrieve and return that record.
+  ---------------------------------------------------------- */
+
+  let reconciliation;
+
+  try {
+    reconciliation = await createReconciliation(input);
+  } catch (createError) {
+    console.warn(
+      "Reconciliation create returned an error. Checking whether the deterministic record already exists.",
+      createError.message,
+    );
+
+    const existingByID = await getReconciliationByID(reconciliationID);
+
+    if (!existingByID) {
+      throw createError;
+    }
+
+    reconciliation = validateExistingReconciliation(
+      existingByID,
+      courierID,
+      startMs,
+      endMs,
+    );
+
+    return {
+      success: true,
+      reusedExistingRecord: true,
+      message:
+        "The reconciliation already exists. The existing record was returned; no duplicate was created.",
+      currency: CURRENCY,
+      reconciliation,
+    };
+  }
+
+  /* ----------------------------------------------------------
+     STEP 9: RETURN RESULTS
+  ---------------------------------------------------------- */
 
   return {
     success: true,
+
     reusedExistingRecord: false,
+
     message:
-      "Reconciliation calculated and saved. No payment was made and no source records were marked as reconciled.",
+      "Reconciliation calculated and saved. No payment was made, no wallet balance was changed, no CourierDebt was created or modified, and no source records were marked as reconciled.",
+
     currency: CURRENCY,
+
     reconciliation,
+
     summary: {
       courierID,
+
       periodStart: normalizedStart,
+
       periodEnd: normalizedEnd,
+
       onlineOrderCount,
+
       cashCollectionCount,
-      skippedOnlineOrderCount,
-      skippedCashCollectionCount,
+
       onlineCourierEarnings,
+
       cashCollectedAmount,
+
       amountCourierOwesAtua,
+
       amountAtuaOwesCourier,
+
       netAmount,
+
       direction,
+
       previousSettlements: 0,
+
       adjustments: 0,
+
       eligibleOnlineOrderIDs,
+
       eligibleCashCollectionIDs,
     },
   };
 };
 
 /* ============================================================
-   LAMBDA HANDLER
+   12. LAMBDA HANDLER
 ============================================================ */
+
+/*
+ * Supports direct Lambda invocation:
+ *
+ * {
+ *   "courierID": "...",
+ *   "periodStart": "2026-11-01T00:00:00.000Z",
+ *   "periodEnd": "2026-11-30T23:59:59.999Z"
+ * }
+ *
+ * Supports AppSync resolver invocation:
+ *
+ * {
+ *   "arguments": {
+ *     "courierID": "...",
+ *     "periodStart": "...",
+ *     "periodEnd": "..."
+ *   }
+ * }
+ *
+ * Supports API Gateway invocation:
+ *
+ * {
+ *   "body": "{\"courierID\":\"...\", ...}"
+ * }
+ */
 
 exports.handler = async (event) => {
   console.log("reconcileCourierBalance invoked", {
     requestId: event?.requestContext?.requestId,
+
     hasArguments: Boolean(event?.arguments),
   });
 
   try {
     let payload = event || {};
 
+    /*
+     * API Gateway body.
+     */
     if (typeof payload.body === "string") {
       try {
         payload = JSON.parse(payload.body);
@@ -888,6 +1206,9 @@ exports.handler = async (event) => {
       }
     }
 
+    /*
+     * AppSync resolver arguments.
+     */
     if (payload.arguments) {
       payload = payload.arguments;
     }
@@ -900,9 +1221,11 @@ exports.handler = async (event) => {
 
     return {
       statusCode: 200,
+
       headers: {
         "Content-Type": "application/json",
       },
+
       body: JSON.stringify(result),
     };
   } catch (error) {
@@ -911,14 +1234,37 @@ exports.handler = async (event) => {
       error.stack || error.message || error,
     );
 
+    const message = error.message || "Reconciliation failed.";
+
+    /*
+     * Validation and business-rule failures return 400.
+     * Unexpected AppSync or infrastructure failures
+     * return 500.
+     */
+    const statusCode =
+      message.includes("required") ||
+      message.includes("valid") ||
+      message.includes("already exists") ||
+      message.includes("overlaps") ||
+      message.includes("does not match") ||
+      message.includes("Multiple confirmed") ||
+      message.includes("no matching") ||
+      message.includes("no unloadingCompletedAt") ||
+      message.includes("incomplete") ||
+      message.includes("invalid")
+        ? 400
+        : 500;
+
     return {
-      statusCode: 400,
+      statusCode,
+
       headers: {
         "Content-Type": "application/json",
       },
+
       body: JSON.stringify({
         success: false,
-        error: error.message || "Reconciliation failed.",
+        error: message,
       }),
     };
   }

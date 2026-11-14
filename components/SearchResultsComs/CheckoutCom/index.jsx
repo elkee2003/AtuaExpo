@@ -435,29 +435,12 @@ const Checkout = () => {
       );
 
       //-------------------------------------
-      // Navigate To Payment
-      //-------------------------------------
-      //
-      // Do NOT reset OrderContext or
-      // LocationContext here.
-      //
+      // Navigate After Order Creation
       //-------------------------------------
 
-      if (
-        paymentResponsibility === "RECEIVER" &&
-        ((paymentTiming === "BEFORE_PICKUP" && paymentMethod === "PAYSTACK") ||
-          (paymentTiming === "ON_DELIVERY" && paymentMethod == null))
-      ) {
-        router.push({
-          pathname: "/screens/payment/receiverpayment",
-          params: {
-            orderId: order.id,
-          },
-        });
-      } else if (
-        paymentTiming === "BEFORE_PICKUP" &&
-        paymentMethod === "PAYSTACK"
-      ) {
+      if (paymentTiming === "BEFORE_PICKUP" && paymentMethod === "PAYSTACK") {
+        // Payment is required before pickup.
+        // Only the sender pays through this screen.
         router.push({
           pathname: "/screens/payment",
           params: {
@@ -465,8 +448,35 @@ const Checkout = () => {
           },
         });
       } else {
-        router.push("/orderhistory");
+        // All Pay on Delivery and Cash at Pickup orders
+        // go directly to Order History.
+        router.replace("/orderhistory");
       }
+
+      // if (
+      //   paymentResponsibility === "RECEIVER" &&
+      //   ((paymentTiming === "BEFORE_PICKUP" && paymentMethod === "PAYSTACK") ||
+      //     (paymentTiming === "ON_DELIVERY" && paymentMethod == null))
+      // ) {
+      //   router.push({
+      //     pathname: "/screens/payment/receiverpayment",
+      //     params: {
+      //       orderId: order.id,
+      //     },
+      //   });
+      // } else if (
+      //   paymentTiming === "BEFORE_PICKUP" &&
+      //   paymentMethod === "PAYSTACK"
+      // ) {
+      //   router.push({
+      //     pathname: "/screens/payment",
+      //     params: {
+      //       orderId: order.id,
+      //     },
+      //   });
+      // } else {
+      //   router.push("/orderhistory");
+      // }
     } catch (error) {
       console.log("CREATE ORDER ERROR:", error);
 
@@ -769,11 +779,10 @@ const Checkout = () => {
                 {paymentTiming === "BEFORE_PICKUP" &&
                 paymentMethod === "PAYSTACK"
                   ? paymentResponsibility === "RECEIVER"
-                    ? "Send Payment Request"
-                    : "Continue to Payment"
+                    ? "Confirm Delivery Order"
+                    : "Proceed to Payment"
                   : "Confirm Delivery Order"}
               </Text>
-
               <Ionicons name="arrow-forward" size={18} color="#FFF" />
             </>
           )}

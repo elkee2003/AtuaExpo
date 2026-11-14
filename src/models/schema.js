@@ -1901,6 +1901,162 @@ export const schema = {
                 }
             ]
         },
+        "PayoutReservation": {
+            "name": "PayoutReservation",
+            "fields": {
+                "id": {
+                    "name": "id",
+                    "isArray": false,
+                    "type": "ID",
+                    "isRequired": true,
+                    "attributes": []
+                },
+                "payoutID": {
+                    "name": "payoutID",
+                    "isArray": false,
+                    "type": "ID",
+                    "isRequired": true,
+                    "attributes": []
+                },
+                "walletID": {
+                    "name": "walletID",
+                    "isArray": false,
+                    "type": "ID",
+                    "isRequired": true,
+                    "attributes": []
+                },
+                "courierID": {
+                    "name": "courierID",
+                    "isArray": false,
+                    "type": "ID",
+                    "isRequired": true,
+                    "attributes": []
+                },
+                "totalWalletDebit": {
+                    "name": "totalWalletDebit",
+                    "isArray": false,
+                    "type": "Float",
+                    "isRequired": true,
+                    "attributes": []
+                },
+                "payoutAmount": {
+                    "name": "payoutAmount",
+                    "isArray": false,
+                    "type": "Float",
+                    "isRequired": true,
+                    "attributes": []
+                },
+                "payoutFee": {
+                    "name": "payoutFee",
+                    "isArray": false,
+                    "type": "Float",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "reference": {
+                    "name": "reference",
+                    "isArray": false,
+                    "type": "String",
+                    "isRequired": true,
+                    "attributes": []
+                },
+                "transactionID": {
+                    "name": "transactionID",
+                    "isArray": false,
+                    "type": "ID",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "status": {
+                    "name": "status",
+                    "isArray": false,
+                    "type": {
+                        "enum": "PayoutReservationStatus"
+                    },
+                    "isRequired": true,
+                    "attributes": []
+                },
+                "failureReason": {
+                    "name": "failureReason",
+                    "isArray": false,
+                    "type": "String",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "reservedAt": {
+                    "name": "reservedAt",
+                    "isArray": false,
+                    "type": "AWSDateTime",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "reversedAt": {
+                    "name": "reversedAt",
+                    "isArray": false,
+                    "type": "AWSDateTime",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "createdAt": {
+                    "name": "createdAt",
+                    "isArray": false,
+                    "type": "AWSDateTime",
+                    "isRequired": false,
+                    "attributes": [],
+                    "isReadOnly": true
+                },
+                "updatedAt": {
+                    "name": "updatedAt",
+                    "isArray": false,
+                    "type": "AWSDateTime",
+                    "isRequired": false,
+                    "attributes": [],
+                    "isReadOnly": true
+                }
+            },
+            "syncable": true,
+            "pluralName": "PayoutReservations",
+            "attributes": [
+                {
+                    "type": "model",
+                    "properties": {}
+                },
+                {
+                    "type": "key",
+                    "properties": {
+                        "name": "byPayoutReservation",
+                        "fields": [
+                            "payoutID"
+                        ]
+                    }
+                },
+                {
+                    "type": "key",
+                    "properties": {
+                        "name": "byWalletReservation",
+                        "fields": [
+                            "walletID"
+                        ]
+                    }
+                },
+                {
+                    "type": "auth",
+                    "properties": {
+                        "rules": [
+                            {
+                                "allow": "private",
+                                "provider": "iam",
+                                "operations": [
+                                    "create",
+                                    "read",
+                                    "update"
+                                ]
+                            }
+                        ]
+                    }
+                }
+            ]
+        },
         "Payout": {
             "name": "Payout",
             "fields": {
@@ -2983,6 +3139,261 @@ export const schema = {
                 }
             ]
         },
+        "CourierDebt": {
+            "name": "CourierDebt",
+            "fields": {
+                "id": {
+                    "name": "id",
+                    "isArray": false,
+                    "type": "ID",
+                    "isRequired": true,
+                    "attributes": []
+                },
+                "courierID": {
+                    "name": "courierID",
+                    "isArray": false,
+                    "type": "ID",
+                    "isRequired": true,
+                    "attributes": []
+                },
+                "courier": {
+                    "name": "courier",
+                    "isArray": false,
+                    "type": {
+                        "model": "Courier"
+                    },
+                    "isRequired": false,
+                    "attributes": [],
+                    "association": {
+                        "connectionType": "BELONGS_TO",
+                        "targetNames": [
+                            "courierID"
+                        ]
+                    }
+                },
+                "walletID": {
+                    "name": "walletID",
+                    "isArray": false,
+                    "type": "ID",
+                    "isRequired": true,
+                    "attributes": []
+                },
+                "reconciliationID": {
+                    "name": "reconciliationID",
+                    "isArray": false,
+                    "type": "ID",
+                    "isRequired": true,
+                    "attributes": []
+                },
+                "reconciliation": {
+                    "name": "reconciliation",
+                    "isArray": false,
+                    "type": {
+                        "model": "CourierReconciliation"
+                    },
+                    "isRequired": false,
+                    "attributes": [],
+                    "association": {
+                        "connectionType": "BELONGS_TO",
+                        "targetNames": [
+                            "reconciliationID"
+                        ]
+                    }
+                },
+                "payments": {
+                    "name": "payments",
+                    "isArray": true,
+                    "type": {
+                        "model": "CourierDebtPayment"
+                    },
+                    "isRequired": false,
+                    "attributes": [],
+                    "isArrayNullable": true,
+                    "association": {
+                        "connectionType": "HAS_MANY",
+                        "associatedWith": [
+                            "courierDebt"
+                        ]
+                    }
+                },
+                "amount": {
+                    "name": "amount",
+                    "isArray": false,
+                    "type": "Float",
+                    "isRequired": true,
+                    "attributes": []
+                },
+                "amountPaid": {
+                    "name": "amountPaid",
+                    "isArray": false,
+                    "type": "Float",
+                    "isRequired": true,
+                    "attributes": []
+                },
+                "remainingAmount": {
+                    "name": "remainingAmount",
+                    "isArray": false,
+                    "type": "Float",
+                    "isRequired": true,
+                    "attributes": []
+                },
+                "grossDebtAmount": {
+                    "name": "grossDebtAmount",
+                    "isArray": false,
+                    "type": "Float",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "earningsOffsetAmount": {
+                    "name": "earningsOffsetAmount",
+                    "isArray": false,
+                    "type": "Float",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "walletRecoveredAmount": {
+                    "name": "walletRecoveredAmount",
+                    "isArray": false,
+                    "type": "Float",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "externalPaymentsAmount": {
+                    "name": "externalPaymentsAmount",
+                    "isArray": false,
+                    "type": "Float",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "status": {
+                    "name": "status",
+                    "isArray": false,
+                    "type": {
+                        "enum": "CourierDebtStatus"
+                    },
+                    "isRequired": true,
+                    "attributes": []
+                },
+                "debtStartedAt": {
+                    "name": "debtStartedAt",
+                    "isArray": false,
+                    "type": "AWSDateTime",
+                    "isRequired": true,
+                    "attributes": []
+                },
+                "dueAt": {
+                    "name": "dueAt",
+                    "isArray": false,
+                    "type": "AWSDateTime",
+                    "isRequired": true,
+                    "attributes": []
+                },
+                "firstPaymentAt": {
+                    "name": "firstPaymentAt",
+                    "isArray": false,
+                    "type": "AWSDateTime",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "settledAt": {
+                    "name": "settledAt",
+                    "isArray": false,
+                    "type": "AWSDateTime",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "idempotencyKey": {
+                    "name": "idempotencyKey",
+                    "isArray": false,
+                    "type": "String",
+                    "isRequired": true,
+                    "attributes": []
+                },
+                "createdAt": {
+                    "name": "createdAt",
+                    "isArray": false,
+                    "type": "AWSDateTime",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "updatedAt": {
+                    "name": "updatedAt",
+                    "isArray": false,
+                    "type": "AWSDateTime",
+                    "isRequired": false,
+                    "attributes": []
+                }
+            },
+            "syncable": true,
+            "pluralName": "CourierDebts",
+            "attributes": [
+                {
+                    "type": "model",
+                    "properties": {}
+                },
+                {
+                    "type": "key",
+                    "properties": {
+                        "name": "byCourierDebt",
+                        "fields": [
+                            "courierID",
+                            "createdAt"
+                        ]
+                    }
+                },
+                {
+                    "type": "key",
+                    "properties": {
+                        "name": "byDebtReconciliation",
+                        "fields": [
+                            "reconciliationID"
+                        ]
+                    }
+                },
+                {
+                    "type": "key",
+                    "properties": {
+                        "name": "byDebtStatusDueAt",
+                        "fields": [
+                            "status",
+                            "dueAt"
+                        ]
+                    }
+                },
+                {
+                    "type": "key",
+                    "properties": {
+                        "name": "byCourierDebtIdempotency",
+                        "fields": [
+                            "idempotencyKey"
+                        ]
+                    }
+                },
+                {
+                    "type": "auth",
+                    "properties": {
+                        "rules": [
+                            {
+                                "allow": "public",
+                                "provider": "apiKey",
+                                "operations": [
+                                    "read"
+                                ]
+                            },
+                            {
+                                "allow": "private",
+                                "provider": "iam",
+                                "operations": [
+                                    "create",
+                                    "read",
+                                    "update"
+                                ]
+                            }
+                        ]
+                    }
+                }
+            ]
+        },
         "CourierDebtPayment": {
             "name": "CourierDebtPayment",
             "fields": {
@@ -3006,6 +3417,28 @@ export const schema = {
                     "type": "ID",
                     "isRequired": true,
                     "attributes": []
+                },
+                "courierDebtID": {
+                    "name": "courierDebtID",
+                    "isArray": false,
+                    "type": "ID",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "courierDebt": {
+                    "name": "courierDebt",
+                    "isArray": false,
+                    "type": {
+                        "model": "CourierDebt"
+                    },
+                    "isRequired": false,
+                    "attributes": [],
+                    "association": {
+                        "connectionType": "BELONGS_TO",
+                        "targetNames": [
+                            "courierDebtID"
+                        ]
+                    }
                 },
                 "amount": {
                     "name": "amount",
@@ -3056,6 +3489,41 @@ export const schema = {
                     "isRequired": false,
                     "attributes": []
                 },
+                "amountApplied": {
+                    "name": "amountApplied",
+                    "isArray": false,
+                    "type": "Float",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "debtBefore": {
+                    "name": "debtBefore",
+                    "isArray": false,
+                    "type": "Float",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "debtAfter": {
+                    "name": "debtAfter",
+                    "isArray": false,
+                    "type": "Float",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "transactionID": {
+                    "name": "transactionID",
+                    "isArray": false,
+                    "type": "ID",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "processedAt": {
+                    "name": "processedAt",
+                    "isArray": false,
+                    "type": "AWSDateTime",
+                    "isRequired": false,
+                    "attributes": []
+                },
                 "failureReason": {
                     "name": "failureReason",
                     "isArray": false,
@@ -3097,6 +3565,15 @@ export const schema = {
                 {
                     "type": "key",
                     "properties": {
+                        "name": "byCourierDebtPaymentDebt",
+                        "fields": [
+                            "courierDebtID"
+                        ]
+                    }
+                },
+                {
+                    "type": "key",
+                    "properties": {
                         "name": "byCourierDebtPaymentReference",
                         "fields": [
                             "reference"
@@ -3107,6 +3584,13 @@ export const schema = {
                     "type": "auth",
                     "properties": {
                         "rules": [
+                            {
+                                "allow": "public",
+                                "provider": "apiKey",
+                                "operations": [
+                                    "read"
+                                ]
+                            },
                             {
                                 "allow": "private",
                                 "provider": "iam",
@@ -3150,6 +3634,22 @@ export const schema = {
                         "connectionType": "BELONGS_TO",
                         "targetNames": [
                             "courierID"
+                        ]
+                    }
+                },
+                "debts": {
+                    "name": "debts",
+                    "isArray": true,
+                    "type": {
+                        "model": "CourierDebt"
+                    },
+                    "isRequired": false,
+                    "attributes": [],
+                    "isArrayNullable": true,
+                    "association": {
+                        "connectionType": "HAS_MANY",
+                        "associatedWith": [
+                            "reconciliation"
                         ]
                     }
                 },
@@ -4370,6 +4870,20 @@ export const schema = {
                     "type": {
                         "enum": "FundsStatus"
                     },
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "courierReconciliationID": {
+                    "name": "courierReconciliationID",
+                    "isArray": false,
+                    "type": "ID",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "courierReconciledAt": {
+                    "name": "courierReconciledAt",
+                    "isArray": false,
+                    "type": "AWSDateTime",
                     "isRequired": false,
                     "attributes": []
                 },
@@ -5775,6 +6289,34 @@ export const schema = {
                     "isRequired": false,
                     "attributes": []
                 },
+                "debtDueAt": {
+                    "name": "debtDueAt",
+                    "isArray": false,
+                    "type": "AWSDateTime",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "debtBlockedAt": {
+                    "name": "debtBlockedAt",
+                    "isArray": false,
+                    "type": "AWSDateTime",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "debtBlockReason": {
+                    "name": "debtBlockReason",
+                    "isArray": false,
+                    "type": "String",
+                    "isRequired": false,
+                    "attributes": []
+                },
+                "debtRestrictionActive": {
+                    "name": "debtRestrictionActive",
+                    "isArray": false,
+                    "type": "Boolean",
+                    "isRequired": false,
+                    "attributes": []
+                },
                 "availabilityStatus": {
                     "name": "availabilityStatus",
                     "isArray": false,
@@ -5796,6 +6338,22 @@ export const schema = {
                     "isArray": true,
                     "type": {
                         "model": "CourierReconciliation"
+                    },
+                    "isRequired": false,
+                    "attributes": [],
+                    "isArrayNullable": true,
+                    "association": {
+                        "connectionType": "HAS_MANY",
+                        "associatedWith": [
+                            "courier"
+                        ]
+                    }
+                },
+                "debts": {
+                    "name": "debts",
+                    "isArray": true,
+                    "type": {
+                        "model": "CourierDebt"
                     },
                     "isRequired": false,
                     "attributes": [],
@@ -6022,6 +6580,14 @@ export const schema = {
                                     "update",
                                     "delete",
                                     "read"
+                                ]
+                            },
+                            {
+                                "allow": "private",
+                                "provider": "iam",
+                                "operations": [
+                                    "read",
+                                    "update"
                                 ]
                             }
                         ]
@@ -6483,6 +7049,17 @@ export const schema = {
                 "REVERSED"
             ]
         },
+        "PayoutReservationStatus": {
+            "name": "PayoutReservationStatus",
+            "values": [
+                "PENDING",
+                "WALLET_DEBITED",
+                "RESERVED",
+                "COMPLETED",
+                "FAILED",
+                "REVERSED"
+            ]
+        },
         "PayoutStatus": {
             "name": "PayoutStatus",
             "values": [
@@ -6614,6 +7191,17 @@ export const schema = {
             "values": [
                 "PAYSTACK",
                 "CASH"
+            ]
+        },
+        "CourierDebtStatus": {
+            "name": "CourierDebtStatus",
+            "values": [
+                "OPEN",
+                "PARTIALLY_PAID",
+                "PAID",
+                "OVERDUE",
+                "REVERSED",
+                "WAIVED"
             ]
         },
         "CourierReconciliationStatus": {
@@ -7286,5 +7874,5 @@ export const schema = {
         }
     },
     "codegenVersion": "3.4.4",
-    "version": "5814284f219d354396214c6054004d17"
+    "version": "43a66b5cc27997eacb8b338fd2eda1ca"
 };

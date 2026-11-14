@@ -335,6 +335,8 @@ export const getFleetTransaction = /* GraphQL */ `
         cashCollectionID
         payoutStatus
         fundsStatus
+        courierReconciliationID
+        courierReconciledAt
         earningsAllocationStatus
         earningsAllocatedAt
         maxiCountIncrementedAt
@@ -993,6 +995,8 @@ export const getFleetOrder = /* GraphQL */ `
         cashCollectionID
         payoutStatus
         fundsStatus
+        courierReconciliationID
+        courierReconciledAt
         earningsAllocationStatus
         earningsAllocatedAt
         maxiCountIncrementedAt
@@ -1074,6 +1078,10 @@ export const getFleetOrder = /* GraphQL */ `
         averageRating
         reviewCount
         totalReports
+        debtDueAt
+        debtBlockedAt
+        debtBlockReason
+        debtRestrictionActive
         availabilityStatus
         lastLocationUpdateAt
         statusKey
@@ -1679,6 +1687,10 @@ export const getFleetMember = /* GraphQL */ `
         averageRating
         reviewCount
         totalReports
+        debtDueAt
+        debtBlockedAt
+        debtBlockReason
+        debtRestrictionActive
         availabilityStatus
         lastLocationUpdateAt
         statusKey
@@ -2006,6 +2018,10 @@ export const getFleetInvitation = /* GraphQL */ `
         averageRating
         reviewCount
         totalReports
+        debtDueAt
+        debtBlockedAt
+        debtBlockReason
+        debtRestrictionActive
         availabilityStatus
         lastLocationUpdateAt
         statusKey
@@ -2323,6 +2339,10 @@ export const getFleetVehicle = /* GraphQL */ `
         averageRating
         reviewCount
         totalReports
+        debtDueAt
+        debtBlockedAt
+        debtBlockReason
+        debtRestrictionActive
         availabilityStatus
         lastLocationUpdateAt
         statusKey
@@ -2736,6 +2756,193 @@ export const paymentMethodsByUser = /* GraphQL */ `
         isDefault
         status
         deactivatedAt
+        createdAt
+        updatedAt
+        _version
+        _deleted
+        _lastChangedAt
+        __typename
+      }
+      nextToken
+      startedAt
+      __typename
+    }
+  }
+`;
+export const getPayoutReservation = /* GraphQL */ `
+  query GetPayoutReservation($id: ID!) {
+    getPayoutReservation(id: $id) {
+      id
+      payoutID
+      walletID
+      courierID
+      totalWalletDebit
+      payoutAmount
+      payoutFee
+      reference
+      transactionID
+      status
+      failureReason
+      reservedAt
+      reversedAt
+      createdAt
+      updatedAt
+      _version
+      _deleted
+      _lastChangedAt
+      __typename
+    }
+  }
+`;
+export const listPayoutReservations = /* GraphQL */ `
+  query ListPayoutReservations(
+    $filter: ModelPayoutReservationFilterInput
+    $limit: Int
+    $nextToken: String
+  ) {
+    listPayoutReservations(
+      filter: $filter
+      limit: $limit
+      nextToken: $nextToken
+    ) {
+      items {
+        id
+        payoutID
+        walletID
+        courierID
+        totalWalletDebit
+        payoutAmount
+        payoutFee
+        reference
+        transactionID
+        status
+        failureReason
+        reservedAt
+        reversedAt
+        createdAt
+        updatedAt
+        _version
+        _deleted
+        _lastChangedAt
+        __typename
+      }
+      nextToken
+      startedAt
+      __typename
+    }
+  }
+`;
+export const syncPayoutReservations = /* GraphQL */ `
+  query SyncPayoutReservations(
+    $filter: ModelPayoutReservationFilterInput
+    $limit: Int
+    $nextToken: String
+    $lastSync: AWSTimestamp
+  ) {
+    syncPayoutReservations(
+      filter: $filter
+      limit: $limit
+      nextToken: $nextToken
+      lastSync: $lastSync
+    ) {
+      items {
+        id
+        payoutID
+        walletID
+        courierID
+        totalWalletDebit
+        payoutAmount
+        payoutFee
+        reference
+        transactionID
+        status
+        failureReason
+        reservedAt
+        reversedAt
+        createdAt
+        updatedAt
+        _version
+        _deleted
+        _lastChangedAt
+        __typename
+      }
+      nextToken
+      startedAt
+      __typename
+    }
+  }
+`;
+export const payoutReservationsByPayoutID = /* GraphQL */ `
+  query PayoutReservationsByPayoutID(
+    $payoutID: ID!
+    $sortDirection: ModelSortDirection
+    $filter: ModelPayoutReservationFilterInput
+    $limit: Int
+    $nextToken: String
+  ) {
+    payoutReservationsByPayoutID(
+      payoutID: $payoutID
+      sortDirection: $sortDirection
+      filter: $filter
+      limit: $limit
+      nextToken: $nextToken
+    ) {
+      items {
+        id
+        payoutID
+        walletID
+        courierID
+        totalWalletDebit
+        payoutAmount
+        payoutFee
+        reference
+        transactionID
+        status
+        failureReason
+        reservedAt
+        reversedAt
+        createdAt
+        updatedAt
+        _version
+        _deleted
+        _lastChangedAt
+        __typename
+      }
+      nextToken
+      startedAt
+      __typename
+    }
+  }
+`;
+export const payoutReservationsByWalletID = /* GraphQL */ `
+  query PayoutReservationsByWalletID(
+    $walletID: ID!
+    $sortDirection: ModelSortDirection
+    $filter: ModelPayoutReservationFilterInput
+    $limit: Int
+    $nextToken: String
+  ) {
+    payoutReservationsByWalletID(
+      walletID: $walletID
+      sortDirection: $sortDirection
+      filter: $filter
+      limit: $limit
+      nextToken: $nextToken
+    ) {
+      items {
+        id
+        payoutID
+        walletID
+        courierID
+        totalWalletDebit
+        payoutAmount
+        payoutFee
+        reference
+        transactionID
+        status
+        failureReason
+        reservedAt
+        reversedAt
         createdAt
         updatedAt
         _version
@@ -3518,6 +3725,8 @@ export const getPayment = /* GraphQL */ `
         cashCollectionID
         payoutStatus
         fundsStatus
+        courierReconciliationID
+        courierReconciledAt
         earningsAllocationStatus
         earningsAllocatedAt
         maxiCountIncrementedAt
@@ -3906,6 +4115,8 @@ export const getOffer = /* GraphQL */ `
         cashCollectionID
         payoutStatus
         fundsStatus
+        courierReconciliationID
+        courierReconciledAt
         earningsAllocationStatus
         earningsAllocatedAt
         maxiCountIncrementedAt
@@ -3988,6 +4199,10 @@ export const getOffer = /* GraphQL */ `
         averageRating
         reviewCount
         totalReports
+        debtDueAt
+        debtBlockedAt
+        debtBlockReason
+        debtRestrictionActive
         availabilityStatus
         lastLocationUpdateAt
         statusKey
@@ -4378,12 +4593,435 @@ export const orderCancellationsByPaymentReference = /* GraphQL */ `
     }
   }
 `;
+export const getCourierDebt = /* GraphQL */ `
+  query GetCourierDebt($id: ID!) {
+    getCourierDebt(id: $id) {
+      id
+      courierID
+      courier {
+        id
+        sub
+        isOnline
+        isBlocked
+        firstName
+        lastName
+        profilePic
+        address
+        landMark
+        phoneNumber
+        email
+        courierNIN
+        courierNINImage
+        bankCode
+        bankName
+        accountName
+        accountNumber
+        transportationType
+        vehicleClass
+        model
+        vehicleColour
+        plateNumber
+        maxiImages
+        maxiDescription
+        guarantorName
+        guarantorLastName
+        guarantorProfession
+        guarantorNumber
+        guarantorRelationship
+        guarantorAddress
+        guarantorEmail
+        guarantorNIN
+        guarantorNINImage
+        lat
+        lng
+        heading
+        liveLocationID
+        isOnboardingComplete
+        push_token
+        isApproved
+        approvedById
+        currentBatchCount
+        currentExpressCount
+        currentMaxiCount
+        lastBatchAssignedAt
+        averageRating
+        reviewCount
+        totalReports
+        debtDueAt
+        debtBlockedAt
+        debtBlockReason
+        debtRestrictionActive
+        availabilityStatus
+        lastLocationUpdateAt
+        statusKey
+        walletID
+        createdAt
+        updatedAt
+        _version
+        _deleted
+        _lastChangedAt
+        __typename
+      }
+      walletID
+      reconciliationID
+      reconciliation {
+        id
+        courierID
+        reconciliationReference
+        periodStart
+        periodEnd
+        onlineCourierEarnings
+        cashCollectedAmount
+        amountCourierOwesAtua
+        amountAtuaOwesCourier
+        previousSettlements
+        adjustments
+        netAmount
+        direction
+        status
+        walletDebtRecovered
+        remainingDebt
+        calculatedAt
+        approvedAt
+        settledAt
+        settlementReference
+        notes
+        createdAt
+        updatedAt
+        _version
+        _deleted
+        _lastChangedAt
+        __typename
+      }
+      payments {
+        nextToken
+        startedAt
+        __typename
+      }
+      amount
+      amountPaid
+      remainingAmount
+      grossDebtAmount
+      earningsOffsetAmount
+      walletRecoveredAmount
+      externalPaymentsAmount
+      status
+      debtStartedAt
+      dueAt
+      firstPaymentAt
+      settledAt
+      idempotencyKey
+      createdAt
+      updatedAt
+      _version
+      _deleted
+      _lastChangedAt
+      __typename
+    }
+  }
+`;
+export const listCourierDebts = /* GraphQL */ `
+  query ListCourierDebts(
+    $filter: ModelCourierDebtFilterInput
+    $limit: Int
+    $nextToken: String
+  ) {
+    listCourierDebts(filter: $filter, limit: $limit, nextToken: $nextToken) {
+      items {
+        id
+        courierID
+        walletID
+        reconciliationID
+        amount
+        amountPaid
+        remainingAmount
+        grossDebtAmount
+        earningsOffsetAmount
+        walletRecoveredAmount
+        externalPaymentsAmount
+        status
+        debtStartedAt
+        dueAt
+        firstPaymentAt
+        settledAt
+        idempotencyKey
+        createdAt
+        updatedAt
+        _version
+        _deleted
+        _lastChangedAt
+        __typename
+      }
+      nextToken
+      startedAt
+      __typename
+    }
+  }
+`;
+export const syncCourierDebts = /* GraphQL */ `
+  query SyncCourierDebts(
+    $filter: ModelCourierDebtFilterInput
+    $limit: Int
+    $nextToken: String
+    $lastSync: AWSTimestamp
+  ) {
+    syncCourierDebts(
+      filter: $filter
+      limit: $limit
+      nextToken: $nextToken
+      lastSync: $lastSync
+    ) {
+      items {
+        id
+        courierID
+        walletID
+        reconciliationID
+        amount
+        amountPaid
+        remainingAmount
+        grossDebtAmount
+        earningsOffsetAmount
+        walletRecoveredAmount
+        externalPaymentsAmount
+        status
+        debtStartedAt
+        dueAt
+        firstPaymentAt
+        settledAt
+        idempotencyKey
+        createdAt
+        updatedAt
+        _version
+        _deleted
+        _lastChangedAt
+        __typename
+      }
+      nextToken
+      startedAt
+      __typename
+    }
+  }
+`;
+export const courierDebtsByCourierIDAndCreatedAt = /* GraphQL */ `
+  query CourierDebtsByCourierIDAndCreatedAt(
+    $courierID: ID!
+    $createdAt: ModelStringKeyConditionInput
+    $sortDirection: ModelSortDirection
+    $filter: ModelCourierDebtFilterInput
+    $limit: Int
+    $nextToken: String
+  ) {
+    courierDebtsByCourierIDAndCreatedAt(
+      courierID: $courierID
+      createdAt: $createdAt
+      sortDirection: $sortDirection
+      filter: $filter
+      limit: $limit
+      nextToken: $nextToken
+    ) {
+      items {
+        id
+        courierID
+        walletID
+        reconciliationID
+        amount
+        amountPaid
+        remainingAmount
+        grossDebtAmount
+        earningsOffsetAmount
+        walletRecoveredAmount
+        externalPaymentsAmount
+        status
+        debtStartedAt
+        dueAt
+        firstPaymentAt
+        settledAt
+        idempotencyKey
+        createdAt
+        updatedAt
+        _version
+        _deleted
+        _lastChangedAt
+        __typename
+      }
+      nextToken
+      startedAt
+      __typename
+    }
+  }
+`;
+export const courierDebtsByReconciliationID = /* GraphQL */ `
+  query CourierDebtsByReconciliationID(
+    $reconciliationID: ID!
+    $sortDirection: ModelSortDirection
+    $filter: ModelCourierDebtFilterInput
+    $limit: Int
+    $nextToken: String
+  ) {
+    courierDebtsByReconciliationID(
+      reconciliationID: $reconciliationID
+      sortDirection: $sortDirection
+      filter: $filter
+      limit: $limit
+      nextToken: $nextToken
+    ) {
+      items {
+        id
+        courierID
+        walletID
+        reconciliationID
+        amount
+        amountPaid
+        remainingAmount
+        grossDebtAmount
+        earningsOffsetAmount
+        walletRecoveredAmount
+        externalPaymentsAmount
+        status
+        debtStartedAt
+        dueAt
+        firstPaymentAt
+        settledAt
+        idempotencyKey
+        createdAt
+        updatedAt
+        _version
+        _deleted
+        _lastChangedAt
+        __typename
+      }
+      nextToken
+      startedAt
+      __typename
+    }
+  }
+`;
+export const courierDebtsByStatusAndDueAt = /* GraphQL */ `
+  query CourierDebtsByStatusAndDueAt(
+    $status: CourierDebtStatus!
+    $dueAt: ModelStringKeyConditionInput
+    $sortDirection: ModelSortDirection
+    $filter: ModelCourierDebtFilterInput
+    $limit: Int
+    $nextToken: String
+  ) {
+    courierDebtsByStatusAndDueAt(
+      status: $status
+      dueAt: $dueAt
+      sortDirection: $sortDirection
+      filter: $filter
+      limit: $limit
+      nextToken: $nextToken
+    ) {
+      items {
+        id
+        courierID
+        walletID
+        reconciliationID
+        amount
+        amountPaid
+        remainingAmount
+        grossDebtAmount
+        earningsOffsetAmount
+        walletRecoveredAmount
+        externalPaymentsAmount
+        status
+        debtStartedAt
+        dueAt
+        firstPaymentAt
+        settledAt
+        idempotencyKey
+        createdAt
+        updatedAt
+        _version
+        _deleted
+        _lastChangedAt
+        __typename
+      }
+      nextToken
+      startedAt
+      __typename
+    }
+  }
+`;
+export const courierDebtsByIdempotencyKey = /* GraphQL */ `
+  query CourierDebtsByIdempotencyKey(
+    $idempotencyKey: String!
+    $sortDirection: ModelSortDirection
+    $filter: ModelCourierDebtFilterInput
+    $limit: Int
+    $nextToken: String
+  ) {
+    courierDebtsByIdempotencyKey(
+      idempotencyKey: $idempotencyKey
+      sortDirection: $sortDirection
+      filter: $filter
+      limit: $limit
+      nextToken: $nextToken
+    ) {
+      items {
+        id
+        courierID
+        walletID
+        reconciliationID
+        amount
+        amountPaid
+        remainingAmount
+        grossDebtAmount
+        earningsOffsetAmount
+        walletRecoveredAmount
+        externalPaymentsAmount
+        status
+        debtStartedAt
+        dueAt
+        firstPaymentAt
+        settledAt
+        idempotencyKey
+        createdAt
+        updatedAt
+        _version
+        _deleted
+        _lastChangedAt
+        __typename
+      }
+      nextToken
+      startedAt
+      __typename
+    }
+  }
+`;
 export const getCourierDebtPayment = /* GraphQL */ `
   query GetCourierDebtPayment($id: ID!) {
     getCourierDebtPayment(id: $id) {
       id
       courierID
       walletID
+      courierDebtID
+      courierDebt {
+        id
+        courierID
+        walletID
+        reconciliationID
+        amount
+        amountPaid
+        remainingAmount
+        grossDebtAmount
+        earningsOffsetAmount
+        walletRecoveredAmount
+        externalPaymentsAmount
+        status
+        debtStartedAt
+        dueAt
+        firstPaymentAt
+        settledAt
+        idempotencyKey
+        createdAt
+        updatedAt
+        _version
+        _deleted
+        _lastChangedAt
+        __typename
+      }
       amount
       currency
       provider
@@ -4391,6 +5029,11 @@ export const getCourierDebtPayment = /* GraphQL */ `
       status
       checkoutUrl
       paidAt
+      amountApplied
+      debtBefore
+      debtAfter
+      transactionID
+      processedAt
       failureReason
       createdAt
       updatedAt
@@ -4416,6 +5059,7 @@ export const listCourierDebtPayments = /* GraphQL */ `
         id
         courierID
         walletID
+        courierDebtID
         amount
         currency
         provider
@@ -4423,6 +5067,11 @@ export const listCourierDebtPayments = /* GraphQL */ `
         status
         checkoutUrl
         paidAt
+        amountApplied
+        debtBefore
+        debtAfter
+        transactionID
+        processedAt
         failureReason
         createdAt
         updatedAt
@@ -4454,6 +5103,7 @@ export const syncCourierDebtPayments = /* GraphQL */ `
         id
         courierID
         walletID
+        courierDebtID
         amount
         currency
         provider
@@ -4461,6 +5111,11 @@ export const syncCourierDebtPayments = /* GraphQL */ `
         status
         checkoutUrl
         paidAt
+        amountApplied
+        debtBefore
+        debtAfter
+        transactionID
+        processedAt
         failureReason
         createdAt
         updatedAt
@@ -4494,6 +5149,7 @@ export const courierDebtPaymentsByCourierID = /* GraphQL */ `
         id
         courierID
         walletID
+        courierDebtID
         amount
         currency
         provider
@@ -4501,6 +5157,57 @@ export const courierDebtPaymentsByCourierID = /* GraphQL */ `
         status
         checkoutUrl
         paidAt
+        amountApplied
+        debtBefore
+        debtAfter
+        transactionID
+        processedAt
+        failureReason
+        createdAt
+        updatedAt
+        _version
+        _deleted
+        _lastChangedAt
+        __typename
+      }
+      nextToken
+      startedAt
+      __typename
+    }
+  }
+`;
+export const courierDebtPaymentsByCourierDebtID = /* GraphQL */ `
+  query CourierDebtPaymentsByCourierDebtID(
+    $courierDebtID: ID!
+    $sortDirection: ModelSortDirection
+    $filter: ModelCourierDebtPaymentFilterInput
+    $limit: Int
+    $nextToken: String
+  ) {
+    courierDebtPaymentsByCourierDebtID(
+      courierDebtID: $courierDebtID
+      sortDirection: $sortDirection
+      filter: $filter
+      limit: $limit
+      nextToken: $nextToken
+    ) {
+      items {
+        id
+        courierID
+        walletID
+        courierDebtID
+        amount
+        currency
+        provider
+        reference
+        status
+        checkoutUrl
+        paidAt
+        amountApplied
+        debtBefore
+        debtAfter
+        transactionID
+        processedAt
         failureReason
         createdAt
         updatedAt
@@ -4534,6 +5241,7 @@ export const courierDebtPaymentsByReference = /* GraphQL */ `
         id
         courierID
         walletID
+        courierDebtID
         amount
         currency
         provider
@@ -4541,6 +5249,11 @@ export const courierDebtPaymentsByReference = /* GraphQL */ `
         status
         checkoutUrl
         paidAt
+        amountApplied
+        debtBefore
+        debtAfter
+        transactionID
+        processedAt
         failureReason
         createdAt
         updatedAt
@@ -4609,6 +5322,10 @@ export const getCourierReconciliation = /* GraphQL */ `
         averageRating
         reviewCount
         totalReports
+        debtDueAt
+        debtBlockedAt
+        debtBlockReason
+        debtRestrictionActive
         availabilityStatus
         lastLocationUpdateAt
         statusKey
@@ -4618,6 +5335,11 @@ export const getCourierReconciliation = /* GraphQL */ `
         _version
         _deleted
         _lastChangedAt
+        __typename
+      }
+      debts {
+        nextToken
+        startedAt
         __typename
       }
       reconciliationReference
@@ -5166,6 +5888,8 @@ export const getOrder = /* GraphQL */ `
       cashCollectionID
       payoutStatus
       fundsStatus
+      courierReconciliationID
+      courierReconciledAt
       earningsAllocationStatus
       earningsAllocatedAt
       maxiCountIncrementedAt
@@ -5255,6 +5979,10 @@ export const getOrder = /* GraphQL */ `
         averageRating
         reviewCount
         totalReports
+        debtDueAt
+        debtBlockedAt
+        debtBlockReason
+        debtRestrictionActive
         availabilityStatus
         lastLocationUpdateAt
         statusKey
@@ -5418,6 +6146,8 @@ export const listOrders = /* GraphQL */ `
         cashCollectionID
         payoutStatus
         fundsStatus
+        courierReconciliationID
+        courierReconciledAt
         earningsAllocationStatus
         earningsAllocatedAt
         maxiCountIncrementedAt
@@ -5590,6 +6320,8 @@ export const syncOrders = /* GraphQL */ `
         cashCollectionID
         payoutStatus
         fundsStatus
+        courierReconciliationID
+        courierReconciledAt
         earningsAllocationStatus
         earningsAllocatedAt
         maxiCountIncrementedAt
@@ -5764,6 +6496,8 @@ export const ordersByAssignedCourierId = /* GraphQL */ `
         cashCollectionID
         payoutStatus
         fundsStatus
+        courierReconciliationID
+        courierReconciledAt
         earningsAllocationStatus
         earningsAllocatedAt
         maxiCountIncrementedAt
@@ -5940,6 +6674,8 @@ export const ordersByAssignmentStatusAndAssignmentExpiresAt = /* GraphQL */ `
         cashCollectionID
         payoutStatus
         fundsStatus
+        courierReconciliationID
+        courierReconciledAt
         earningsAllocationStatus
         earningsAllocatedAt
         maxiCountIncrementedAt
@@ -6114,6 +6850,8 @@ export const ordersByRecipientTrackingToken = /* GraphQL */ `
         cashCollectionID
         payoutStatus
         fundsStatus
+        courierReconciliationID
+        courierReconciledAt
         earningsAllocationStatus
         earningsAllocatedAt
         maxiCountIncrementedAt
@@ -6288,6 +7026,8 @@ export const ordersByUserID = /* GraphQL */ `
         cashCollectionID
         payoutStatus
         fundsStatus
+        courierReconciliationID
+        courierReconciledAt
         earningsAllocationStatus
         earningsAllocatedAt
         maxiCountIncrementedAt
@@ -6380,6 +7120,10 @@ export const getCourierReport = /* GraphQL */ `
         averageRating
         reviewCount
         totalReports
+        debtDueAt
+        debtBlockedAt
+        debtBlockReason
+        debtRestrictionActive
         availabilityStatus
         lastLocationUpdateAt
         statusKey
@@ -6535,6 +7279,8 @@ export const getCourierReport = /* GraphQL */ `
         cashCollectionID
         payoutStatus
         fundsStatus
+        courierReconciliationID
+        courierReconciledAt
         earningsAllocationStatus
         earningsAllocatedAt
         maxiCountIncrementedAt
@@ -6821,6 +7567,10 @@ export const getCourierReview = /* GraphQL */ `
         averageRating
         reviewCount
         totalReports
+        debtDueAt
+        debtBlockedAt
+        debtBlockReason
+        debtRestrictionActive
         availabilityStatus
         lastLocationUpdateAt
         statusKey
@@ -6976,6 +7726,8 @@ export const getCourierReview = /* GraphQL */ `
         cashCollectionID
         payoutStatus
         fundsStatus
+        courierReconciliationID
+        courierReconciledAt
         earningsAllocationStatus
         earningsAllocatedAt
         maxiCountIncrementedAt
@@ -7355,6 +8107,10 @@ export const getCourierLiveLocation = /* GraphQL */ `
         averageRating
         reviewCount
         totalReports
+        debtDueAt
+        debtBlockedAt
+        debtBlockReason
+        debtRestrictionActive
         availabilityStatus
         lastLocationUpdateAt
         statusKey
@@ -7568,9 +8324,18 @@ export const getCourier = /* GraphQL */ `
       averageRating
       reviewCount
       totalReports
+      debtDueAt
+      debtBlockedAt
+      debtBlockReason
+      debtRestrictionActive
       availabilityStatus
       lastLocationUpdateAt
       reconciliations {
+        nextToken
+        startedAt
+        __typename
+      }
+      debts {
         nextToken
         startedAt
         __typename
@@ -7697,6 +8462,10 @@ export const listCouriers = /* GraphQL */ `
         averageRating
         reviewCount
         totalReports
+        debtDueAt
+        debtBlockedAt
+        debtBlockReason
+        debtRestrictionActive
         availabilityStatus
         lastLocationUpdateAt
         statusKey
@@ -7776,6 +8545,10 @@ export const syncCouriers = /* GraphQL */ `
         averageRating
         reviewCount
         totalReports
+        debtDueAt
+        debtBlockedAt
+        debtBlockReason
+        debtRestrictionActive
         availabilityStatus
         lastLocationUpdateAt
         statusKey
@@ -7857,6 +8630,10 @@ export const couriersBySub = /* GraphQL */ `
         averageRating
         reviewCount
         totalReports
+        debtDueAt
+        debtBlockedAt
+        debtBlockReason
+        debtRestrictionActive
         availabilityStatus
         lastLocationUpdateAt
         statusKey
@@ -7938,6 +8715,10 @@ export const couriersByStatus = /* GraphQL */ `
         averageRating
         reviewCount
         totalReports
+        debtDueAt
+        debtBlockedAt
+        debtBlockReason
+        debtRestrictionActive
         availabilityStatus
         lastLocationUpdateAt
         statusKey

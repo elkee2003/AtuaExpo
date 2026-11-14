@@ -1,62 +1,39 @@
-/*
- * File:
- * amplify/backend/function/verifyCourierDebtPayment/src/index.js
- *
- * ATUA — VERIFY COURIER DEBT PAYMENT
- *
- * PURPOSE
- * -------
- * Verifies a courier's debt-repayment transaction with Paystack and,
- * if successful, reduces the courier's outstanding wallet debt.
- *
- * FLOW
- * ----
- * 1. Authenticate the courier.
- * 2. Validate the payment reference.
- * 3. Load the CourierDebtPayment record.
- * 4. Verify the payment belongs to the authenticated courier.
- * 5. Verify the transaction directly with Paystack.
- * 6. Validate the reference, amount, currency and transaction status.
- * 7. Claim the payment by changing PENDING to PROCESSING.
- * 8. Validate the courier's wallet and outstanding debt.
- * 9. Reduce the wallet debt.
- * 10. Mark the payment SUCCESS.
- *
- * IMPORTANT FINANCIAL SAFETY LIMITATION
- * -------------------------------------
- * Updating the wallet and updating CourierDebtPayment are two separate
- * AppSync operations. They are not one atomic database transaction.
- *
- * If the wallet update succeeds but the payment update fails or times
- * out, the payment may remain PROCESSING even though the debt was
- * already reduced.
- *
- * Never reset a PROCESSING payment to PENDING automatically.
- * Reconcile the payment record, Paystack transaction and wallet before
- * deciding whether any recovery action is needed.
- *
- * REQUIRED CONFIGURATION
- * ----------------------
- * REGION or AWS_REGION
- * API_ATUA_GRAPHQLAPIENDPOINTOUTPUT
- * PAYSTACK_SECRET_KEY
- *
- * PAYSTACK_SECRET_KEY must contain the NAME of the AWS SSM parameter
- * storing the Paystack secret, not the Paystack secret itself.
- *
- * The Lambda execution role needs permission to:
- * - Read the specified SSM parameter.
- * - Decrypt it if it uses a customer-managed KMS key.
- * - Call the required AppSync operations using IAM.
- *
- * Dependencies:
- * - aws4
- * - @aws-sdk/client-ssm
- */
-
 "use strict";
 
+/*
+ * ATUA — VERIFY COURIER DEBT PAYMENT
+ *
+ * Verifies a Paystack debt repayment and applies it to:
+ *   1. The linked CourierDebt record.
+ *   2. Wallet.outstandingDebt.
+ *   3. The Transaction ledger.
+ *
+ * IMPORTANT:
+ * - Never deduct from availableBalance.
+ * - Never deduct from pendingBalance.
+ * - Never change lifetimeEarnings.
+ * - Never reset PROCESSING to PENDING.
+ * - Never automatically repeat an uncertain financial mutation.
+ * - Partial repayments do not reset the original debt deadline.
+ *
+ * ENVIRONMENT VARIABLES:
+ * REGION or AWS_REGION
+ * API_ATUA_GRAPHQLAPIENDPOINTOUTPUT
+ * PAYSTACK_SECRET_KEY (SSM parameter name, not secret value)
+ *
+ * DEPENDENCIES:
+ * aws4
+ * @aws-sdk/client-ssm
+ *
+ * REQUIRED IAM:
+ * ssm:GetParameter
+ * kms:Decrypt (if using a customer-managed KMS key)
+ * AppSync IAM access for Courier, CourierDebt,
+ * CourierDebtPayment, Wallet and Transaction.
+ */
+
 const https = require("https");
+const crypto = require("crypto");
 const aws4 = require("aws4");
 
 const { SSMClient, GetParameterCommand } = require("@aws-sdk/client-ssm");
@@ -65,44 +42,29 @@ const { SSMClient, GetParameterCommand } = require("@aws-sdk/client-ssm");
 // 1. CONFIGURATION
 // ============================================================
 
-// AWS region where the Lambda and AppSync API are configured.
 const REGION = process.env.REGION || process.env.AWS_REGION || "eu-north-1";
 
-// AppSync GraphQL endpoint.
 const GRAPHQL_ENDPOINT = process.env.API_ATUA_GRAPHQLAPIENDPOINTOUTPUT;
 
-// Name of the SSM parameter containing the Paystack secret.
 const PAYSTACK_PARAMETER_NAME = process.env.PAYSTACK_SECRET_KEY;
 
-// AWS Systems Manager client used to retrieve the secret.
-const ssm = new SSMClient({
-  region: REGION,
-});
-
-// This Lambda handles Paystack payments in Nigerian naira.
 const CURRENCY = "NGN";
 const PROVIDER = "PAYSTACK";
-
-// Only references with this prefix are accepted by this Lambda.
 const PAYMENT_PREFIX = "ATUA-DEBT-";
 
-// Maximum allowed repayment amount in naira.
-// This is a safety limit against unexpected or corrupted values.
 const MAX_PAYMENT_NAIRA = 100000000;
+const REQUEST_TIMEOUT_MS = 15000;
 
-// Cache the secret for subsequent invocations in the same warm
-// Lambda execution environment. Do not log the secret.
-let cachedPaystackSecret;
+const ACTIVE_DEBT_STATUSES = ["OPEN", "PARTIALLY_PAID", "OVERDUE"];
+
+let cachedPaystackSecret = null;
+
+const ssm = new SSMClient({ region: REGION });
 
 // ============================================================
-// 2. STANDARD RESPONSE
+// 2. GENERAL HELPERS
 // ============================================================
 
-/*
- * Returns a consistent response structure to the AppSync caller.
- *
- * Additional fields can be included through the extra argument.
- */
 function response(success, message, extra = {}) {
   return {
     success,
@@ -111,29 +73,61 @@ function response(success, message, extra = {}) {
   };
 }
 
+function isNonEmptyString(value) {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+function toKobo(value, fieldName) {
+  const amount = Number(value);
+
+  if (!Number.isFinite(amount)) {
+    throw new Error(`${fieldName} is not a valid amount.`);
+  }
+
+  const kobo = Math.round(amount * 100);
+
+  if (!Number.isSafeInteger(kobo)) {
+    throw new Error(`${fieldName} is outside the supported range.`);
+  }
+
+  return kobo;
+}
+
+function fromKobo(kobo) {
+  if (!Number.isSafeInteger(kobo)) {
+    throw new Error("Invalid monetary amount.");
+  }
+
+  return Number((kobo / 100).toFixed(2));
+}
+
+function parseJsonSafely(value) {
+  try {
+    return JSON.parse(value);
+  } catch {
+    throw new Error("The server returned an invalid JSON response.");
+  }
+}
+
+function validDate(value) {
+  if (!value) return false;
+
+  return Number.isFinite(new Date(value).getTime());
+}
+
 // ============================================================
-// 3. GET PAYSTACK SECRET FROM AWS SSM
+// 3. PAYSTACK SECRET FROM SSM
 // ============================================================
 
-/*
- * Retrieves the Paystack secret from AWS Systems Manager Parameter
- * Store with decryption enabled.
- *
- * The Lambda should never receive the actual secret from the mobile
- * app or from GraphQL arguments.
- */
 async function getPaystackSecret() {
-  // Reuse the cached secret if this execution environment already
-  // retrieved it successfully.
   if (cachedPaystackSecret) {
     return cachedPaystackSecret;
   }
 
-  if (!PAYSTACK_PARAMETER_NAME) {
+  if (!isNonEmptyString(PAYSTACK_PARAMETER_NAME)) {
     throw new Error("PAYSTACK_SECRET_KEY SSM parameter name is missing.");
   }
 
-  // Securely retrieve the parameter value.
   const result = await ssm.send(
     new GetParameterCommand({
       Name: PAYSTACK_PARAMETER_NAME,
@@ -143,80 +137,68 @@ async function getPaystackSecret() {
 
   const secret = result?.Parameter?.Value;
 
-  if (!secret) {
-    throw new Error("Paystack secret could not be retrieved.");
+  if (!isNonEmptyString(secret)) {
+    throw new Error("Paystack secret could not be retrieved from SSM.");
   }
 
-  // Cache it only after successfully retrieving a non-empty value.
   cachedPaystackSecret = secret;
 
   return secret;
 }
 
 // ============================================================
-// 4. APPSYNC GRAPHQL REQUEST USING AWS IAM SIGNATURE V4
+// 4. APPSYNC REQUEST
 // ============================================================
 
-/*
- * Executes a GraphQL request against AppSync using the Lambda
- * execution role's AWS credentials.
- *
- * This is different from API-key authentication. The Lambda role
- * must have the required AppSync IAM permissions, and the relevant
- * schema operations must permit IAM access.
- */
 async function graphqlRequest(query, variables = {}) {
-  if (!GRAPHQL_ENDPOINT) {
+  if (!isNonEmptyString(GRAPHQL_ENDPOINT)) {
     throw new Error("API_ATUA_GRAPHQLAPIENDPOINTOUTPUT is missing.");
   }
 
   const endpoint = new URL(GRAPHQL_ENDPOINT);
 
-  // Refuse non-HTTPS endpoints so requests are encrypted in transit.
   if (endpoint.protocol !== "https:") {
     throw new Error("The AppSync endpoint must use HTTPS.");
   }
 
-  // Build the GraphQL request body.
   const body = JSON.stringify({
     query,
     variables,
   });
 
-  // aws4.sign adds the AWS Signature Version 4 authorization headers.
-  const request = {
+  const headers = {
+    "Content-Type": "application/json",
     host: endpoint.host,
+  };
 
-    // Preserve any endpoint query string if one exists.
+  const signedRequest = {
+    host: endpoint.host,
     path: `${endpoint.pathname}${endpoint.search}`,
-
     method: "POST",
     service: "appsync",
     region: REGION,
-
-    headers: {
-      "Content-Type": "application/json",
-      host: endpoint.host,
-    },
-
+    headers,
     body,
   };
 
-  // Sign the request using the Lambda execution role credentials.
-  aws4.sign(request);
+  aws4.sign(signedRequest);
+  Object.assign(headers, signedRequest.headers);
 
   return new Promise((resolve, reject) => {
-    const req = https.request(
+    const request = https.request(
       {
-        hostname: request.host,
-        path: request.path,
-        method: request.method,
-        headers: request.headers,
+        hostname: endpoint.hostname,
+        port: endpoint.port || 443,
+        path: `${endpoint.pathname}${endpoint.search}`,
+        method: "POST",
+        headers: {
+          ...headers,
+          "Content-Length": Buffer.byteLength(body),
+        },
       },
       (res) => {
         let data = "";
 
-        // Accumulate the response body.
         res.on("data", (chunk) => {
           data += chunk;
         });
@@ -224,22 +206,20 @@ async function graphqlRequest(query, variables = {}) {
         res.on("end", () => {
           let parsed;
 
-          // AppSync should return JSON.
           try {
-            parsed = JSON.parse(data);
-          } catch {
-            return reject(new Error("AppSync returned an invalid response."));
+            parsed = parseJsonSafely(data);
+          } catch (error) {
+            return reject(error);
           }
 
-          // Check the HTTP status independently of GraphQL errors.
           if (res.statusCode < 200 || res.statusCode >= 300) {
-            console.error("AppSync HTTP status:", res.statusCode);
+            console.error("AppSync HTTP error:", {
+              statusCode: res.statusCode,
+            });
 
-            return reject(new Error("AppSync HTTP request failed."));
+            return reject(new Error("AppSync database request failed."));
           }
 
-          // A GraphQL request can return HTTP 200 and still contain
-          // one or more GraphQL operation errors.
           if (parsed.errors?.length) {
             console.error(
               "AppSync GraphQL errors:",
@@ -254,28 +234,21 @@ async function graphqlRequest(query, variables = {}) {
       },
     );
 
-    // Prevent this request from hanging indefinitely.
-    req.setTimeout(15000, () => {
-      req.destroy(new Error("AppSync request timed out."));
+    request.setTimeout(REQUEST_TIMEOUT_MS, () => {
+      request.destroy(new Error("AppSync request timed out."));
     });
 
-    req.on("error", reject);
+    request.on("error", reject);
 
-    req.write(body);
-    req.end();
+    request.write(body);
+    request.end();
   });
 }
 
 // ============================================================
-// 5. FIND DEBT PAYMENT BY REFERENCE
+// 5. LOAD PAYMENT BY REFERENCE
 // ============================================================
 
-/*
- * Retrieves the CourierDebtPayment record associated with a
- * Paystack reference.
- *
- * A reference must identify exactly one payment record.
- */
 async function getDebtPaymentByReference(reference) {
   const query = /* GraphQL */ `
     query ListCourierDebtPayments(
@@ -287,12 +260,18 @@ async function getDebtPaymentByReference(reference) {
           id
           courierID
           walletID
+          courierDebtID
           amount
           currency
           provider
           reference
           status
           paidAt
+          amountApplied
+          debtBefore
+          debtAfter
+          transactionID
+          processedAt
           failureReason
           _version
         }
@@ -311,18 +290,15 @@ async function getDebtPaymentByReference(reference) {
 
   const items = data?.listCourierDebtPayments?.items || [];
 
-  // Confirm the exact reference rather than relying solely on
-  // the database filter.
   const matches = items.filter((item) => item && item.reference === reference);
 
   if (matches.length === 0) {
     return null;
   }
 
-  // Duplicate references are a data-integrity problem.
   if (matches.length !== 1) {
     throw new Error(
-      "The payment reference does not identify exactly one record.",
+      "The reference does not identify exactly one payment record.",
     );
   }
 
@@ -330,15 +306,9 @@ async function getDebtPaymentByReference(reference) {
 }
 
 // ============================================================
-// 6. GET COURIER
+// 6. LOAD COURIER
 // ============================================================
 
-/*
- * Retrieves the courier associated with the payment record.
- *
- * The caller later compares courier.sub with the authenticated
- * Cognito subject to ensure the user owns this payment.
- */
 async function getCourierById(courierID) {
   const query = /* GraphQL */ `
     query GetCourier($id: ID!) {
@@ -347,6 +317,11 @@ async function getCourierById(courierID) {
         sub
         email
         walletID
+        debtRestrictionActive
+        debtDueAt
+        debtBlockedAt
+        debtBlockReason
+        _version
       }
     }
   `;
@@ -359,23 +334,10 @@ async function getCourierById(courierID) {
 }
 
 // ============================================================
-// 7. GET WALLET
+// 7. LOAD WALLET
 // ============================================================
 
-/*
- * Retrieves the wallet associated with the debt-payment record.
- *
- * We need:
- * - ownerID and ownerType to confirm wallet ownership.
- * - outstandingDebt to calculate the remaining debt.
- * - availableBalance for context if needed by future reconciliation.
- * - _version for AppSync version-conflict protection, when enabled.
- */
 async function getWallet(walletID) {
-  if (!walletID) {
-    throw new Error("The payment has no walletID.");
-  }
-
   const query = /* GraphQL */ `
     query GetWallet($id: ID!) {
       getWallet(id: $id) {
@@ -383,7 +345,10 @@ async function getWallet(walletID) {
         ownerID
         ownerType
         outstandingDebt
+        activeCourierDebtID
         availableBalance
+        pendingBalance
+        lifetimeEarnings
         _version
       }
     }
@@ -397,27 +362,125 @@ async function getWallet(walletID) {
 }
 
 // ============================================================
-// 8. VERIFY PAYMENT DIRECTLY WITH PAYSTACK
+// 8. LOAD THE SPECIFIC COURIER DEBT
 // ============================================================
 
-/*
- * Calls Paystack's transaction verification endpoint.
- *
- * Do not rely solely on information submitted by the mobile app.
- * Paystack's server response is used to verify the transaction.
- */
+async function getCourierDebt(courierDebtID) {
+  const query = /* GraphQL */ `
+    query GetCourierDebt($id: ID!) {
+      getCourierDebt(id: $id) {
+        id
+        courierID
+        walletID
+        amount
+        amountPaid
+        remainingAmount
+        externalPaymentsAmount
+        status
+        debtStartedAt
+        dueAt
+        firstPaymentAt
+        settledAt
+        _version
+      }
+    }
+  `;
+
+  const data = await graphqlRequest(query, {
+    id: courierDebtID,
+  });
+
+  return data?.getCourierDebt || null;
+}
+
+// ============================================================
+// 9. UPDATE COURIER DEBT
+// ============================================================
+
+async function updateCourierDebt(
+  debt,
+  changes,
+  oldRemainingAmount,
+  oldAmountPaid,
+) {
+  const query = /* GraphQL */ `
+    mutation UpdateCourierDebt(
+      $input: UpdateCourierDebtInput!
+      $condition: ModelCourierDebtConditionInput
+    ) {
+      updateCourierDebt(input: $input, condition: $condition) {
+        id
+        courierID
+        walletID
+        amount
+        amountPaid
+        remainingAmount
+        externalPaymentsAmount
+        status
+        debtStartedAt
+        dueAt
+        firstPaymentAt
+        settledAt
+        _version
+      }
+    }
+  `;
+
+  const input = {
+    id: debt.id,
+    ...changes,
+  };
+
+  if (debt._version !== undefined && debt._version !== null) {
+    input._version = debt._version;
+  }
+
+  const data = await graphqlRequest(query, {
+    input,
+    condition: {
+      courierID: {
+        eq: debt.courierID,
+      },
+      walletID: {
+        eq: debt.walletID,
+      },
+      remainingAmount: {
+        eq: oldRemainingAmount,
+      },
+      amountPaid: {
+        eq: oldAmountPaid,
+      },
+      status: {
+        eq: debt.status,
+      },
+    },
+  });
+
+  const updated = data?.updateCourierDebt;
+
+  if (!updated) {
+    throw new Error("Courier debt update failed. Reconciliation is required.");
+  }
+
+  return updated;
+}
+
+// ============================================================
+// 10. VERIFY DIRECTLY WITH PAYSTACK
+// ============================================================
+
 async function verifyWithPaystack(reference) {
   const secret = await getPaystackSecret();
 
   const path = "/transaction/verify/" + encodeURIComponent(reference);
 
   return new Promise((resolve, reject) => {
-    const req = https.request(
+    const request = https.request(
       {
         hostname: "api.paystack.co",
+        port: 443,
         path,
         method: "GET",
-
         headers: {
           Authorization: `Bearer ${secret}`,
           Accept: "application/json",
@@ -434,21 +497,25 @@ async function verifyWithPaystack(reference) {
           let parsed;
 
           try {
-            parsed = JSON.parse(data);
-          } catch {
-            return reject(new Error("Paystack returned an invalid response."));
+            parsed = parseJsonSafely(data);
+          } catch (error) {
+            return reject(error);
           }
 
           if (res.statusCode < 200 || res.statusCode >= 300) {
-            console.error("Paystack verification HTTP status:", res.statusCode);
+            console.error("Paystack verification HTTP error:", {
+              statusCode: res.statusCode,
+              reference,
+            });
 
             return reject(new Error("Paystack verification request failed."));
           }
 
-          // Paystack must indicate success and include transaction data.
           if (parsed.status !== true || !parsed.data) {
             return reject(
-              new Error("Paystack could not verify this transaction."),
+              new Error(
+                parsed.message || "Paystack could not verify this transaction.",
+              ),
             );
           }
 
@@ -457,29 +524,19 @@ async function verifyWithPaystack(reference) {
       },
     );
 
-    req.setTimeout(15000, () => {
-      req.destroy(new Error("Paystack verification timed out."));
+    request.setTimeout(REQUEST_TIMEOUT_MS, () => {
+      request.destroy(new Error("Paystack verification request timed out."));
     });
 
-    req.on("error", reject);
-
-    req.end();
+    request.on("error", reject);
+    request.end();
   });
 }
 
 // ============================================================
-// 9. UPDATE COURIER DEBT PAYMENT
+// 11. UPDATE COURIER DEBT PAYMENT
 // ============================================================
 
-/*
- * Updates a CourierDebtPayment record.
- *
- * The optional condition allows the caller to require a particular
- * current status before the update is accepted.
- *
- * The _version value is included when available. This is useful
- * when the AppSync model has version-based conflict detection enabled.
- */
 async function updateDebtPayment(payment, inputFields, condition = null) {
   const query = /* GraphQL */ `
     mutation UpdateCourierDebtPayment(
@@ -490,12 +547,18 @@ async function updateDebtPayment(payment, inputFields, condition = null) {
         id
         courierID
         walletID
+        courierDebtID
         amount
         currency
         provider
         reference
         status
         paidAt
+        amountApplied
+        debtBefore
+        debtAfter
+        transactionID
+        processedAt
         failureReason
         _version
       }
@@ -507,16 +570,12 @@ async function updateDebtPayment(payment, inputFields, condition = null) {
     ...inputFields,
   };
 
-  // Supply the current model version when the schema supports it.
   if (payment._version !== undefined && payment._version !== null) {
     input._version = payment._version;
   }
 
-  const variables = {
-    input,
-  };
+  const variables = { input };
 
-  // Only add a condition when the caller supplied one.
   if (condition) {
     variables.condition = condition;
   }
@@ -533,27 +592,9 @@ async function updateDebtPayment(payment, inputFields, condition = null) {
 }
 
 // ============================================================
-// 10. CLAIM PAYMENT: PENDING -> PROCESSING
+// 12. CLAIM PAYMENT: PENDING -> PROCESSING
 // ============================================================
 
-/*
- * Claims the payment before making a wallet change.
- *
- * The conditional mutation requires the stored status to be PENDING.
- * This helps stop two concurrent requests from both claiming the
- * same payment.
- *
- * Returns a consistent object:
- * - { claimed: true, payment: updatedRecord }
- * - { claimed: false, payment: latestRecord }
- *
- * If the mutation fails, reload the record to determine whether
- * another request may already have claimed it.
- *
- * IMPORTANT:
- * A failed request can sometimes have an uncertain outcome.
- * Never reset PROCESSING to PENDING automatically.
- */
 async function claimPaymentForProcessing(payment) {
   try {
     const updated = await updateDebtPayment(
@@ -574,11 +615,8 @@ async function claimPaymentForProcessing(payment) {
       payment: updated,
     };
   } catch (error) {
-    // Reload the payment because another request may have won
-    // the race to change PENDING to PROCESSING.
     const latest = await getDebtPaymentByReference(payment.reference);
 
-    // If the stored state has changed, do not attempt another claim.
     if (latest && latest.status !== "PENDING") {
       return {
         claimed: false,
@@ -586,33 +624,207 @@ async function claimPaymentForProcessing(payment) {
       };
     }
 
-    // If it is still PENDING, the original failure was not explained
-    // by another request successfully changing its status.
     throw error;
   }
 }
 
 // ============================================================
-// 11. UPDATE WALLET OUTSTANDING DEBT
+// 13. TRANSACTION LOOKUP
 // ============================================================
 
-/*
- * Writes the new outstanding debt to the wallet.
- *
- * The wallet version is supplied when available. Actual protection
- * against stale updates depends on the AppSync model's configured
- * conflict-detection behavior.
- *
- * This is a separate operation from marking the payment SUCCESS.
- */
-async function updateWalletDebt(wallet, newOutstandingDebt) {
+function getDebtTransactionReference(paymentReference) {
+  return `DEBT-PAYMENT-${paymentReference}`;
+}
+
+async function getDebtTransactionByReference(reference) {
   const query = /* GraphQL */ `
-    mutation UpdateWallet($input: UpdateWalletInput!) {
-      updateWallet(input: $input) {
+    query TransactionsByReference($reference: String!, $limit: Int) {
+      transactionsByReference(reference: $reference, limit: $limit) {
+        items {
+          id
+          walletID
+          type
+          amount
+          description
+          paymentID
+          reference
+          status
+        }
+      }
+    }
+  `;
+
+  const data = await graphqlRequest(query, {
+    reference,
+    limit: 10,
+  });
+
+  const items = data?.transactionsByReference?.items || [];
+
+  const matches = items.filter((item) => item && item.reference === reference);
+
+  if (matches.length > 1) {
+    throw new Error("Duplicate debt repayment transactions were found.");
+  }
+
+  return matches[0] || null;
+}
+
+// ============================================================
+// 14. CREATE DEBT REPAYMENT TRANSACTION
+// ============================================================
+
+async function createDebtTransaction({
+  payment,
+  wallet,
+  amount,
+  transactionReference,
+}) {
+  const existing = await getDebtTransactionByReference(transactionReference);
+
+  if (existing) {
+    if (
+      existing.walletID !== wallet.id ||
+      existing.paymentID !== payment.id ||
+      Number(existing.amount) !== amount ||
+      existing.type !== "DEBT_REPAYMENT"
+    ) {
+      throw new Error(
+        "An existing transaction has conflicting payment details.",
+      );
+    }
+
+    return existing;
+  }
+
+  const deterministicID =
+    "DEBT-" +
+    crypto
+      .createHash("sha256")
+      .update(payment.reference)
+      .digest("hex")
+      .slice(0, 40);
+
+  const query = /* GraphQL */ `
+    mutation CreateTransaction($input: CreateTransactionInput!) {
+      createTransaction(input: $input) {
+        id
+        walletID
+        type
+        amount
+        description
+        paymentID
+        reference
+        status
+      }
+    }
+  `;
+
+  try {
+    const data = await graphqlRequest(query, {
+      input: {
+        id: deterministicID,
+        walletID: wallet.id,
+        type: "DEBT_REPAYMENT",
+        amount,
+        description: "Courier debt repayment via Paystack",
+        paymentID: payment.id,
+        reference: transactionReference,
+        status: "PENDING",
+      },
+    });
+
+    const created = data?.createTransaction;
+
+    if (!created) {
+      throw new Error("The debt repayment transaction was not created.");
+    }
+
+    return created;
+  } catch (error) {
+    // The create request may have succeeded even if its
+    // response was lost. Check before reporting failure.
+    const recovered = await getDebtTransactionByReference(transactionReference);
+
+    if (recovered) {
+      if (
+        recovered.walletID !== wallet.id ||
+        recovered.paymentID !== payment.id ||
+        Number(recovered.amount) !== amount ||
+        recovered.type !== "DEBT_REPAYMENT"
+      ) {
+        throw new Error("The recovered transaction has conflicting details.");
+      }
+
+      return recovered;
+    }
+
+    throw error;
+  }
+}
+
+// ============================================================
+// 15. UPDATE TRANSACTION STATUS
+// ============================================================
+
+async function updateDebtTransactionStatus(transaction, status) {
+  const query = /* GraphQL */ `
+    mutation UpdateTransaction($input: UpdateTransactionInput!) {
+      updateTransaction(input: $input) {
+        id
+        walletID
+        type
+        amount
+        description
+        paymentID
+        reference
+        status
+      }
+    }
+  `;
+
+  const data = await graphqlRequest(query, {
+    input: {
+      id: transaction.id,
+      status,
+    },
+  });
+
+  const updated = data?.updateTransaction;
+
+  if (!updated) {
+    throw new Error(
+      "The debt repayment transaction status could not be updated.",
+    );
+  }
+
+  return updated;
+}
+
+// ============================================================
+// 16. UPDATE WALLET OUTSTANDING DEBT AND ACTIVE DEBT POINTER
+// ============================================================
+
+async function updateWalletDebt(wallet, oldDebt, newDebt, courierDebtID) {
+  if (wallet.activeCourierDebtID !== courierDebtID) {
+    throw new Error(
+      "The wallet's active debt pointer changed. Reconciliation is required.",
+    );
+  }
+
+  const fullySettled = newDebt === 0;
+
+  const query = /* GraphQL */ `
+    mutation UpdateWallet(
+      $input: UpdateWalletInput!
+      $condition: ModelWalletConditionInput
+    ) {
+      updateWallet(input: $input, condition: $condition) {
         id
         ownerID
         ownerType
         outstandingDebt
+        activeCourierDebtID
         _version
       }
     }
@@ -620,7 +832,8 @@ async function updateWalletDebt(wallet, newOutstandingDebt) {
 
   const input = {
     id: wallet.id,
-    outstandingDebt: newOutstandingDebt,
+    outstandingDebt: newDebt,
+    activeCourierDebtID: fullySettled ? null : courierDebtID,
   };
 
   if (wallet._version !== undefined && wallet._version !== null) {
@@ -629,66 +842,208 @@ async function updateWalletDebt(wallet, newOutstandingDebt) {
 
   const data = await graphqlRequest(query, {
     input,
+    condition: {
+      ownerID: {
+        eq: wallet.ownerID,
+      },
+      ownerType: {
+        eq: "COURIER",
+      },
+      outstandingDebt: {
+        eq: oldDebt,
+      },
+      activeCourierDebtID: {
+        eq: courierDebtID,
+      },
+    },
   });
 
   const updated = data?.updateWallet;
 
   if (!updated) {
-    throw new Error("The wallet debt was not updated.");
+    throw new Error("Wallet outstanding debt could not be updated.");
   }
 
   return updated;
 }
 
 // ============================================================
-// 12. HANDLE PAYMENTS THAT ARE ALREADY CLAIMED OR COMPLETED
+// 17. SYNCHRONISE COURIER DEBT RESTRICTION
 // ============================================================
 
-/*
- * Produces the appropriate response for a payment that is no longer
- * PENDING.
- *
- * SUCCESS:
- * A previous operation has recorded the payment as successful.
- *
- * PROCESSING:
- * Another request may be processing it, or a previous operation may
- * have stopped before finishing. PROCESSING does NOT by itself prove
- * that this request has verified Paystack or that the wallet was updated.
- *
- * Other statuses:
- * The payment cannot be processed through this verification attempt.
- */
+async function syncCourierDebtRestriction(courierID) {
+  const courier = await getCourierById(courierID);
+
+  if (!courier) {
+    throw new Error(
+      "Courier could not be found while synchronising debt restriction.",
+    );
+  }
+
+  const query = /* GraphQL */ `
+    query ListCourierDebts(
+      $filter: ModelCourierDebtFilterInput
+      $limit: Int
+      $nextToken: String
+    ) {
+      listCourierDebts(filter: $filter, limit: $limit, nextToken: $nextToken) {
+        items {
+          id
+          courierID
+          remainingAmount
+          status
+          dueAt
+        }
+        nextToken
+      }
+    }
+  `;
+
+  const allDebts = [];
+  let nextToken = null;
+
+  do {
+    const data = await graphqlRequest(query, {
+      filter: {
+        courierID: {
+          eq: courierID,
+        },
+      },
+      limit: 1000,
+      nextToken,
+    });
+
+    const result = data?.listCourierDebts;
+
+    if (!result) {
+      throw new Error("Could not retrieve courier debt records.");
+    }
+
+    allDebts.push(...(result.items || []));
+    nextToken = result.nextToken || null;
+  } while (nextToken);
+
+  const activeDebts = allDebts.filter((debt) => {
+    const remaining = Number(debt.remainingAmount || 0);
+
+    return remaining > 0 && ACTIVE_DEBT_STATUSES.includes(debt.status);
+  });
+
+  const now = Date.now();
+
+  const overdueDebts = activeDebts.filter((debt) => {
+    if (!validDate(debt.dueAt)) {
+      throw new Error(
+        `Active debt ${debt.id} has a missing or invalid deadline.`,
+      );
+    }
+
+    return new Date(debt.dueAt).getTime() <= now;
+  });
+
+  const earliestDueAt =
+    activeDebts.length > 0
+      ? activeDebts
+          .map((debt) => debt.dueAt)
+          .sort((a, b) => new Date(a).getTime() - new Date(b).getTime())[0]
+      : null;
+
+  const shouldRestrict = overdueDebts.length > 0;
+
+  const debtBlockedAt = shouldRestrict
+    ? courier.debtBlockedAt || new Date().toISOString()
+    : null;
+
+  const debtBlockReason = shouldRestrict ? "OVERDUE_DEBT" : null;
+
+  const restrictionChanged =
+    courier.debtRestrictionActive !== shouldRestrict ||
+    (courier.debtDueAt || null) !== earliestDueAt ||
+    (courier.debtBlockedAt || null) !== debtBlockedAt ||
+    (courier.debtBlockReason || null) !== debtBlockReason;
+
+  if (!restrictionChanged) {
+    return {
+      debtRestrictionActive: shouldRestrict,
+      debtDueAt: earliestDueAt,
+      activeDebtCount: activeDebts.length,
+      overdueDebtCount: overdueDebts.length,
+      updated: false,
+    };
+  }
+
+  const input = {
+    id: courier.id,
+    debtRestrictionActive: shouldRestrict,
+    debtDueAt: earliestDueAt,
+    debtBlockedAt,
+    debtBlockReason,
+  };
+
+  if (courier._version !== undefined && courier._version !== null) {
+    input._version = courier._version;
+  }
+
+  const updateQuery = /* GraphQL */ `
+    mutation UpdateCourier($input: UpdateCourierInput!) {
+      updateCourier(input: $input) {
+        id
+        debtRestrictionActive
+        debtDueAt
+        debtBlockedAt
+        debtBlockReason
+        _version
+      }
+    }
+  `;
+
+  const updateData = await graphqlRequest(updateQuery, { input });
+
+  const updatedCourier = updateData?.updateCourier;
+
+  if (!updatedCourier) {
+    throw new Error("Could not update the courier's debt restriction.");
+  }
+
+  return {
+    debtRestrictionActive: shouldRestrict,
+    debtDueAt: earliestDueAt,
+    activeDebtCount: activeDebts.length,
+    overdueDebtCount: overdueDebts.length,
+    updated: true,
+  };
+}
+
+// ============================================================
+// 18. EXISTING PAYMENT STATE RESPONSE
+// ============================================================
+
 function responseForExistingState(payment) {
   if (payment.status === "SUCCESS") {
     return response(
       true,
-      "This payment has already been recorded as successful.",
+      "This debt payment has already been processed successfully.",
       {
         verified: true,
         alreadyPaid: true,
         reference: payment.reference,
-        amount: payment.amount,
+        amount: payment.amountApplied ?? payment.amount,
         currency: payment.currency,
+        remainingDebt: payment.debtAfter ?? null,
+        transactionID: payment.transactionID ?? null,
+        paidAt: payment.paidAt ?? null,
       },
     );
   }
 
   if (payment.status === "PROCESSING") {
-    /*
-     * CORRECTION:
-     * Do not return verified: true here.
-     *
-     * The status PROCESSING only tells us that the payment has been
-     * claimed. It does not prove that the wallet update completed or
-     * that this invocation independently verified Paystack.
-     */
     return response(
       false,
-      "This payment is already being processed or requires reconciliation. Do not retry it repeatedly. If the status does not change, contact Atua support.",
+      "This payment is already being processed or requires reconciliation. Do not make another payment for this reference. Contact Atua support if the status does not change.",
       {
         verified: false,
         processing: true,
+        reconciliationRequired: true,
         reference: payment.reference,
       },
     );
@@ -700,66 +1055,106 @@ function responseForExistingState(payment) {
     {
       verified: false,
       reference: payment.reference,
+      status: payment.status,
     },
   );
 }
 
 // ============================================================
-// 13. MAIN LAMBDA HANDLER
+// 19. VALIDATE PAYSTACK RESPONSE
 // ============================================================
 
-/*
- * Expected AppSync event:
- *
- * {
- *   "arguments": {
- *     "reference": "ATUA-DEBT-..."
- *   },
- *   "identity": {
- *     "sub": "authenticated-cognito-user-sub"
- *   }
- * }
- *
- * Configure the AppSync mutation to require Cognito authentication.
- * Do not allow the client to choose the courier ID used for ownership
- * verification.
- */
+function validatePaystackTransaction(transaction, payment) {
+  if (!transaction) {
+    throw new Error("Paystack did not return transaction details.");
+  }
+
+  if (transaction.reference !== payment.reference) {
+    throw new Error(
+      "The Paystack reference does not match the Atua payment record.",
+    );
+  }
+
+  if (transaction.status !== "success") {
+    return {
+      successful: false,
+      providerStatus: transaction.status || "UNKNOWN",
+    };
+  }
+
+  if (String(transaction.currency).toUpperCase() !== CURRENCY) {
+    throw new Error("The verified Paystack transaction is not in NGN.");
+  }
+
+  const savedAmount = Number(payment.amount);
+
+  if (
+    !Number.isFinite(savedAmount) ||
+    savedAmount <= 0 ||
+    savedAmount > MAX_PAYMENT_NAIRA
+  ) {
+    throw new Error("The saved payment amount is invalid.");
+  }
+
+  const expectedKobo = toKobo(savedAmount, "Saved payment amount");
+
+  const receivedKobo = Number(transaction.amount);
+
+  if (!Number.isSafeInteger(receivedKobo)) {
+    throw new Error("Paystack returned an invalid transaction amount.");
+  }
+
+  if (receivedKobo !== expectedKobo) {
+    console.error("Debt payment amount mismatch:", {
+      reference: payment.reference,
+      expectedKobo,
+      receivedKobo,
+    });
+
+    throw new Error(
+      "The verified Paystack amount does not match the saved debt payment amount.",
+    );
+  }
+
+  return {
+    successful: true,
+    amountKobo: receivedKobo,
+    amountNaira: fromKobo(receivedKobo),
+  };
+}
+
+// ============================================================
+// 20. MAIN HANDLER
+// ============================================================
+
 exports.handler = async (event) => {
   let payment = null;
-
-  /*
-   * Diagnostic flag only.
-   *
-   * true means the wallet update returned successfully.
-   * false does NOT guarantee the wallet was unchanged: a network
-   * timeout can occur after AppSync has already applied the update.
-   */
-  let walletUpdateCompleted = false;
 
   try {
     console.log("VERIFY COURIER DEBT PAYMENT: started");
 
-    // ----------------------------------------------------------
-    // STEP 1: REQUIRE AN AUTHENTICATED COGNITO IDENTITY
-    // ----------------------------------------------------------
+    // --------------------------------------------------------
+    // STEP 1: AUTHENTICATE COURIER
+    // --------------------------------------------------------
 
-    const authenticatedSub = event?.identity?.sub;
+    const authenticatedSub =
+      event?.identity?.sub || event?.identity?.claims?.sub;
 
-    if (typeof authenticatedSub !== "string" || !authenticatedSub.trim()) {
-      return response(false, "You must be signed in to verify this payment.");
+    if (!isNonEmptyString(authenticatedSub)) {
+      return response(
+        false,
+        "You must be signed in to verify this debt payment.",
+      );
     }
 
-    // ----------------------------------------------------------
-    // STEP 2: VALIDATE THE PAYMENT REFERENCE
-    // ----------------------------------------------------------
+    // --------------------------------------------------------
+    // STEP 2: VALIDATE REFERENCE
+    // --------------------------------------------------------
 
-    const reference = String(event?.arguments?.reference || "").trim();
+    const reference = String(
+      event?.arguments?.reference || event?.reference || "",
+    ).trim();
 
-    /*
-     * Validate the prefix, allowed characters and maximum length.
-     * The reference must come from an existing payment record and
-     * must also be verified against Paystack.
-     */
     if (
       !reference ||
       reference.length > 100 ||
@@ -772,9 +1167,9 @@ exports.handler = async (event) => {
       );
     }
 
-    // ----------------------------------------------------------
-    // STEP 3: LOAD THE DEBT-PAYMENT RECORD
-    // ----------------------------------------------------------
+    // --------------------------------------------------------
+    // STEP 3: LOAD PAYMENT RECORD
+    // --------------------------------------------------------
 
     payment = await getDebtPaymentByReference(reference);
 
@@ -785,9 +1180,9 @@ exports.handler = async (event) => {
       );
     }
 
-    // ----------------------------------------------------------
+    // --------------------------------------------------------
     // STEP 4: VALIDATE PROVIDER AND CURRENCY
-    // ----------------------------------------------------------
+    // --------------------------------------------------------
 
     if (
       payment.provider !== PROVIDER ||
@@ -796,156 +1191,78 @@ exports.handler = async (event) => {
       return response(false, "This is not a valid Atua Paystack debt payment.");
     }
 
-    // ----------------------------------------------------------
-    // STEP 5: CONFIRM PAYMENT OWNERSHIP
-    // ----------------------------------------------------------
+    // --------------------------------------------------------
+    // STEP 5: VERIFY COURIER OWNERSHIP
+    // --------------------------------------------------------
 
-    /*
-     * Load the courier from the payment record, then compare the
-     * courier's Cognito sub with the authenticated user's sub.
-     *
-     * This prevents one authenticated courier from verifying another
-     * courier's debt payment merely by supplying its reference.
-     */
     const courier = await getCourierById(payment.courierID);
 
     if (!courier || courier.sub !== authenticatedSub) {
       return response(false, "You are not authorized to verify this payment.");
     }
 
-    // ----------------------------------------------------------
-    // STEP 6: HANDLE ALREADY COMPLETED OR CLAIMED PAYMENTS
-    // ----------------------------------------------------------
-
-    /*
-     * SUCCESS means the database already records the payment as
-     * completed. Return an idempotent success response.
-     *
-     * PROCESSING or any other non-PENDING status must not go through
-     * the normal wallet-update flow again.
-     *
-     * This prevents a normal retry from deducting the same payment
-     * from the wallet debt a second time.
-     */
-    if (payment.status === "SUCCESS") {
-      return responseForExistingState(payment);
+    if (courier.walletID && courier.walletID !== payment.walletID) {
+      throw new Error(
+        "The payment wallet does not match the courier's registered wallet.",
+      );
     }
+
+    // --------------------------------------------------------
+    // STEP 6: HANDLE EXISTING PAYMENT STATES
+    // --------------------------------------------------------
 
     if (payment.status !== "PENDING") {
+      if (payment.status === "SUCCESS") {
+        // A previous invocation may have completed the
+        // financial updates but failed during restriction sync.
+        await syncCourierDebtRestriction(payment.courierID);
+      }
+
       return responseForExistingState(payment);
     }
 
-    // ----------------------------------------------------------
-    // STEP 7: VERIFY THE TRANSACTION WITH PAYSTACK
-    // ----------------------------------------------------------
+    // --------------------------------------------------------
+    // STEP 7: VERIFY DIRECTLY WITH PAYSTACK
+    // --------------------------------------------------------
 
-    /*
-     * Verify using Paystack's API, not a status supplied by the app.
-     */
-    const transaction = await verifyWithPaystack(reference);
+    const paystackTransaction = await verifyWithPaystack(reference);
 
-    // Confirm Paystack returned the exact reference we requested.
-    if (transaction.reference !== payment.reference) {
+    const verification = validatePaystackTransaction(
+      paystackTransaction,
+      payment,
+    );
+
+    if (!verification.successful) {
+      // Leave PENDING. A later verification may confirm success.
       return response(
         false,
-        "The Paystack reference does not match the payment record.",
+        "Paystack has not confirmed a successful payment.",
+        {
+          verified: false,
+          reference,
+          providerStatus: verification.providerStatus,
+        },
       );
     }
 
-    // Only a transaction whose Paystack status is "success" proceeds.
-    if (transaction.status !== "success") {
-      return response(false, "Paystack has not confirmed successful payment.", {
-        verified: false,
-        reference,
-        providerStatus: transaction.status || "UNKNOWN",
-      });
-    }
+    const paymentAmount = verification.amountNaira;
+    const paymentAmountKobo = verification.amountKobo;
 
-    // ----------------------------------------------------------
-    // STEP 8: VALIDATE THE PAYMENT AMOUNT
-    // ----------------------------------------------------------
+    // --------------------------------------------------------
+    // STEP 8: CLAIM PAYMENT
+    // --------------------------------------------------------
 
-    /*
-     * Paystack reports transaction amounts in kobo.
-     * The CourierDebtPayment record is assumed to store naira.
-     *
-     * Example:
-     * ₦2,000 in the database = 200,000 kobo from Paystack.
-     */
-    const paymentAmount = Number(payment.amount);
-
-    const expectedKobo = Math.round(paymentAmount * 100);
-
-    const receivedKobo = Number(transaction.amount);
-
-    /*
-     * Reject:
-     * - Invalid or zero amounts.
-     * - Negative amounts.
-     * - Amounts above the configured safety limit.
-     * - Values that cannot be safely represented in kobo.
-     * - Transactions whose received amount differs from the expected
-     *   amount in the database.
-     */
-    if (
-      !Number.isFinite(paymentAmount) ||
-      paymentAmount <= 0 ||
-      paymentAmount > MAX_PAYMENT_NAIRA ||
-      !Number.isSafeInteger(expectedKobo) ||
-      !Number.isFinite(receivedKobo) ||
-      receivedKobo !== expectedKobo
-    ) {
-      console.error("Debt-payment amount mismatch:", {
-        reference,
-        expectedKobo,
-        receivedKobo,
-      });
-
-      return response(
-        false,
-        "The verified payment amount does not match the expected amount.",
-      );
-    }
-
-    // ----------------------------------------------------------
-    // STEP 9: VALIDATE PAYSTACK CURRENCY
-    // ----------------------------------------------------------
-
-    if (String(transaction.currency).toUpperCase() !== CURRENCY) {
-      return response(false, "The verified payment currency is not NGN.");
-    }
-
-    // ----------------------------------------------------------
-    // STEP 10: CLAIM THE PAYMENT BEFORE CHANGING THE WALLET
-    // ----------------------------------------------------------
-
-    /*
-     * The conditional mutation attempts to change:
-     *
-     * PENDING -> PROCESSING
-     *
-     * Only a payment currently in PENDING should be claimable.
-     * This helps prevent concurrent requests from processing the
-     * same payment simultaneously.
-     *
-     * The claim is made before the wallet is modified.
-     */
     const claim = await claimPaymentForProcessing(payment);
 
-    /*
-     * If another request already claimed or completed the payment,
-     * return the current state instead of updating the wallet again.
-     */
-    if (claim.claimed === false) {
+    if (!claim.claimed) {
       return responseForExistingState(claim.payment);
     }
 
-    // Continue with the newly claimed, current payment record.
     payment = claim.payment;
 
-    // ----------------------------------------------------------
-    // STEP 11: LOAD AND VALIDATE THE WALLET
-    // ----------------------------------------------------------
+    // --------------------------------------------------------
+    // STEP 9: LOAD AND VALIDATE WALLET
+    // --------------------------------------------------------
 
     const wallet = await getWallet(payment.walletID);
 
@@ -953,18 +1270,55 @@ exports.handler = async (event) => {
       throw new Error("The courier wallet could not be found.");
     }
 
-    /*
-     * Confirm that the wallet referenced by the payment actually
-     * belongs to this courier.
-     */
     if (wallet.ownerID !== courier.id || wallet.ownerType !== "COURIER") {
-      throw new Error("The payment wallet does not belong to this courier.");
+      throw new Error(
+        "The wallet referenced by this payment does not belong to the courier.",
+      );
     }
 
-    // Treat a missing outstandingDebt as zero.
+    // --------------------------------------------------------
+    // STEP 10: LOAD THE SPECIFIC LINKED DEBT
+    // --------------------------------------------------------
+
+    if (!isNonEmptyString(payment.courierDebtID)) {
+      throw new Error("The payment is not linked to a courier debt.");
+    }
+
+    const courierDebt = await getCourierDebt(payment.courierDebtID);
+
+    if (!courierDebt) {
+      throw new Error("The associated courier debt could not be found.");
+    }
+
+    if (
+      courierDebt.courierID !== courier.id ||
+      courierDebt.walletID !== wallet.id
+    ) {
+      throw new Error(
+        "The selected debt does not belong to this courier wallet.",
+      );
+    }
+
+    if (!ACTIVE_DEBT_STATUSES.includes(courierDebt.status)) {
+      throw new Error(
+        `This debt cannot receive payment because its status is ${courierDebt.status}.`,
+      );
+    }
+
+    // The payment must apply to the wallet's one consolidated
+    // active debt cycle.
+    if (wallet.activeCourierDebtID !== courierDebt.id) {
+      throw new Error(
+        "The wallet's active debt pointer does not match the debt linked to this payment. Reconciliation is required.",
+      );
+    }
+
+    // --------------------------------------------------------
+    // STEP 11: VALIDATE BALANCES
+    // --------------------------------------------------------
+
     const currentDebt = Number(wallet.outstandingDebt ?? 0);
 
-    // Reject corrupted or unexpectedly large debt values.
     if (
       !Number.isFinite(currentDebt) ||
       currentDebt < 0 ||
@@ -973,35 +1327,108 @@ exports.handler = async (event) => {
       throw new Error("The wallet outstanding debt is invalid.");
     }
 
-    // ----------------------------------------------------------
-    // STEP 12: CHECK WHETHER THE PAYMENT EXCEEDS THE CURRENT DEBT
-    // ----------------------------------------------------------
+    const currentDebtKobo = toKobo(currentDebt, "Wallet outstanding debt");
 
-    /*
-     * The courier's debt may have changed since checkout was created.
-     *
-     * Do not silently discard an excess payment or mark the entire
-     * payment successful while leaving the debt calculation unresolved.
-     *
-     * If the amount exceeds the current debt, leave the payment in
-     * PROCESSING for reconciliation. The wallet has not been changed
-     * by this Lambda at this point.
-     */
-    if (paymentAmount > currentDebt) {
-      console.error("Payment exceeds current wallet debt:", {
+    const debtRemainingKobo = toKobo(
+      courierDebt.remainingAmount,
+      "Courier debt remaining amount",
+    );
+
+    const debtAmountPaidKobo = toKobo(
+      courierDebt.amountPaid ?? 0,
+      "Courier debt amount paid",
+    );
+
+    const debtExternalPaymentsKobo = toKobo(
+      courierDebt.externalPaymentsAmount ?? 0,
+      "Courier debt external payments",
+    );
+
+    if (
+      debtRemainingKobo <= 0 ||
+      debtAmountPaidKobo < 0 ||
+      debtExternalPaymentsKobo < 0
+    ) {
+      throw new Error("The selected courier debt has invalid balances.");
+    }
+
+    // This architecture uses one consolidated active debt
+    // cycle. The wallet and debt must therefore agree.
+    if (currentDebtKobo !== debtRemainingKobo) {
+      throw new Error(
+        "Wallet outstanding debt does not match the active courier debt. Reconciliation is required.",
+      );
+    }
+
+    // --------------------------------------------------------
+    // STEP 12: CHECK FOR EXISTING TRANSACTION
+    // --------------------------------------------------------
+
+    const transactionReference = getDebtTransactionReference(reference);
+
+    const existingTransaction =
+      await getDebtTransactionByReference(transactionReference);
+
+    if (existingTransaction) {
+      // Do not repeat any financial update if a transaction
+      // already exists. The previous invocation may have
+      // completed one or more database mutations.
+      return response(
+        false,
+        "A repayment transaction already exists for this reference. Reconciliation is required before any further financial update.",
+        {
+          verified: true,
+          processing: true,
+          reconciliationRequired: true,
+          reference,
+          transactionID: existingTransaction.id,
+          transactionStatus: existingTransaction.status,
+        },
+      );
+    }
+
+    // --------------------------------------------------------
+    // STEP 13: PREVENT OVERPAYMENT
+    // --------------------------------------------------------
+
+    if (paymentAmountKobo > debtRemainingKobo) {
+      console.error("Payment exceeds selected courier debt:", {
         reference,
+        courierDebtID: courierDebt.id,
         paymentAmount,
-        currentDebt,
-        courierID: courier.id,
-        walletID: wallet.id,
+        debtRemaining: fromKobo(debtRemainingKobo),
       });
 
       return response(
         false,
-        "Paystack confirmed the payment, but the outstanding debt has changed. The payment requires reconciliation before it can be finalized. Contact Atua support.",
+        "Paystack confirmed the payment, but the selected debt is now lower than the amount paid. Manual reconciliation is required.",
         {
           verified: true,
           processing: true,
+          reconciliationRequired: true,
+          reference,
+          amount: paymentAmount,
+          selectedDebtRemaining: fromKobo(debtRemainingKobo),
+        },
+      );
+    }
+
+    if (paymentAmountKobo > currentDebtKobo) {
+      console.error("Payment exceeds wallet outstanding debt:", {
+        reference,
+        courierID: courier.id,
+        walletID: wallet.id,
+        paymentAmount,
+        currentDebt,
+      });
+
+      return response(
+        false,
+        "Paystack confirmed the payment, but the wallet outstanding debt is lower than the amount paid. Manual reconciliation is required.",
+        {
+          verified: true,
+          processing: true,
+          reconciliationRequired: true,
           reference,
           amount: paymentAmount,
           currentDebt,
@@ -1009,59 +1436,120 @@ exports.handler = async (event) => {
       );
     }
 
-    // ----------------------------------------------------------
-    // STEP 13: CALCULATE THE REMAINING DEBT
-    // ----------------------------------------------------------
+    // --------------------------------------------------------
+    // STEP 14: CALCULATE NEW BALANCES
+    // --------------------------------------------------------
 
-    /*
-     * Subtract the verified repayment from the outstanding debt.
-     * Round to two decimal places to avoid floating-point residue.
-     *
-     * This assumes the debt is represented in naira with two decimal
-     * places. For the strongest financial precision, store and
-     * calculate monetary amounts in integer kobo consistently.
-     */
-    const remainingDebt = Number((currentDebt - paymentAmount).toFixed(2));
+    const remainingDebtKobo = currentDebtKobo - paymentAmountKobo;
 
-    // ----------------------------------------------------------
-    // STEP 14: UPDATE THE WALLET DEBT
-    // ----------------------------------------------------------
+    const remainingDebt = fromKobo(remainingDebtKobo);
 
-    /*
-     * This is the first financial database mutation.
-     *
-     * If AppSync version conflict detection is configured, the wallet
-     * _version can help reject a stale update.
-     *
-     * IMPORTANT:
-     * This wallet mutation is not atomic with the next payment mutation.
-     * If this update succeeds but the following operation fails, the
-     * payment may remain PROCESSING and must be reconciled.
-     */
-    const updatedWallet = await updateWalletDebt(wallet, remainingDebt);
+    const debtRemainingAfterKobo = debtRemainingKobo - paymentAmountKobo;
 
-    // This flag means the wallet update returned successfully.
-    // It is useful for logs but is not an atomic transaction guarantee.
-    walletUpdateCompleted = true;
+    const debtRemainingAfter = fromKobo(debtRemainingAfterKobo);
 
-    // ----------------------------------------------------------
-    // STEP 15: MARK THE PAYMENT SUCCESSFUL
-    // ----------------------------------------------------------
+    const debtAmountPaidAfter = fromKobo(
+      debtAmountPaidKobo + paymentAmountKobo,
+    );
 
-    /*
-     * Only mark the payment SUCCESS after the wallet update returns.
-     *
-     * The condition requires the payment still to be PROCESSING.
-     * This helps prevent an unexpected status transition from being
-     * overwritten.
-     */
+    const debtExternalPaymentsAfter = fromKobo(
+      debtExternalPaymentsKobo + paymentAmountKobo,
+    );
+
+    // Preserve debtStartedAt and dueAt.
+    if (!validDate(courierDebt.dueAt)) {
+      throw new Error(
+        "The selected courier debt has no valid repayment deadline. Manual reconciliation is required.",
+      );
+    }
+
+    const debtIsPastDue = new Date(courierDebt.dueAt).getTime() <= Date.now();
+
+    const debtStatusAfter =
+      debtRemainingAfterKobo === 0
+        ? "PAID"
+        : debtIsPastDue
+          ? "OVERDUE"
+          : "PARTIALLY_PAID";
+
     const paidAt = new Date().toISOString();
+
+    // --------------------------------------------------------
+    // STEP 15: CREATE PENDING TRANSACTION
+    // --------------------------------------------------------
+
+    const transaction = await createDebtTransaction({
+      payment,
+      wallet,
+      amount: paymentAmount,
+      transactionReference,
+    });
+
+    if (transaction.status !== "PENDING") {
+      throw new Error(
+        "The repayment transaction is not in the expected PENDING state.",
+      );
+    }
+
+    // --------------------------------------------------------
+    // STEP 16: UPDATE THE SPECIFIC COURIER DEBT
+    // --------------------------------------------------------
+
+    const updatedCourierDebt = await updateCourierDebt(
+      courierDebt,
+      {
+        amountPaid: debtAmountPaidAfter,
+        remainingAmount: debtRemainingAfter,
+        externalPaymentsAmount: debtExternalPaymentsAfter,
+        status: debtStatusAfter,
+        firstPaymentAt: courierDebt.firstPaymentAt || paidAt,
+        settledAt: debtRemainingAfterKobo === 0 ? paidAt : null,
+      },
+      fromKobo(debtRemainingKobo),
+      fromKobo(debtAmountPaidKobo),
+    );
+
+    // --------------------------------------------------------
+    // STEP 17: UPDATE WALLET DEBT AND POINTER
+    // --------------------------------------------------------
+
+    // This updates outstandingDebt only.
+    // It never changes availableBalance, pendingBalance
+    // or lifetimeEarnings.
+    //
+    // Partial repayment: retain activeCourierDebtID.
+    // Full repayment: clear activeCourierDebtID.
+
+    const updatedWallet = await updateWalletDebt(
+      wallet,
+      currentDebt,
+      remainingDebt,
+      courierDebt.id,
+    );
+
+    // --------------------------------------------------------
+    // STEP 18: COMPLETE TRANSACTION
+    // --------------------------------------------------------
+
+    const completedTransaction = await updateDebtTransactionStatus(
+      transaction,
+      "COMPLETED",
+    );
+
+    // --------------------------------------------------------
+    // STEP 19: MARK PAYMENT SUCCESSFUL
+    // --------------------------------------------------------
 
     const successfulPayment = await updateDebtPayment(
       payment,
       {
         status: "SUCCESS",
         paidAt,
+        amountApplied: paymentAmount,
+        debtBefore: currentDebt,
+        debtAfter: remainingDebt,
+        transactionID: completedTransaction.id,
+        processedAt: paidAt,
         failureReason: null,
       },
       {
@@ -1071,78 +1559,86 @@ exports.handler = async (event) => {
       },
     );
 
-    // ----------------------------------------------------------
-    // STEP 16: LOG THE SUCCESSFUL RESULT
-    // ----------------------------------------------------------
+    payment = successfulPayment;
 
-    /*
-     * Log identifiers and amounts needed for operational investigation.
-     * Never log the Paystack secret or signed request headers.
-     */
-    console.log("COURIER DEBT PAYMENT VERIFIED:", {
+    // --------------------------------------------------------
+    // STEP 20: SYNCHRONISE DEBT RESTRICTION
+    // --------------------------------------------------------
+
+    const restrictionResult = await syncCourierDebtRestriction(courier.id);
+
+    console.log("DEBT RESTRICTION AFTER REPAYMENT:", restrictionResult);
+
+    // --------------------------------------------------------
+    // STEP 21: LOG SUCCESS
+    // --------------------------------------------------------
+
+    console.log("COURIER DEBT PAYMENT SUCCESSFULLY VERIFIED:", {
       courierID: courier.id,
       walletID: updatedWallet.id,
       paymentID: successfulPayment.id,
+      transactionID: completedTransaction.id,
+      debtID: updatedCourierDebt.id,
+      debtRemainingAfter,
+      debtStatusAfter,
       reference,
-      amount: paymentAmount,
-      previousDebt: currentDebt,
-      remainingDebt,
+      amountApplied: paymentAmount,
+      debtBefore: currentDebt,
+      debtAfter: remainingDebt,
+      activeCourierDebtID: updatedWallet.activeCourierDebtID,
     });
 
-    // ----------------------------------------------------------
-    // STEP 17: RETURN SUCCESS
-    // ----------------------------------------------------------
+    // --------------------------------------------------------
+    // STEP 22: RETURN SUCCESS
+    // --------------------------------------------------------
 
-    return response(true, "Payment verified successfully.", {
-      verified: true,
-      alreadyPaid: false,
-      reference,
-      amount: paymentAmount,
-      currency: CURRENCY,
-      previousDebt: currentDebt,
-      remainingDebt,
-      paidAt,
-    });
+    return response(
+      true,
+      "Your debt repayment has been verified and applied successfully.",
+      {
+        verified: true,
+        alreadyPaid: false,
+        reference,
+        amount: paymentAmount,
+        amountApplied: paymentAmount,
+        currency: CURRENCY,
+        previousDebt: currentDebt,
+        remainingDebt,
+        transactionID: completedTransaction.id,
+        paidAt,
+        debtStatus: debtStatusAfter,
+        debtRestrictionActive: restrictionResult.debtRestrictionActive,
+      },
+    );
   } catch (error) {
-    // ----------------------------------------------------------
-    // STEP 18: HANDLE ERRORS SAFELY
-    // ----------------------------------------------------------
-
-    /*
-     * Do not log the Paystack secret or request authorization headers.
-     *
-     * The flag is diagnostic only. A false value does not prove that
-     * the wallet was unchanged, because a timeout can happen after
-     * AppSync applies a mutation but before this Lambda receives its
-     * response.
-     */
     console.error("VERIFY COURIER DEBT PAYMENT ERROR:", {
       message: error?.message,
       paymentID: payment?.id,
       reference: payment?.reference,
-      walletUpdateCompleted,
+      paymentStatus: payment?.status,
     });
 
     /*
-     * Do not reset PROCESSING to PENDING here.
+     * Do not:
+     * - Reset PROCESSING to PENDING.
+     * - Deduct the wallet debt again automatically.
+     * - Mark a payment SUCCESS without confirming the ledger updates.
+     * - Change availableBalance.
+     * - Change pendingBalance.
+     * - Change lifetimeEarnings.
      *
-     * If a mutation timed out, its actual database outcome may be
-     * uncertain. Automatically retrying could reduce the debt twice.
-     *
-     * Reconcile:
-     * - The Paystack transaction.
-     * - The CourierDebtPayment status.
-     * - The wallet's outstandingDebt.
-     *
-     * Only after those records are compared should a recovery action
-     * be performed.
+     * If AppSync times out, the mutation may still have succeeded.
+     * Keep the payment PROCESSING until its records have been
+     * checked and reconciled.
      */
+
     return response(
       false,
-      "We could not complete payment verification. If Paystack has charged you, do not make another payment for the same debt yet. Contact Atua support for reconciliation.",
+      "We could not safely complete this debt-payment verification. If Paystack has charged you, do not make another payment for the same reference. Contact Atua support for reconciliation.",
       {
         reference: payment?.reference || null,
         processing: payment?.status === "PROCESSING",
+        reconciliationRequired: true,
       },
     );
   }

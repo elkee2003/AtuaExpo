@@ -176,6 +176,15 @@ export enum TransactionStatus {
   REVERSED = "REVERSED"
 }
 
+export enum PayoutReservationStatus {
+  PENDING = "PENDING",
+  WALLET_DEBITED = "WALLET_DEBITED",
+  RESERVED = "RESERVED",
+  COMPLETED = "COMPLETED",
+  FAILED = "FAILED",
+  REVERSED = "REVERSED"
+}
+
 export enum PayoutStatus {
   PENDING = "PENDING",
   PROCESSING = "PROCESSING",
@@ -279,6 +288,15 @@ export enum OrderPaymentTiming {
 export enum OrderPaymentMethod {
   PAYSTACK = "PAYSTACK",
   CASH = "CASH"
+}
+
+export enum CourierDebtStatus {
+  OPEN = "OPEN",
+  PARTIALLY_PAID = "PARTIALLY_PAID",
+  PAID = "PAID",
+  OVERDUE = "OVERDUE",
+  REVERSED = "REVERSED",
+  WAIVED = "WAIVED"
 }
 
 export enum CourierReconciliationStatus {
@@ -1094,6 +1112,56 @@ export declare const PaymentMethod: (new (init: ModelInit<PaymentMethod>) => Pay
   copyOf(source: PaymentMethod, mutator: (draft: MutableModel<PaymentMethod>) => MutableModel<PaymentMethod> | void): PaymentMethod;
 }
 
+type EagerPayoutReservation = {
+  readonly [__modelMeta__]: {
+    identifier: ManagedIdentifier<PayoutReservation, 'id'>;
+    readOnlyFields: 'createdAt' | 'updatedAt';
+  };
+  readonly id: string;
+  readonly payoutID: string;
+  readonly walletID: string;
+  readonly courierID: string;
+  readonly totalWalletDebit: number;
+  readonly payoutAmount: number;
+  readonly payoutFee?: number | null;
+  readonly reference: string;
+  readonly transactionID?: string | null;
+  readonly status: PayoutReservationStatus | keyof typeof PayoutReservationStatus;
+  readonly failureReason?: string | null;
+  readonly reservedAt?: string | null;
+  readonly reversedAt?: string | null;
+  readonly createdAt?: string | null;
+  readonly updatedAt?: string | null;
+}
+
+type LazyPayoutReservation = {
+  readonly [__modelMeta__]: {
+    identifier: ManagedIdentifier<PayoutReservation, 'id'>;
+    readOnlyFields: 'createdAt' | 'updatedAt';
+  };
+  readonly id: string;
+  readonly payoutID: string;
+  readonly walletID: string;
+  readonly courierID: string;
+  readonly totalWalletDebit: number;
+  readonly payoutAmount: number;
+  readonly payoutFee?: number | null;
+  readonly reference: string;
+  readonly transactionID?: string | null;
+  readonly status: PayoutReservationStatus | keyof typeof PayoutReservationStatus;
+  readonly failureReason?: string | null;
+  readonly reservedAt?: string | null;
+  readonly reversedAt?: string | null;
+  readonly createdAt?: string | null;
+  readonly updatedAt?: string | null;
+}
+
+export declare type PayoutReservation = LazyLoading extends LazyLoadingDisabled ? EagerPayoutReservation : LazyPayoutReservation
+
+export declare const PayoutReservation: (new (init: ModelInit<PayoutReservation>) => PayoutReservation) & {
+  copyOf(source: PayoutReservation, mutator: (draft: MutableModel<PayoutReservation>) => MutableModel<PayoutReservation> | void): PayoutReservation;
+}
+
 type EagerPayout = {
   readonly [__modelMeta__]: {
     identifier: ManagedIdentifier<Payout, 'id'>;
@@ -1402,6 +1470,68 @@ export declare const OrderCancellation: (new (init: ModelInit<OrderCancellation>
   copyOf(source: OrderCancellation, mutator: (draft: MutableModel<OrderCancellation>) => MutableModel<OrderCancellation> | void): OrderCancellation;
 }
 
+type EagerCourierDebt = {
+  readonly [__modelMeta__]: {
+    identifier: ManagedIdentifier<CourierDebt, 'id'>;
+  };
+  readonly id: string;
+  readonly courierID: string;
+  readonly courier?: Courier | null;
+  readonly walletID: string;
+  readonly reconciliationID: string;
+  readonly reconciliation?: CourierReconciliation | null;
+  readonly payments?: (CourierDebtPayment | null)[] | null;
+  readonly amount: number;
+  readonly amountPaid: number;
+  readonly remainingAmount: number;
+  readonly grossDebtAmount?: number | null;
+  readonly earningsOffsetAmount?: number | null;
+  readonly walletRecoveredAmount?: number | null;
+  readonly externalPaymentsAmount?: number | null;
+  readonly status: CourierDebtStatus | keyof typeof CourierDebtStatus;
+  readonly debtStartedAt: string;
+  readonly dueAt: string;
+  readonly firstPaymentAt?: string | null;
+  readonly settledAt?: string | null;
+  readonly idempotencyKey: string;
+  readonly createdAt?: string | null;
+  readonly updatedAt?: string | null;
+}
+
+type LazyCourierDebt = {
+  readonly [__modelMeta__]: {
+    identifier: ManagedIdentifier<CourierDebt, 'id'>;
+  };
+  readonly id: string;
+  readonly courierID: string;
+  readonly courier: AsyncItem<Courier | undefined>;
+  readonly walletID: string;
+  readonly reconciliationID: string;
+  readonly reconciliation: AsyncItem<CourierReconciliation | undefined>;
+  readonly payments: AsyncCollection<CourierDebtPayment>;
+  readonly amount: number;
+  readonly amountPaid: number;
+  readonly remainingAmount: number;
+  readonly grossDebtAmount?: number | null;
+  readonly earningsOffsetAmount?: number | null;
+  readonly walletRecoveredAmount?: number | null;
+  readonly externalPaymentsAmount?: number | null;
+  readonly status: CourierDebtStatus | keyof typeof CourierDebtStatus;
+  readonly debtStartedAt: string;
+  readonly dueAt: string;
+  readonly firstPaymentAt?: string | null;
+  readonly settledAt?: string | null;
+  readonly idempotencyKey: string;
+  readonly createdAt?: string | null;
+  readonly updatedAt?: string | null;
+}
+
+export declare type CourierDebt = LazyLoading extends LazyLoadingDisabled ? EagerCourierDebt : LazyCourierDebt
+
+export declare const CourierDebt: (new (init: ModelInit<CourierDebt>) => CourierDebt) & {
+  copyOf(source: CourierDebt, mutator: (draft: MutableModel<CourierDebt>) => MutableModel<CourierDebt> | void): CourierDebt;
+}
+
 type EagerCourierDebtPayment = {
   readonly [__modelMeta__]: {
     identifier: ManagedIdentifier<CourierDebtPayment, 'id'>;
@@ -1409,6 +1539,8 @@ type EagerCourierDebtPayment = {
   readonly id: string;
   readonly courierID: string;
   readonly walletID: string;
+  readonly courierDebtID?: string | null;
+  readonly courierDebt?: CourierDebt | null;
   readonly amount: number;
   readonly currency: string;
   readonly provider: string;
@@ -1416,6 +1548,11 @@ type EagerCourierDebtPayment = {
   readonly status: string;
   readonly checkoutUrl?: string | null;
   readonly paidAt?: string | null;
+  readonly amountApplied?: number | null;
+  readonly debtBefore?: number | null;
+  readonly debtAfter?: number | null;
+  readonly transactionID?: string | null;
+  readonly processedAt?: string | null;
   readonly failureReason?: string | null;
   readonly createdAt?: string | null;
   readonly updatedAt?: string | null;
@@ -1428,6 +1565,8 @@ type LazyCourierDebtPayment = {
   readonly id: string;
   readonly courierID: string;
   readonly walletID: string;
+  readonly courierDebtID?: string | null;
+  readonly courierDebt: AsyncItem<CourierDebt | undefined>;
   readonly amount: number;
   readonly currency: string;
   readonly provider: string;
@@ -1435,6 +1574,11 @@ type LazyCourierDebtPayment = {
   readonly status: string;
   readonly checkoutUrl?: string | null;
   readonly paidAt?: string | null;
+  readonly amountApplied?: number | null;
+  readonly debtBefore?: number | null;
+  readonly debtAfter?: number | null;
+  readonly transactionID?: string | null;
+  readonly processedAt?: string | null;
   readonly failureReason?: string | null;
   readonly createdAt?: string | null;
   readonly updatedAt?: string | null;
@@ -1453,6 +1597,7 @@ type EagerCourierReconciliation = {
   readonly id: string;
   readonly courierID: string;
   readonly courier?: Courier | null;
+  readonly debts?: (CourierDebt | null)[] | null;
   readonly reconciliationReference: string;
   readonly periodStart: string;
   readonly periodEnd: string;
@@ -1483,6 +1628,7 @@ type LazyCourierReconciliation = {
   readonly id: string;
   readonly courierID: string;
   readonly courier: AsyncItem<Courier | undefined>;
+  readonly debts: AsyncCollection<CourierDebt>;
   readonly reconciliationReference: string;
   readonly periodStart: string;
   readonly periodEnd: string;
@@ -1677,6 +1823,8 @@ type EagerOrder = {
   readonly cashCollectionID?: string | null;
   readonly payoutStatus?: OrderPayoutStatus | keyof typeof OrderPayoutStatus | null;
   readonly fundsStatus?: FundsStatus | keyof typeof FundsStatus | null;
+  readonly courierReconciliationID?: string | null;
+  readonly courierReconciledAt?: string | null;
   readonly earningsAllocationStatus?: EarningsAllocationStatus | keyof typeof EarningsAllocationStatus | null;
   readonly earningsAllocatedAt?: string | null;
   readonly maxiCountIncrementedAt?: string | null;
@@ -1838,6 +1986,8 @@ type LazyOrder = {
   readonly cashCollectionID?: string | null;
   readonly payoutStatus?: OrderPayoutStatus | keyof typeof OrderPayoutStatus | null;
   readonly fundsStatus?: FundsStatus | keyof typeof FundsStatus | null;
+  readonly courierReconciliationID?: string | null;
+  readonly courierReconciledAt?: string | null;
   readonly earningsAllocationStatus?: EarningsAllocationStatus | keyof typeof EarningsAllocationStatus | null;
   readonly earningsAllocatedAt?: string | null;
   readonly maxiCountIncrementedAt?: string | null;
@@ -2136,9 +2286,14 @@ type EagerCourier = {
   readonly averageRating?: number | null;
   readonly reviewCount?: number | null;
   readonly totalReports?: number | null;
+  readonly debtDueAt?: string | null;
+  readonly debtBlockedAt?: string | null;
+  readonly debtBlockReason?: string | null;
+  readonly debtRestrictionActive?: boolean | null;
   readonly availabilityStatus?: CourierAvailabilityStatus | keyof typeof CourierAvailabilityStatus | null;
   readonly lastLocationUpdateAt?: string | null;
   readonly reconciliations?: (CourierReconciliation | null)[] | null;
+  readonly debts?: (CourierDebt | null)[] | null;
   readonly fleetMemberships?: (FleetMember | null)[] | null;
   readonly fleetVehicles?: (FleetVehicle | null)[] | null;
   readonly fleetOrders?: (FleetOrder | null)[] | null;
@@ -2208,9 +2363,14 @@ type LazyCourier = {
   readonly averageRating?: number | null;
   readonly reviewCount?: number | null;
   readonly totalReports?: number | null;
+  readonly debtDueAt?: string | null;
+  readonly debtBlockedAt?: string | null;
+  readonly debtBlockReason?: string | null;
+  readonly debtRestrictionActive?: boolean | null;
   readonly availabilityStatus?: CourierAvailabilityStatus | keyof typeof CourierAvailabilityStatus | null;
   readonly lastLocationUpdateAt?: string | null;
   readonly reconciliations: AsyncCollection<CourierReconciliation>;
+  readonly debts: AsyncCollection<CourierDebt>;
   readonly fleetMemberships: AsyncCollection<FleetMember>;
   readonly fleetVehicles: AsyncCollection<FleetVehicle>;
   readonly fleetOrders: AsyncCollection<FleetOrder>;

@@ -1,3 +1,5 @@
+// User is no longer going to generate url if he pleases, therefore this page is no more needed. It can be deleted.
+
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { DataStore } from "aws-amplify/datastore";
 import { useEffect, useMemo, useState } from "react";

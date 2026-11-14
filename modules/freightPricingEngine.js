@@ -255,36 +255,39 @@ export const freightPricingEngine = ({
   // 9. Calculate negotiation range
   // ------------------------------------------------------------
   //
-  // We intentionally give a wide negotiation window:
-  //
+
+  // ------------------------------------------------------------
+  // 9. Calculate negotiation range
+  // ------------------------------------------------------------
+
   // MINIMUM:
-  //     40% BELOW reference
-  //
-  //     reference × 0.60
+  //     25% BELOW reference price
+  //     reference × 0.75
   //
   // MAXIMUM:
-  //     50% ABOVE reference
+  //     60% ABOVE reference price
+  //     reference × 1.60
   //
-  //     reference × 1.50
+  // This gives customers room to negotiate downward,
+  // while allowing couriers more room to negotiate upward.
   //
   // Example:
   //
   // Reference = ₦50,000
   //
-  // Minimum = ₦50,000 × 0.60
-  //         = ₦30,000
-  //
-  // Maximum = ₦50,000 × 1.50
-  //         = ₦75,000
+  // Minimum = ₦50,000 × 0.75 = ₦37,500
+  // Maximum = ₦50,000 × 1.60 = ₦80,000
   //
   // Negotiation range:
-  //
-  //     ₦30,000 – ₦75,000
+  //     ₦37,500 – ₦80,000
   // ------------------------------------------------------------
 
-  const minSuggested = Math.round(finalPrice * 0.6);
+  const MIN_OFFER_PERCENTAGE = 0.75;
+  const MAX_OFFER_PERCENTAGE = 1.6;
 
-  const maxSuggested = Math.round(finalPrice * 1.5);
+  const minSuggested = Math.round(finalPrice * MIN_OFFER_PERCENTAGE);
+
+  const maxSuggested = Math.round(finalPrice * MAX_OFFER_PERCENTAGE);
 
   // ------------------------------------------------------------
   // 10. Return the pricing result

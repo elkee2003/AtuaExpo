@@ -79,6 +79,13 @@ export type AmplifyDependentResourcesAttributes = {
       "Name": "string",
       "Region": "string"
     },
+    "enforceCourierDebtDeadline": {
+      "Arn": "string",
+      "LambdaExecutionRole": "string",
+      "LambdaExecutionRoleArn": "string",
+      "Name": "string",
+      "Region": "string"
+    },
     "financialOrderTrigger": {
       "Arn": "string",
       "LambdaExecutionRole": "string",
@@ -167,6 +174,13 @@ export type AmplifyDependentResourcesAttributes = {
       "Region": "string"
     },
     "releaseFunds": {
+      "Arn": "string",
+      "LambdaExecutionRole": "string",
+      "LambdaExecutionRoleArn": "string",
+      "Name": "string",
+      "Region": "string"
+    },
+    "reservePayoutWallet": {
       "Arn": "string",
       "LambdaExecutionRole": "string",
       "LambdaExecutionRoleArn": "string",

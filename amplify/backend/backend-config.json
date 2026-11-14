@@ -203,6 +203,22 @@
       "providerPlugin": "awscloudformation",
       "service": "Lambda"
     },
+    "enforceCourierDebtDeadline": {
+      "build": true,
+      "dependsOn": [
+        {
+          "attributes": [
+            "GraphQLAPIIdOutput",
+            "GraphQLAPIEndpointOutput",
+            "GraphQLAPIKeyOutput"
+          ],
+          "category": "api",
+          "resourceName": "Atua"
+        }
+      ],
+      "providerPlugin": "awscloudformation",
+      "service": "Lambda"
+    },
     "financialOrderTrigger": {
       "build": true,
       "dependsOn": [],
@@ -401,6 +417,11 @@
       "providerPlugin": "awscloudformation",
       "service": "Lambda"
     },
+    "reservePayoutWallet": {
+      "build": true,
+      "providerPlugin": "awscloudformation",
+      "service": "Lambda"
+    },
     "resetCourierIfIdle": {
       "build": true,
       "dependsOn": [
@@ -434,22 +455,6 @@
       "service": "Lambda"
     },
     "selectDeliveryPaymentMethod": {
-      "build": true,
-      "dependsOn": [
-        {
-          "attributes": [
-            "GraphQLAPIIdOutput",
-            "GraphQLAPIEndpointOutput",
-            "GraphQLAPIKeyOutput"
-          ],
-          "category": "api",
-          "resourceName": "Atua"
-        }
-      ],
-      "providerPlugin": "awscloudformation",
-      "service": "Lambda"
-    },
-    "settleCourierBalance": {
       "build": true,
       "dependsOn": [
         {
@@ -648,6 +653,22 @@
         {
           "category": "function",
           "resourceName": "deletePaymentMethod"
+        }
+      ]
+    },
+    "AMPLIFY_function_enforceCourierDebtDeadline_deploymentBucketName": {
+      "usedBy": [
+        {
+          "category": "function",
+          "resourceName": "enforceCourierDebtDeadline"
+        }
+      ]
+    },
+    "AMPLIFY_function_enforceCourierDebtDeadline_s3Key": {
+      "usedBy": [
+        {
+          "category": "function",
+          "resourceName": "enforceCourierDebtDeadline"
         }
       ]
     },
@@ -939,6 +960,22 @@
         }
       ]
     },
+    "AMPLIFY_function_reservePayoutWallet_deploymentBucketName": {
+      "usedBy": [
+        {
+          "category": "function",
+          "resourceName": "reservePayoutWallet"
+        }
+      ]
+    },
+    "AMPLIFY_function_reservePayoutWallet_s3Key": {
+      "usedBy": [
+        {
+          "category": "function",
+          "resourceName": "reservePayoutWallet"
+        }
+      ]
+    },
     "AMPLIFY_function_resetCourierIfIdle_deploymentBucketName": {
       "usedBy": [
         {
@@ -984,22 +1021,6 @@
         {
           "category": "function",
           "resourceName": "selectDeliveryPaymentMethod"
-        }
-      ]
-    },
-    "AMPLIFY_function_settleCourierBalance_deploymentBucketName": {
-      "usedBy": [
-        {
-          "category": "function",
-          "resourceName": "settleCourierBalance"
-        }
-      ]
-    },
-    "AMPLIFY_function_settleCourierBalance_s3Key": {
-      "usedBy": [
-        {
-          "category": "function",
-          "resourceName": "settleCourierBalance"
         }
       ]
     },

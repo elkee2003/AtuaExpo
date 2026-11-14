@@ -1,0 +1,438 @@
+// @ts-check
+import { initSchema } from '@aws-amplify/datastore';
+import { schema } from './schema';
+
+const FleetOrganisationType = {
+  "CORPORATE": "CORPORATE",
+  "REGISTERED_BUSINESS": "REGISTERED_BUSINESS",
+  "INFORMAL_FLEET": "INFORMAL_FLEET"
+};
+
+const FleetLegalStatus = {
+  "REGISTERED": "REGISTERED",
+  "UNREGISTERED": "UNREGISTERED",
+  "REGISTRATION_IN_PROGRESS": "REGISTRATION_IN_PROGRESS"
+};
+
+const FleetVerificationStatus = {
+  "UNVERIFIED": "UNVERIFIED",
+  "PENDING": "PENDING",
+  "VERIFIED": "VERIFIED",
+  "REJECTED": "REJECTED"
+};
+
+const FleetStatus = {
+  "PENDING": "PENDING",
+  "ACTIVE": "ACTIVE",
+  "SUSPENDED": "SUSPENDED",
+  "DEACTIVATED": "DEACTIVATED"
+};
+
+const FleetRole = {
+  "OWNER": "OWNER",
+  "MANAGER": "MANAGER",
+  "DISPATCHER": "DISPATCHER",
+  "ACCOUNTANT": "ACCOUNTANT",
+  "RIDER": "RIDER"
+};
+
+const FleetMemberStatus = {
+  "INVITED": "INVITED",
+  "PENDING": "PENDING",
+  "ACTIVE": "ACTIVE",
+  "SUSPENDED": "SUSPENDED",
+  "REMOVED": "REMOVED"
+};
+
+const FleetInvitationStatus = {
+  "PENDING": "PENDING",
+  "ACCEPTED": "ACCEPTED",
+  "DECLINED": "DECLINED",
+  "EXPIRED": "EXPIRED",
+  "CANCELLED": "CANCELLED"
+};
+
+const FleetVehicleStatus = {
+  "AVAILABLE": "AVAILABLE",
+  "ASSIGNED": "ASSIGNED",
+  "IN_USE": "IN_USE",
+  "MAINTENANCE": "MAINTENANCE",
+  "INACTIVE": "INACTIVE"
+};
+
+const FleetAssignmentType = {
+  "MARKETPLACE_AUTO": "MARKETPLACE_AUTO",
+  "FLEET_DISPATCH": "FLEET_DISPATCH",
+  "PRIVATE": "PRIVATE"
+};
+
+const FleetOrderSource = {
+  "ATUA_MARKETPLACE": "ATUA_MARKETPLACE",
+  "FLEET_CREATED": "FLEET_CREATED",
+  "API": "API"
+};
+
+const FleetSubscriptionPlan = {
+  "FREE": "FREE",
+  "STARTER": "STARTER",
+  "GROWTH": "GROWTH",
+  "BUSINESS": "BUSINESS",
+  "ENTERPRISE": "ENTERPRISE"
+};
+
+const FleetSubscriptionStatus = {
+  "ACTIVE": "ACTIVE",
+  "TRIALING": "TRIALING",
+  "PAST_DUE": "PAST_DUE",
+  "CANCELLED": "CANCELLED",
+  "EXPIRED": "EXPIRED"
+};
+
+const CourierAvailabilityStatus = {
+  "OFFLINE": "OFFLINE",
+  "AVAILABLE": "AVAILABLE",
+  "BUSY": "BUSY",
+  "ON_DELIVERY": "ON_DELIVERY",
+  "SUSPENDED": "SUSPENDED"
+};
+
+const OrderBookingSource = {
+  "APP": "APP",
+  "WEBSITE": "WEBSITE",
+  "SUPPORT": "SUPPORT"
+};
+
+const OrderPaymentResponsibility = {
+  "SENDER": "SENDER",
+  "RECEIVER": "RECEIVER"
+};
+
+const ReceiverConfirmationStatus = {
+  "PENDING": "PENDING",
+  "CONFIRMED": "CONFIRMED",
+  "DECLINED": "DECLINED",
+  "UNREACHABLE": "UNREACHABLE",
+  "EXPIRED": "EXPIRED"
+};
+
+const PaystackEnvironment = {
+  "TEST": "TEST",
+  "LIVE": "LIVE"
+};
+
+const OrderEnvironment = {
+  "PRODUCTION": "PRODUCTION",
+  "TEST": "TEST"
+};
+
+const PaymentMethodStatus = {
+  "ACTIVE": "ACTIVE",
+  "INACTIVE": "INACTIVE",
+  "EXPIRED": "EXPIRED",
+  "FAILED": "FAILED"
+};
+
+const EarningsAllocationStatus = {
+  "NOT_ALLOCATED": "NOT_ALLOCATED",
+  "PROCESSING": "PROCESSING",
+  "ALLOCATED": "ALLOCATED",
+  "FAILED": "FAILED"
+};
+
+const FundsStatus = {
+  "HELD": "HELD",
+  "PARTIALLY_RELEASED": "PARTIALLY_RELEASED",
+  "RELEASED": "RELEASED"
+};
+
+const OrderPayoutStatus = {
+  "NOT_PAID": "NOT_PAID",
+  "PAID": "PAID"
+};
+
+const OrderPaymentStatus = {
+  "PENDING": "PENDING",
+  "PROCESSING": "PROCESSING",
+  "PAID": "PAID",
+  "FAILED": "FAILED"
+};
+
+const PaymentStatus = {
+  "PENDING": "PENDING",
+  "PROCESSING": "PROCESSING",
+  "SUCCESS": "SUCCESS",
+  "FAILED": "FAILED"
+};
+
+const TransactionType = {
+  "CREDIT": "CREDIT",
+  "DEBIT": "DEBIT"
+};
+
+const TransactionStatus = {
+  "PENDING": "PENDING",
+  "COMPLETED": "COMPLETED",
+  "FAILED": "FAILED",
+  "REVERSED": "REVERSED"
+};
+
+const PayoutReservationStatus = {
+  "PENDING": "PENDING",
+  "WALLET_DEBITED": "WALLET_DEBITED",
+  "RESERVED": "RESERVED",
+  "COMPLETED": "COMPLETED",
+  "FAILED": "FAILED",
+  "REVERSED": "REVERSED"
+};
+
+const PayoutStatus = {
+  "PENDING": "PENDING",
+  "PROCESSING": "PROCESSING",
+  "PAID": "PAID",
+  "FAILED": "FAILED"
+};
+
+const PayoutSource = {
+  "COURIER_REQUESTED": "COURIER_REQUESTED",
+  "ADMIN_MANUAL": "ADMIN_MANUAL",
+  "SYSTEM": "SYSTEM"
+};
+
+const OwnerType = {
+  "COURIER": "COURIER",
+  "USER": "USER"
+};
+
+const OfferStatus = {
+  "ACTIVE": "ACTIVE",
+  "ACCEPTED": "ACCEPTED",
+  "REJECTED": "REJECTED",
+  "CANCELLED": "CANCELLED"
+};
+
+const CourierPreTransferUploadStatus = {
+  "PENDING": "PENDING",
+  "UPLOADING": "UPLOADING",
+  "COMPLETE": "COMPLETE",
+  "FAILED": "FAILED"
+};
+
+const CourierPostLoadingUploadStatus = {
+  "PENDING": "PENDING",
+  "UPLOADING": "UPLOADING",
+  "COMPLETE": "COMPLETE",
+  "FAILED": "FAILED"
+};
+
+const DropoffUploadStatus = {
+  "PENDING": "PENDING",
+  "UPLOADING": "UPLOADING",
+  "COMPLETE": "COMPLETE",
+  "FAILED": "FAILED"
+};
+
+const MediaUploadStatus = {
+  "PENDING": "PENDING",
+  "UPLOADING": "UPLOADING",
+  "COMPLETE": "COMPLETE",
+  "FAILED": "FAILED"
+};
+
+const RefundStatus = {
+  "NONE": "NONE",
+  "PENDING": "PENDING",
+  "PROCESSING": "PROCESSING",
+  "NEEDS_ATTENTION": "NEEDS_ATTENTION",
+  "PROCESSED": "PROCESSED",
+  "FAILED": "FAILED"
+};
+
+const CancellationStage = {
+  "BEFORE_ACCEPTANCE": "BEFORE_ACCEPTANCE",
+  "ACCEPTED": "ACCEPTED",
+  "COURIER_ARRIVED": "COURIER_ARRIVED",
+  "PICKUP_STARTED": "PICKUP_STARTED",
+  "PICKED_UP": "PICKED_UP",
+  "IN_TRANSIT": "IN_TRANSIT",
+  "DELIVERED": "DELIVERED"
+};
+
+const CancellationReason = {
+  "CHANGED_MIND": "CHANGED_MIND",
+  "WRONG_ADDRESS": "WRONG_ADDRESS",
+  "WRONG_ORDER": "WRONG_ORDER",
+  "TOO_EXPENSIVE": "TOO_EXPENSIVE",
+  "TOO_LONG_TO_WAIT": "TOO_LONG_TO_WAIT",
+  "NO_LONGER_NEEDED": "NO_LONGER_NEEDED",
+  "COURIER_DELAY": "COURIER_DELAY",
+  "COURIER_REQUEST": "COURIER_REQUEST",
+  "SYSTEM_ERROR": "SYSTEM_ERROR",
+  "OTHER": "OTHER"
+};
+
+const CancellationStatus = {
+  "NONE": "NONE",
+  "REQUESTED": "REQUESTED",
+  "PROCESSING": "PROCESSING",
+  "COMPLETED": "COMPLETED",
+  "FAILED": "FAILED",
+  "REJECTED": "REJECTED"
+};
+
+const OrderPaymentTiming = {
+  "BEFORE_PICKUP": "BEFORE_PICKUP",
+  "AT_PICKUP": "AT_PICKUP",
+  "ON_DELIVERY": "ON_DELIVERY"
+};
+
+const OrderPaymentMethod = {
+  "PAYSTACK": "PAYSTACK",
+  "CASH": "CASH"
+};
+
+const CourierDebtStatus = {
+  "OPEN": "OPEN",
+  "PARTIALLY_PAID": "PARTIALLY_PAID",
+  "PAID": "PAID",
+  "OVERDUE": "OVERDUE",
+  "REVERSED": "REVERSED",
+  "WAIVED": "WAIVED"
+};
+
+const CourierReconciliationStatus = {
+  "PENDING": "PENDING",
+  "CALCULATED": "CALCULATED",
+  "APPROVED": "APPROVED",
+  "SETTLED": "SETTLED",
+  "REVERSED": "REVERSED"
+};
+
+const CourierReconciliationDirection = {
+  "ATUA_OWES_COURIER": "ATUA_OWES_COURIER",
+  "COURIER_OWES_ATUA": "COURIER_OWES_ATUA",
+  "BALANCED": "BALANCED"
+};
+
+const CashCollectionStatus = {
+  "NOT_REQUIRED": "NOT_REQUIRED",
+  "PENDING": "PENDING",
+  "CONFIRMED": "CONFIRMED",
+  "DISPUTED": "DISPUTED",
+  "REVERSED": "REVERSED"
+};
+
+const OrderStatus = {
+  "BIDDING": "BIDDING",
+  "AWAITING_PAYMENT": "AWAITING_PAYMENT",
+  "READY_FOR_PICKUP": "READY_FOR_PICKUP",
+  "ACCEPTED": "ACCEPTED",
+  "ARRIVED_PICKUP": "ARRIVED_PICKUP",
+  "LOADING": "LOADING",
+  "PICKED_UP": "PICKED_UP",
+  "IN_TRANSIT": "IN_TRANSIT",
+  "ARRIVED_DROPOFF": "ARRIVED_DROPOFF",
+  "UNLOADING": "UNLOADING",
+  "DELIVERED": "DELIVERED",
+  "HANDOVER_TO_LOGISTICS": "HANDOVER_TO_LOGISTICS",
+  "IN_LOGISTICS_TRANSIT": "IN_LOGISTICS_TRANSIT",
+  "CANCELLED": "CANCELLED",
+  "DISPUTED": "DISPUTED"
+};
+
+const CourierReportStatus = {
+  "OPEN": "OPEN",
+  "UNDER_REVIEW": "UNDER_REVIEW",
+  "RESOLVED": "RESOLVED",
+  "DISMISSED": "DISMISSED"
+};
+
+const { FleetWallet, FleetTransaction, FleetSubscription, FleetOrder, Fleet, FleetMember, FleetInvitation, FleetVehicle, PaymentMethod, PayoutReservation, Payout, Transaction, Wallet, Payment, Offer, OrderCancellation, CourierDebt, CourierDebtPayment, CourierReconciliation, CashCollection, Order, CourierReport, CourierReview, AdminAlert, CourierLiveLocation, Courier, User, VerifyAtuaPaymentResult, VerifiedPaymentDetails, ChargeAtuaPaymentMethodResult, DeleteSavedPaymentMethodResult, InitializeAtuaPaymentResult, InitializeDeliveryPaymentResult, RecordCashCollectionResult, SelectDeliveryPaymentMethodResult, InitializeCourierDebtPaymentResult, VerifyCourierDebtPaymentResult, ProcessPayoutsResponse, ReversePayoutResponse } = initSchema(schema);
+
+export {
+  FleetWallet,
+  FleetTransaction,
+  FleetSubscription,
+  FleetOrder,
+  Fleet,
+  FleetMember,
+  FleetInvitation,
+  FleetVehicle,
+  PaymentMethod,
+  PayoutReservation,
+  Payout,
+  Transaction,
+  Wallet,
+  Payment,
+  Offer,
+  OrderCancellation,
+  CourierDebt,
+  CourierDebtPayment,
+  CourierReconciliation,
+  CashCollection,
+  Order,
+  CourierReport,
+  CourierReview,
+  AdminAlert,
+  CourierLiveLocation,
+  Courier,
+  User,
+  FleetOrganisationType,
+  FleetLegalStatus,
+  FleetVerificationStatus,
+  FleetStatus,
+  FleetRole,
+  FleetMemberStatus,
+  FleetInvitationStatus,
+  FleetVehicleStatus,
+  FleetAssignmentType,
+  FleetOrderSource,
+  FleetSubscriptionPlan,
+  FleetSubscriptionStatus,
+  CourierAvailabilityStatus,
+  OrderBookingSource,
+  OrderPaymentResponsibility,
+  ReceiverConfirmationStatus,
+  PaystackEnvironment,
+  OrderEnvironment,
+  PaymentMethodStatus,
+  EarningsAllocationStatus,
+  FundsStatus,
+  OrderPayoutStatus,
+  OrderPaymentStatus,
+  PaymentStatus,
+  TransactionType,
+  TransactionStatus,
+  PayoutReservationStatus,
+  PayoutStatus,
+  PayoutSource,
+  OwnerType,
+  OfferStatus,
+  CourierPreTransferUploadStatus,
+  CourierPostLoadingUploadStatus,
+  DropoffUploadStatus,
+  MediaUploadStatus,
+  RefundStatus,
+  CancellationStage,
+  CancellationReason,
+  CancellationStatus,
+  OrderPaymentTiming,
+  OrderPaymentMethod,
+  CourierDebtStatus,
+  CourierReconciliationStatus,
+  CourierReconciliationDirection,
+  CashCollectionStatus,
+  OrderStatus,
+  CourierReportStatus,
+  VerifyAtuaPaymentResult,
+  VerifiedPaymentDetails,
+  ChargeAtuaPaymentMethodResult,
+  DeleteSavedPaymentMethodResult,
+  InitializeAtuaPaymentResult,
+  InitializeDeliveryPaymentResult,
+  RecordCashCollectionResult,
+  SelectDeliveryPaymentMethodResult,
+  InitializeCourierDebtPaymentResult,
+  VerifyCourierDebtPaymentResult,
+  ProcessPayoutsResponse,
+  ReversePayoutResponse
+};

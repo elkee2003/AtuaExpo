@@ -1,6 +1,8 @@
 [
   {
-    "Action": [],
-    "Resource": []
+    "Action": ["lambda:InvokeFunction"],
+    "Resource": [
+      "arn:aws:lambda:eu-north-1:703145406670:function:reservePayoutWallet-staging"
+    ]
   }
 ]

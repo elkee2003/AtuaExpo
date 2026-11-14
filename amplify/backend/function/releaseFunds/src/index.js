@@ -1,114 +1,80 @@
-/*
-===============================================================
-ATUA — RELEASE FUNDS LAMBDA
-===============================================================
+/* Amplify Params - DO NOT EDIT
+    ENV
+    REGION
+Amplify Params - DO NOT EDIT */
 
-PURPOSE
--------
-This Lambda releases courier earnings for MICRO and MOTO orders
-that were paid electronically through Paystack.
+/**
+ * ATUA — RELEASE FUNDS
+ *
+ * PURPOSE
+ * -------
+ * Releases allocated courier earnings for MICRO and MOTO orders
+ * after successful delivery.
+ *
+ * SUPPORTED FLOW
+ * --------------
+ * 1. Order is paid through PAYSTACK.
+ * 2. Backend verifies payment and sets paymentStatus = PAID.
+ * 3. allocateCourierEarnings credits courier pendingBalance.
+ * 4. Order reaches DELIVERED.
+ * 5. This Lambda validates the Order, Courier, Wallet and
+ *    original EARNINGS transaction.
+ * 6. The Order is conditionally claimed for release.
+ * 7. Wallet pendingBalance decreases.
+ * 8. Wallet availableBalance increases.
+ *
+ * IMPORTANT
+ * ---------
+ * - CASH orders are never released through this Lambda.
+ * - MAXI orders must use releaseCourierMilestoneFunds.
+ * - This Lambda does not calculate courier earnings.
+ * - This Lambda does not recover courier debt.
+ * - This Lambda does not increase lifetimeEarnings.
+ *
+ * FINANCIAL SAFETY
+ * ----------------
+ * - Checks payment method and payment status.
+ * - Checks earnings allocation status.
+ * - Checks Order delivery status.
+ * - Checks courier and wallet ownership.
+ * - Checks the original EARNINGS transaction.
+ * - Uses a conditional Order claim.
+ * - Uses a conditional Wallet update.
+ * - Handles uncertain Wallet update outcomes by rereading
+ *   the Wallet before deciding whether rollback is safe.
+ *
+ * IMPORTANT LIMITATION
+ * --------------------
+ * AppSync does not make the Order and Wallet mutations atomic.
+ * If a process crashes between those mutations, manual
+ * reconciliation may still be required.
+ */
 
-It does NOT release funds for MAXI orders. MAXI orders use:
-releaseCourierMilestoneFunds.
+"use strict";
 
-ELECTRONIC PAYMENT FLOW
------------------------
-1. Customer pays electronically through Paystack.
-2. Backend verifies payment and marks the Order as PAID.
-3. allocateCourierEarnings allocates courier earnings to
-   the courier's pendingBalance.
-4. The order reaches DELIVERED.
-5. This Lambda validates the Order, Courier, Wallet and ledger.
-6. The Lambda claims the Order for release.
-7. Courier earnings move from pendingBalance to availableBalance.
-8. The Order records the release.
-
-CASH PAYMENT FLOW
------------------
-Cash collected by a courier is NOT electronic money held by Atua.
-
-This Lambda therefore does not release cash orders through the
-electronic payment flow.
-
-Cash orders must be handled through:
-- recordCashCollection
-- The cash reconciliation process
-- The appropriate cash wallet and ledger rules
-
-IMPORTANT FINANCIAL SAFETY
---------------------------
-This Lambda uses an Order condition to reduce duplicate releases
-and uses _version when available.
-
-However, separate AppSync mutations are NOT one atomic transaction.
-
-If the Order is claimed but the wallet update fails, this code
-attempts to restore the Order to HELD.
-
-If the wallet update succeeds and a later step fails, investigate
-the Order and Wallet before attempting another release.
-
-For stronger production guarantees, use a durable, idempotent
-release ledger and a recoverable PROCESSING state.
-
-REQUIRED ENVIRONMENT VARIABLES
-------------------------------
-API_ATUA_GRAPHQLAPIENDPOINTOUTPUT
-API_ATUA_GRAPHQLAPIKEYOUTPUT
-
-SCHEMA REQUIREMENTS
--------------------
-This code assumes your deployed schema contains the fields,
-enum values, queries and mutations used below. Verify these
-against your actual Amplify GraphQL schema before deployment.
-===============================================================
-*/
-
-const fetch = global.fetch || require("node-fetch");
-
-/*
-===============================================================
-1. CONFIGURATION
-===============================================================
-
-Read the AppSync endpoint and API key from Lambda environment
-variables. Do not hardcode credentials in this file.
-*/
+// =============================================================================
+// 1. CONFIGURATION
+// =============================================================================
 
 const GRAPHQL_ENDPOINT = process.env.API_ATUA_GRAPHQLAPIENDPOINTOUTPUT;
 
 const API_KEY = process.env.API_ATUA_GRAPHQLAPIKEYOUTPUT;
 
-/*
-===============================================================
-2. MAIN LAMBDA HANDLER
-===============================================================
+// This Lambda requires the native fetch available in supported
+// modern Node.js Lambda runtimes.
+if (typeof fetch !== "function") {
+  throw new Error(
+    "Native fetch is unavailable. Use a supported Node.js Lambda runtime.",
+  );
+}
 
-AWS Lambda starts execution here.
+const REQUEST_TIMEOUT_MS = 15000;
 
-The handler:
-- Extracts the Order ID.
-- Loads the Order.
-- Validates payment, delivery and allocation.
-- Validates the Courier and Wallet.
-- Verifies the original earnings transaction.
-- Claims the Order for release.
-- Updates the Wallet.
-- Returns a result or throws an error for investigation.
-*/
+// =============================================================================
+// 2. MAIN HANDLER
+// =============================================================================
 
 exports.handler = async (event) => {
-  /*
-  -------------------------------------------------------------
-  2.1 Extract the Order ID
-  -------------------------------------------------------------
-
-  Different callers may send the Order ID in different locations.
-
-  Supporting these formats allows the Lambda to be called by
-  another Lambda or by a compatible direct invocation.
-  */
-
   const orderID =
     event?.orderID ||
     event?.orderId ||
@@ -119,37 +85,28 @@ exports.handler = async (event) => {
     event?.detail?.orderID ||
     event?.detail?.orderId;
 
-  // An Order ID is mandatory. Do not continue without one.
   if (!orderID) {
     throw new Error("orderID is required.");
   }
 
-  console.log("ATUA RELEASE FUNDS START:", orderID);
-
-  /*
-  -------------------------------------------------------------
-  2.2 Declare variables used during processing
-  -------------------------------------------------------------
-
-  These variables allow the error handler to determine whether
-  the Order was claimed and whether the Wallet was updated.
-  */
+  console.log("=================================================");
+  console.log("ATUA RELEASE FUNDS START");
+  console.log("Order ID:", orderID);
+  console.log("=================================================");
 
   let order = null;
+  let courier = null;
   let wallet = null;
+
   let claimedOrder = null;
-  let walletAfterUpdate = null;
   let walletUpdated = false;
 
-  try {
-    /*
-    -----------------------------------------------------------
-    STEP 1: LOAD THE ORDER
-    -----------------------------------------------------------
+  let expectedWalletBalances = null;
 
-    Always read the latest Order record before making financial
-    changes. Never rely only on values supplied by the caller.
-    */
+  try {
+    // =======================================================================
+    // STEP 1: LOAD THE LATEST ORDER
+    // =======================================================================
 
     order = await getOrder(orderID);
 
@@ -157,60 +114,40 @@ exports.handler = async (event) => {
       throw new Error(`Order ${orderID} was not found or has been deleted.`);
     }
 
-    // Normalize enum/string values for consistent comparisons.
     const paymentMethod = normalize(order.paymentMethod);
     const paymentStatus = normalize(order.paymentStatus);
     const orderStatus = normalize(order.status);
     const fundsStatus = normalize(order.fundsStatus);
-
     const allocationStatus = normalize(order.earningsAllocationStatus);
 
-    // The courier assigned to this Order.
     const courierID = order.assignedCourierId;
 
-    /*
-    -----------------------------------------------------------
-    STEP 2: HANDLE CASH ORDERS SAFELY
-    -----------------------------------------------------------
+    // =======================================================================
+    // STEP 2: HANDLE CASH ORDERS
+    // =======================================================================
 
-    CASH is not the same as PAYSTACK.
-
-    A courier collecting cash from a receiver does not mean
-    Atua has received electronic funds that this Lambda can
-    release from a platform-held payment.
-
-    Therefore, this Lambda never moves cash-order earnings
-    from pendingBalance to availableBalance.
-
-    If cash earnings were already allocated to pendingBalance,
-    flag the Order for reconciliation rather than guessing how
-    to correct the wallet.
-    */
+    /**
+     * Cash is physically collected by the courier.
+     *
+     * It is not money held electronically by Atua.
+     * Therefore, this Lambda must never move cash-order earnings
+     * from pendingBalance to availableBalance.
+     *
+     * If cash earnings have already been allocated, that is a
+     * financial inconsistency requiring reconciliation.
+     */
 
     if (paymentMethod === "CASH") {
       if (allocationStatus === "ALLOCATED") {
         console.error(
-          "CASH ORDER REQUIRES FINANCIAL RECONCILIATION:",
+          "CRITICAL: CASH ORDER HAS ALLOCATED ONLINE EARNINGS",
           JSON.stringify({
             orderID,
             courierID,
-            paymentMethod,
             allocationStatus,
             fundsStatus,
-            message:
-              "Cash-order earnings have already been allocated. " +
-              "Review the wallet and ledger before making adjustments.",
           }),
         );
-
-        /*
-        Return a structured result so the caller can identify
-        the reconciliation requirement.
-
-        NOTE: The HTTP-style status code is 200. A caller must
-        inspect body.success and body.reconciliationRequired;
-        it must not interpret HTTP 200 alone as financial success.
-        */
 
         return response({
           success: false,
@@ -220,107 +157,66 @@ exports.handler = async (event) => {
           courierID: courierID || null,
           paymentMethod: "CASH",
           message:
-            "Cash earnings were already allocated. This Lambda " +
-            "did not release them. Reconcile the wallet and ledger.",
+            "Cash order has an allocated earnings transaction. " +
+            "Inspect the Wallet and ledger before making adjustments.",
         });
       }
 
-      // Cash order has not been allocated through this flow.
-      console.log(
-        `Order ${orderID} uses CASH. ` + "Electronic funds release skipped.",
-      );
+      console.log(`Skipping online funds release for CASH Order ${orderID}.`);
 
       return response({
         success: true,
         skipped: true,
         orderID,
-        courierID: courierID || null,
         paymentMethod: "CASH",
         message:
-          "Cash orders are handled by the cash collection " +
-          "and reconciliation process.",
+          "Cash orders are handled by cash collection and reconciliation.",
       });
     }
 
-    /*
-    -----------------------------------------------------------
-    STEP 3: VALIDATE THE PAYMENT METHOD
-    -----------------------------------------------------------
-
-    Only PAYSTACK orders are supported by this Lambda.
-
-    Other payment methods must use their own appropriate
-    accounting and release logic.
-    */
+    // =======================================================================
+    // STEP 3: VALIDATE PAYMENT METHOD
+    // =======================================================================
 
     if (paymentMethod !== "PAYSTACK") {
       throw new Error(
-        `Unsupported payment method "${order.paymentMethod}". ` +
+        `Unsupported payment method: ${order.paymentMethod}. ` +
           "Only PAYSTACK orders can use releaseFunds.",
       );
     }
 
-    /*
-    -----------------------------------------------------------
-    STEP 4: VERIFY THAT PAYMENT SUCCEEDED
-    -----------------------------------------------------------
-
-    The Order must be marked PAID.
-
-    This check relies on the backend correctly verifying the
-    Paystack transaction before setting paymentStatus to PAID.
-    This Lambda does not independently contact Paystack.
-    */
+    // =======================================================================
+    // STEP 4: VERIFY PAYMENT
+    // =======================================================================
 
     if (paymentStatus !== "PAID") {
       throw new Error(
-        `Order ${orderID} is not PAID. ` +
-          `Current paymentStatus: ${order.paymentStatus}`,
+        `Order ${orderID} is not PAID. Current status: ${order.paymentStatus}`,
       );
     }
 
-    /*
-    -----------------------------------------------------------
-    STEP 5: VERIFY THAT EARNINGS WERE ALLOCATED
-    -----------------------------------------------------------
-
-    allocateCourierEarnings must have completed the initial
-    earnings allocation before this Lambda runs.
-
-    This Lambda does not create the initial allocation.
-    It only releases an existing allocation.
-    */
+    // =======================================================================
+    // STEP 5: VERIFY EARNINGS ALLOCATION
+    // =======================================================================
 
     if (allocationStatus !== "ALLOCATED") {
       throw new Error(
-        `Courier earnings have not been allocated for Order ` +
-          `${orderID}. Current status: ` +
-          `${order.earningsAllocationStatus}`,
+        `Order ${orderID} earnings are not allocated. ` +
+          `Current status: ${order.earningsAllocationStatus}`,
       );
     }
 
-    /*
-    -----------------------------------------------------------
-    STEP 6: VERIFY THE ASSIGNED COURIER
-    -----------------------------------------------------------
-
-    An Order cannot release earnings without a courier ID.
-    */
+    // =======================================================================
+    // STEP 6: VERIFY COURIER
+    // =======================================================================
 
     if (!courierID) {
       throw new Error(`Order ${orderID} has no assigned courier.`);
     }
 
-    /*
-    -----------------------------------------------------------
-    STEP 7: VERIFY DELIVERY
-    -----------------------------------------------------------
-
-    For Micro/Moto orders, the release occurs after delivery.
-
-    This prevents the funds from being released merely because
-    the customer paid or the courier picked up the package.
-    */
+    // =======================================================================
+    // STEP 7: VERIFY DELIVERY
+    // =======================================================================
 
     if (orderStatus !== "DELIVERED") {
       throw new Error(
@@ -329,17 +225,9 @@ exports.handler = async (event) => {
       );
     }
 
-    /*
-    -----------------------------------------------------------
-    STEP 8: IDENTIFY THE TRANSPORTATION TYPE
-    -----------------------------------------------------------
-
-    MAXI orders use milestone-based releases, so they must
-    not pass through this Lambda.
-
-    The checks support common transportationType and vehicleClass
-    values. Confirm that these values match your schema.
-    */
+    // =======================================================================
+    // STEP 8: VERIFY TRANSPORTATION TYPE
+    // =======================================================================
 
     const transportationType = normalize(order.transportationType);
 
@@ -349,21 +237,19 @@ exports.handler = async (event) => {
 
     if (isMaxi) {
       throw new Error(
-        `Order ${orderID} is a MAXI order. ` +
+        `Order ${orderID} is MAXI. ` +
           "Use releaseCourierMilestoneFunds instead.",
       );
     }
 
     const isMicro =
       transportationType === "MICRO" ||
-      transportationType === "MICRO_EXPRESS" ||
-      transportationType === "MICRO_BATCH" ||
+      transportationType.startsWith("MICRO_") ||
       vehicleClass === "MICRO";
 
     const isMoto =
       transportationType === "MOTO" ||
-      transportationType === "MOTO_EXPRESS" ||
-      transportationType === "MOTO_BATCH" ||
+      transportationType.startsWith("MOTO_") ||
       vehicleClass === "MOTO";
 
     if (!isMicro && !isMoto) {
@@ -373,19 +259,12 @@ exports.handler = async (event) => {
       );
     }
 
-    /*
-    -----------------------------------------------------------
-    STEP 9: CHECK FOR AN ADMINISTRATIVE HOLD
-    -----------------------------------------------------------
-
-    If an administrator has blocked the release, stop without
-    changing the wallet.
-
-    This is useful when an Order is disputed or under review.
-    */
+    // =======================================================================
+    // STEP 9: CHECK ADMINISTRATIVE HOLD
+    // =======================================================================
 
     if (order.fundsReleaseBlocked === true) {
-      console.log(`Funds release blocked for Order ${orderID}.`);
+      console.log(`Funds release is blocked for Order ${orderID}.`);
 
       return response({
         success: true,
@@ -398,84 +277,73 @@ exports.handler = async (event) => {
       });
     }
 
-    /*
-    -----------------------------------------------------------
-    STEP 10: CHECK WHETHER THE ORDER WAS ALREADY RELEASED
-    -----------------------------------------------------------
-
-    If the Order is already RELEASED, do not change the wallet
-    again.
-
-    This is an important idempotency check for retries.
-    */
+    // =======================================================================
+    // STEP 10: CHECK DUPLICATE RELEASE
+    // =======================================================================
 
     if (fundsStatus === "RELEASED") {
+      const recordedAmount = money(order.fundsReleasedAmount ?? 0);
+
+      const currentEarnings = money(order.courierEarnings);
+
+      if (recordedAmount !== currentEarnings) {
+        throw new Error(
+          `Order ${orderID} is marked RELEASED but its recorded ` +
+            `release amount (${recordedAmount}) does not match ` +
+            `courier earnings (${currentEarnings}). ` +
+            "Manual reconciliation is required.",
+        );
+      }
+
+      console.log(`Order ${orderID} has already been released.`);
+
       return response({
         success: true,
         alreadyProcessed: true,
         orderID,
         courierID,
         fundsStatus: "RELEASED",
-        fundsReleasedAmount: money(order.fundsReleasedAmount || 0),
+        fundsReleasedAmount: recordedAmount,
         message:
-          "The Order is already marked as released. " +
-          "No additional wallet change was made.",
+          "This Order has already been released. No additional wallet change was made.",
       });
     }
 
-    /*
-    -----------------------------------------------------------
-    STEP 11: REQUIRE THE HELD STATE
-    -----------------------------------------------------------
-
-    Only an Order with fundsStatus HELD can enter this release
-    process.
-
-    Unknown states must not be silently treated as releasable.
-    */
+    // =======================================================================
+    // STEP 11: REQUIRE HELD STATE
+    // =======================================================================
 
     if (fundsStatus !== "HELD") {
       throw new Error(
         `Order ${orderID} has fundsStatus "${order.fundsStatus}". ` +
-          "Micro/Moto release requires HELD.",
+          "MICRO/MOTO release requires HELD.",
       );
     }
 
-    // A HELD Order should not already record a released amount.
-    if (money(order.fundsReleasedAmount || 0) !== 0) {
+    if (money(order.fundsReleasedAmount ?? 0) !== 0) {
       throw new Error(
-        `Order ${orderID} is HELD but already records a released ` +
-          "amount. Manual reconciliation is required.",
+        `Order ${orderID} is HELD but already has a recorded ` +
+          "release amount. Manual reconciliation is required.",
       );
     }
 
-    /*
-    -----------------------------------------------------------
-    STEP 12: VALIDATE COURIER EARNINGS
-    -----------------------------------------------------------
-
-    Use the courierEarnings value already calculated and stored
-    by the backend. Do not recalculate the fare here.
-    */
+    // =======================================================================
+    // STEP 12: VALIDATE EARNINGS
+    // =======================================================================
 
     const earnings = money(order.courierEarnings);
 
     if (earnings <= 0) {
       throw new Error(
-        `Invalid courier earnings for Order ${orderID}: ` +
-          `${order.courierEarnings}`,
+        `Invalid courier earnings for Order ${orderID}: ${order.courierEarnings}`,
       );
     }
 
-    /*
-    -----------------------------------------------------------
-    STEP 13: LOAD THE COURIER
-    -----------------------------------------------------------
+    // =======================================================================
+    // STEP 13: LOAD COURIER
+    // =======================================================================
 
-    Confirm that the assigned courier still exists.
-    */
-
-    const courier = await getCourier(courierID);
+    courier = await getCourier(courierID);
 
     if (!courier || courier._deleted === true) {
       throw new Error(
@@ -483,23 +351,14 @@ exports.handler = async (event) => {
       );
     }
 
-    /*
-    -----------------------------------------------------------
-    STEP 14: FIND THE COURIER'S WALLET
-    -----------------------------------------------------------
-
-    If Courier.walletID exists, use it.
-
-    Otherwise, search for a wallet owned by this courier.
-
-    If more than one matching wallet exists, stop rather than
-    risk crediting the wrong wallet.
-    */
+    // =======================================================================
+    // STEP 14: FIND COURIER WALLET
+    // =======================================================================
 
     wallet = await findCourierWallet(courier);
 
     if (!wallet) {
-      throw new Error(`No wallet found for courier ${courierID}.`);
+      throw new Error(`No Wallet found for Courier ${courierID}.`);
     }
 
     if (
@@ -507,67 +366,35 @@ exports.handler = async (event) => {
       normalize(wallet.ownerType) !== "COURIER"
     ) {
       throw new Error(
-        `Wallet ${wallet.id} does not belong to courier ${courierID}.`,
+        `Wallet ${wallet.id} does not belong to Courier ${courierID}.`,
       );
     }
 
-    /*
-    -----------------------------------------------------------
-    STEP 15: READ AND VALIDATE THE WALLET BALANCES
-    -----------------------------------------------------------
+    // =======================================================================
+    // STEP 15: VALIDATE WALLET BALANCES
+    // =======================================================================
 
-    pendingBalance:
-      Earnings that have been allocated but are not yet available.
+    const pendingBalance = money(wallet.pendingBalance ?? 0);
 
-    availableBalance:
-      Earnings available for the courier to withdraw or use.
+    const availableBalance = money(wallet.availableBalance ?? 0);
 
-    lifetimeEarnings:
-      The lifetime earnings total maintained by your wallet model.
-
-    IMPORTANT:
-    This code assumes all three fields use the same currency unit
-    and convention as Order.courierEarnings.
-    */
-
-    const pendingBalance = money(wallet.pendingBalance || 0);
-
-    const availableBalance = money(wallet.availableBalance || 0);
-
-    const lifetimeEarnings = money(wallet.lifetimeEarnings || 0);
+    const lifetimeEarnings = money(wallet.lifetimeEarnings ?? 0);
 
     if (pendingBalance < 0 || availableBalance < 0 || lifetimeEarnings < 0) {
       throw new Error(`Wallet ${wallet.id} contains a negative balance.`);
     }
 
-    // The wallet must contain the earnings being released.
     if (pendingBalance < earnings) {
       throw new Error(
         `Insufficient pending balance for Order ${orderID}. ` +
-          `Pending: ${pendingBalance}; required: ${earnings}.`,
+          `Available pending balance: ${pendingBalance}; ` +
+          `required: ${earnings}.`,
       );
     }
 
-    /*
-    -----------------------------------------------------------
-    STEP 16: VERIFY THE ORIGINAL EARNINGS TRANSACTION
-    -----------------------------------------------------------
-
-    allocateCourierEarnings is expected to create a transaction
-    with this reference:
-
-      EARNINGS-{orderID}
-
-    Before releasing the earnings, verify:
-    - The transaction exists.
-    - It belongs to the correct wallet and Order.
-    - It is a CREDIT.
-    - Its amount matches courierEarnings.
-    - Its status is COMPLETED.
-
-    These checks help prevent releasing earnings that do not
-    match the ledger.
-    */
+    // =======================================================================
+    // STEP 16: VERIFY ORIGINAL EARNINGS TRANSACTION
+    // =======================================================================
 
     const transactionReference = `EARNINGS-${orderID}`;
 
@@ -580,119 +407,166 @@ exports.handler = async (event) => {
       earnings,
     });
 
-    /*
-    -----------------------------------------------------------
-    STEP 17: CALCULATE THE NEW WALLET BALANCES
-    -----------------------------------------------------------
-
-    Example:
-      Pending balance before:   ₦5,000
-      Earnings to release:      ₦2,000
-      Available balance before: ₦1,000
-
-    After release:
-      Pending balance:          ₦3,000
-      Available balance:        ₦3,000
-
-    The earnings are moved between balances, not added twice.
-
-    lifetimeEarnings is increased here according to this
-    implementation's accounting convention. Confirm that your
-    other financial Lambdas use the same convention.
-    */
+    // =======================================================================
+    // STEP 17: CALCULATE NEW WALLET BALANCES
+    // =======================================================================
 
     const newPendingBalance = money(pendingBalance - earnings);
 
     const newAvailableBalance = money(availableBalance + earnings);
 
-    const newLifetimeEarnings = money(lifetimeEarnings + earnings);
+    /**
+     * IMPORTANT:
+     *
+     * lifetimeEarnings is NOT increased here.
+     *
+     * allocateCourierEarnings already records the earnings
+     * as generated. This Lambda only moves the same money
+     * from pendingBalance to availableBalance.
+     *
+     * Increasing lifetimeEarnings here would count the
+     * same courier earnings twice.
+     */
 
-    /*
-    -----------------------------------------------------------
-    STEP 18: CLAIM THE ORDER BEFORE UPDATING THE WALLET
-    -----------------------------------------------------------
+    const newLifetimeEarnings = lifetimeEarnings;
 
-    The Order update uses a condition requiring it to still be:
-    - DELIVERED
-    - HELD
-    - ALLOCATED
-    - PAID
-    - PAYSTACK
+    expectedWalletBalances = {
+      pendingBalance: newPendingBalance,
+      availableBalance: newAvailableBalance,
+      lifetimeEarnings: newLifetimeEarnings,
+    };
 
-    If another invocation has already changed the Order, the
-    condition should reject this claim.
-
-    This reduces the risk of two concurrent invocations
-    releasing the same Order.
-
-    IMPORTANT:
-    This is not a multi-record database transaction. The Order
-    claim and Wallet update can still become inconsistent if the
-    Lambda crashes between operations.
-    */
+    // =======================================================================
+    // STEP 18: CLAIM ORDER FOR RELEASE
+    // =======================================================================
 
     const releaseTimestamp = new Date().toISOString();
 
     claimedOrder = await claimOrderRelease({
       order,
+      courierID,
       earnings,
       releaseTimestamp,
     });
 
     if (!claimedOrder) {
-      // Re-read the Order to determine whether another invocation
-      // already claimed or released it.
       const latestOrder = await getOrder(orderID);
 
-      if (normalize(latestOrder?.fundsStatus) === "RELEASED") {
+      if (
+        normalize(latestOrder?.fundsStatus) === "RELEASED" &&
+        money(latestOrder?.fundsReleasedAmount ?? 0) === earnings
+      ) {
         return response({
           success: true,
           alreadyProcessed: true,
           orderID,
+          courierID,
           message:
-            "The Order was already claimed or released. " +
-            "Verify the Wallet and Order ledger before retrying.",
+            "Another invocation has already claimed or released this Order.",
         });
       }
 
       throw new Error(
         `Could not claim Order ${orderID} for release. ` +
-          "Refresh the records and investigate before retrying.",
+          "Refresh the Order and investigate before retrying.",
       );
     }
 
-    /*
-    -----------------------------------------------------------
-    STEP 19: UPDATE THE WALLET
-    -----------------------------------------------------------
+    // =======================================================================
+    // STEP 19: UPDATE WALLET CONDITIONALLY
+    // =======================================================================
 
-    Once the Order has been claimed, move the earnings from
-    pendingBalance to availableBalance.
+    /**
+     * The Wallet mutation checks that:
+     *
+     * - The wallet still belongs to the same courier.
+     * - pendingBalance has not changed.
+     * - availableBalance has not changed.
+     * - lifetimeEarnings has not changed.
+     *
+     * If another financial operation updates the Wallet first,
+     * this mutation must fail rather than overwrite that update.
+     */
 
-    The mutation includes _version when returned by AppSync.
+    try {
+      await updateWallet({
+        wallet,
+        pendingBalance: newPendingBalance,
+        availableBalance: newAvailableBalance,
+        lifetimeEarnings: newLifetimeEarnings,
+      });
 
-    For this to protect concurrent wallet writes, your AppSync
-    configuration must enforce optimistic concurrency.
-    */
+      walletUpdated = true;
+    } catch (walletUpdateError) {
+      /**
+       * A network error can occur after AppSync has committed
+       * the mutation but before this Lambda receives the response.
+       *
+       * Therefore, do not immediately roll back the Order.
+       *
+       * First reread the Wallet and determine whether the
+       * intended balances were actually committed.
+       */
 
-    const updatedWallet = await updateWallet({
-      wallet,
-      pendingBalance: newPendingBalance,
-      availableBalance: newAvailableBalance,
-      lifetimeEarnings: newLifetimeEarnings,
-    });
+      console.error(
+        "Wallet update returned an error. Checking actual Wallet state:",
+        walletUpdateError?.message,
+      );
 
-    walletAfterUpdate = updatedWallet;
-    walletUpdated = true;
+      const latestWallet = await getWallet(wallet.id);
 
-    /*
-    -----------------------------------------------------------
-    STEP 20: LOG THE SUCCESSFUL RELEASE
-    -----------------------------------------------------------
+      if (!latestWallet || latestWallet._deleted === true) {
+        throw new Error(
+          `Wallet ${wallet.id} could not be reread after an uncertain update. ` +
+            "Order remains claimed. Manual reconciliation is required.",
+        );
+      }
 
-    The Order was claimed and the Wallet update was confirmed.
-    Record the key details in CloudWatch for troubleshooting.
-    */
+      const latestBalances = {
+        pendingBalance: money(latestWallet.pendingBalance ?? 0),
+        availableBalance: money(latestWallet.availableBalance ?? 0),
+        lifetimeEarnings: money(latestWallet.lifetimeEarnings ?? 0),
+      };
+
+      const updateWasCommitted =
+        latestBalances.pendingBalance === newPendingBalance &&
+        latestBalances.availableBalance === newAvailableBalance &&
+        latestBalances.lifetimeEarnings === newLifetimeEarnings;
+
+      const walletRemainsUnchanged =
+        latestBalances.pendingBalance === pendingBalance &&
+        latestBalances.availableBalance === availableBalance &&
+        latestBalances.lifetimeEarnings === lifetimeEarnings;
+
+      if (updateWasCommitted) {
+        console.warn(
+          "Wallet update appears to have committed despite the request error.",
+        );
+
+        walletUpdated = true;
+      } else if (walletRemainsUnchanged) {
+        throw walletUpdateError;
+      } else {
+        /**
+         * A different wallet state means another operation may
+         * have changed it, or the outcome is uncertain.
+         *
+         * Do not roll back the Order automatically.
+         * Doing so could allow the same earnings to be released twice.
+         */
+
+        throw new Error(
+          `CRITICAL FINANCIAL RECONCILIATION REQUIRED for Order ${orderID}. ` +
+            `Wallet ${wallet.id} does not match either its original or ` +
+            "expected balances after an uncertain update. " +
+            "Order remains claimed. Inspect the Wallet before retrying.",
+        );
+      }
+    }
+
+    // =======================================================================
+    // STEP 20: SUCCESS
+    // =======================================================================
 
     console.log(
       "ATUA RELEASE FUNDS SUCCESS:",
@@ -701,28 +575,17 @@ exports.handler = async (event) => {
         courierID,
         walletID: wallet.id,
         paymentMethod: "PAYSTACK",
+        transportationType,
         amountReleased: earnings,
         previousPendingBalance: pendingBalance,
         newPendingBalance,
         previousAvailableBalance: availableBalance,
         newAvailableBalance,
-        newLifetimeEarnings,
+        lifetimeEarnings: newLifetimeEarnings,
         fundsStatus: "RELEASED",
         releaseTimestamp,
       }),
     );
-
-    /*
-    -----------------------------------------------------------
-    STEP 21: RETURN THE RESULT
-    -----------------------------------------------------------
-
-    The calling Lambda can inspect the response body to determine
-    whether the release succeeded.
-
-    Do not rely on statusCode alone. Inspect success and the
-    returned message as well.
-    */
 
     return response({
       success: true,
@@ -745,46 +608,35 @@ exports.handler = async (event) => {
       alreadyProcessed: false,
     });
   } catch (error) {
-    /*
-    -----------------------------------------------------------
-    STEP 22: LOG THE FAILURE
-    -----------------------------------------------------------
+    console.error("=================================================");
+    console.error("ATUA RELEASE FUNDS FAILED");
+    console.error("Order ID:", orderID);
+    console.error("Error:", error?.message);
+    console.error("Stack:", error?.stack);
+    console.error("=================================================");
 
-    Log the Order ID, error message and stack trace.
+    // =======================================================================
+    // STEP 21: SAFE ORDER CLAIM ROLLBACK
+    // =======================================================================
 
-    Throwing the error allows the caller or retry mechanism to
-    detect that processing failed.
-    */
-
-    console.error(
-      "ATUA RELEASE FUNDS FAILED:",
-      JSON.stringify({
-        orderID,
-        error: error?.message,
-        stack: error?.stack,
-      }),
-    );
-
-    /*
-    -----------------------------------------------------------
-    STEP 23: ATTEMPT TO ROLL BACK AN UNCOMPLETED CLAIM
-    -----------------------------------------------------------
-
-    If the Order was claimed but the Wallet update did not
-    succeed, attempt to restore the Order to HELD.
-
-    If this rollback fails, raise a critical reconciliation
-    error rather than pretending the operation was recovered.
-    */
+    /**
+     * Roll back only when:
+     *
+     * - The Order was claimed.
+     * - The Wallet was not updated.
+     *
+     * If the Wallet update succeeded or its outcome is uncertain,
+     * never restore the Order to HELD automatically.
+     */
 
     if (claimedOrder && !walletUpdated) {
       try {
         await rollbackOrderClaim(claimedOrder);
 
-        console.log(`Order ${orderID} claim was rolled back to HELD.`);
+        console.log(`Order ${orderID} claim successfully rolled back to HELD.`);
       } catch (rollbackError) {
         console.error(
-          "CRITICAL: ORDER CLAIM ROLLBACK FAILED:",
+          "CRITICAL: ORDER CLAIM ROLLBACK FAILED",
           JSON.stringify({
             orderID,
             originalError: error?.message,
@@ -793,164 +645,129 @@ exports.handler = async (event) => {
         );
 
         throw new Error(
-          `CRITICAL FINANCIAL RECONCILIATION REQUIRED for ` +
-            `Order ${orderID}. Original error: ${error.message}. ` +
-            `Rollback error: ${rollbackError.message}`,
+          `CRITICAL FINANCIAL RECONCILIATION REQUIRED for Order ${orderID}. ` +
+            `Original error: ${error?.message}. ` +
+            `Rollback error: ${rollbackError?.message}.`,
         );
       }
     }
 
-    /*
-    -----------------------------------------------------------
-    STEP 24: HANDLE A FAILURE AFTER THE WALLET UPDATE
-    -----------------------------------------------------------
-
-    If the Wallet was updated, do not blindly restore old balances.
-
-    Another legitimate wallet operation may have occurred, and
-    restoring an old snapshot could overwrite that transaction.
-
-    The Order was claimed before the Wallet update. If an error
-    occurs after the Wallet update, inspect both records and
-    reconcile them before any retry.
-
-    A production implementation should use a durable release
-    ledger/state machine to recover this case automatically.
-    */
-
     if (claimedOrder && walletUpdated) {
       console.error(
-        "CRITICAL: WALLET UPDATED; VERIFY RELEASE RECORDS:",
+        "CRITICAL: WALLET UPDATED AND ORDER CLAIMED",
         JSON.stringify({
           orderID,
           walletID: wallet?.id,
-          walletVersion: walletAfterUpdate?._version,
+          expectedWalletBalances,
           message:
-            "Inspect the Order, Wallet and earnings transaction " +
-            "before attempting another release.",
+            "Do not retry blindly. Verify the Order and Wallet before any manual correction.",
         }),
       );
     }
 
-    // Propagate the error so the caller knows the invocation failed.
     throw error;
   }
 };
 
-/*
-===============================================================
-3. GRAPHQL REQUEST HELPER
-===============================================================
-
-All GraphQL operations pass through this function.
-
-It:
-- Checks that the endpoint and API key exist.
-- Sends the GraphQL request to AppSync.
-- Parses the response.
-- Throws if AppSync reports a GraphQL or HTTP error.
-
-This helps prevent failed GraphQL requests from being treated
-as successful financial operations.
-*/
+// =============================================================================
+// 3. GRAPHQL REQUEST HELPER
+// =============================================================================
 
 async function graphqlRequest(query, variables = {}) {
   if (!GRAPHQL_ENDPOINT) {
-    throw new Error(
-      "Missing API_ATUA_GRAPHQLAPIENDPOINTOUTPUT environment variable.",
-    );
+    throw new Error("Missing API_ATUA_GRAPHQLAPIENDPOINTOUTPUT.");
   }
 
   if (!API_KEY) {
-    throw new Error(
-      "Missing API_ATUA_GRAPHQLAPIKEYOUTPUT environment variable.",
-    );
+    throw new Error("Missing API_ATUA_GRAPHQLAPIKEYOUTPUT.");
   }
 
-  const response = await fetch(GRAPHQL_ENDPOINT, {
-    method: "POST",
+  const controller = new AbortController();
 
-    headers: {
-      "Content-Type": "application/json",
-      "x-api-key": API_KEY,
-    },
+  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
-    body: JSON.stringify({
-      query,
-      variables,
-    }),
-  });
+  let httpResponse;
+
+  try {
+    httpResponse = await fetch(GRAPHQL_ENDPOINT, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": API_KEY,
+      },
+      body: JSON.stringify({
+        query,
+        variables,
+      }),
+      signal: controller.signal,
+    });
+  } catch (error) {
+    if (error?.name === "AbortError") {
+      throw new Error(
+        `AppSync request timed out after ${REQUEST_TIMEOUT_MS}ms.`,
+      );
+    }
+
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
 
   let payload;
 
   try {
-    payload = await response.json();
+    payload = await httpResponse.json();
   } catch {
-    throw new Error(`AppSync returned invalid JSON. HTTP ${response.status}.`);
+    throw new Error(
+      `AppSync returned invalid JSON. HTTP ${httpResponse.status}.`,
+    );
   }
 
-  // AppSync can return HTTP 200 while reporting GraphQL errors.
-  if (!response.ok || payload.errors?.length) {
+  if (!httpResponse.ok || payload.errors?.length) {
     const messages = (payload.errors || [])
       .map((item) => item.message)
       .join("; ");
 
     throw new Error(
-      `AppSync request failed: ${messages || `HTTP ${response.status}`}`,
+      `AppSync request failed: ${messages || `HTTP ${httpResponse.status}`}`,
     );
   }
 
   return payload;
 }
 
-/*
-===============================================================
-4. GRAPHQL READ HELPERS
-===============================================================
+// =============================================================================
+// 4. GRAPHQL READ HELPERS
+// =============================================================================
 
-These functions retrieve the Order, Courier, Wallet and
-Earnings transaction.
-*/
-
-// Fetch the latest Order by ID.
 async function getOrder(id) {
-  const response = await graphqlRequest(GET_ORDER_QUERY, { id });
+  const result = await graphqlRequest(GET_ORDER_QUERY, { id });
 
-  return response?.data?.getOrder || null;
+  return result?.data?.getOrder || null;
 }
 
-// Fetch the Courier assigned to the Order.
 async function getCourier(id) {
-  const response = await graphqlRequest(GET_COURIER_QUERY, { id });
+  const result = await graphqlRequest(GET_COURIER_QUERY, { id });
 
-  return response?.data?.getCourier || null;
+  return result?.data?.getCourier || null;
 }
 
-// Fetch a Wallet by its ID.
 async function getWallet(id) {
-  const response = await graphqlRequest(GET_WALLET_QUERY, { id });
+  const result = await graphqlRequest(GET_WALLET_QUERY, { id });
 
-  return response?.data?.getWallet || null;
+  return result?.data?.getWallet || null;
 }
 
-/*
-Find the courier's Wallet.
-
-First, try Courier.walletID.
-
-If no usable Wallet is found through walletID, search for a
-Wallet whose ownerID and ownerType identify this Courier.
-
-If multiple Wallets are found, stop because the correct Wallet
-cannot be selected safely.
-*/
+// =============================================================================
+// 5. FIND COURIER WALLET
+// =============================================================================
 
 async function findCourierWallet(courier) {
+  // Prefer the Wallet explicitly linked to the Courier.
   if (courier.walletID) {
     const wallet = await getWallet(courier.walletID);
 
     if (wallet && !wallet._deleted) {
-      // Never trust the wallet reference without checking ownership.
       if (
         wallet.ownerID !== courier.id ||
         normalize(wallet.ownerType) !== "COURIER"
@@ -964,74 +781,83 @@ async function findCourierWallet(courier) {
     }
   }
 
-  // Fall back to a Wallet lookup by owner.
-  const response = await graphqlRequest(LIST_WALLETS_QUERY, {
-    filter: {
-      ownerID: { eq: courier.id },
-      ownerType: { eq: "COURIER" },
-      _deleted: { ne: true },
-    },
-    limit: 100,
-  });
+  /**
+   * Fallback search.
+   *
+   * Pagination is used so that the lookup does not silently
+   * ignore matching wallets beyond the first page.
+   */
 
-  const wallets = (response?.data?.listWallets?.items || []).filter(
-    (item) => item && !item._deleted,
-  );
+  let nextToken = null;
+  const wallets = [];
 
-  if (wallets.length === 0) {
-    return null;
-  }
+  do {
+    const result = await graphqlRequest(LIST_WALLETS_QUERY, {
+      filter: {
+        ownerID: { eq: courier.id },
+        ownerType: { eq: "COURIER" },
+        _deleted: { ne: true },
+      },
+      limit: 100,
+      nextToken,
+    });
 
-  if (wallets.length > 1) {
-    throw new Error(
-      `Multiple Wallets found for Courier ${courier.id}. ` +
-        "Manual reconciliation is required.",
+    const page = result?.data?.listWallets;
+
+    wallets.push(
+      ...(page?.items || []).filter((item) => item && !item._deleted),
     );
-  }
 
-  return wallets[0];
+    nextToken = page?.nextToken || null;
+
+    if (wallets.length > 1) {
+      throw new Error(
+        `Multiple Wallets found for Courier ${courier.id}. ` +
+          "Manual reconciliation is required.",
+      );
+    }
+  } while (nextToken);
+
+  return wallets[0] || null;
 }
 
-/*
-Find the original allocation transaction.
-
-The expected reference is:
-EARNINGS-{orderID}
-
-Exactly one active transaction should match.
-*/
+// =============================================================================
+// 6. FIND ORIGINAL EARNINGS TRANSACTION
+// =============================================================================
 
 async function getEarningsTransaction(reference) {
-  const response = await graphqlRequest(LIST_TRANSACTIONS_QUERY, {
-    filter: {
-      reference: { eq: reference },
-      _deleted: { ne: true },
-    },
-    limit: 100,
-  });
+  let nextToken = null;
+  const transactions = [];
 
-  const transactions = (response?.data?.listTransactions?.items || []).filter(
-    (item) => item && !item._deleted,
-  );
+  do {
+    const result = await graphqlRequest(LIST_TRANSACTIONS_QUERY, {
+      filter: {
+        reference: { eq: reference },
+        _deleted: { ne: true },
+      },
+      limit: 100,
+      nextToken,
+    });
 
-  if (transactions.length > 1) {
-    throw new Error(`Multiple active transactions found for ${reference}.`);
-  }
+    const page = result?.data?.listTransactions;
+
+    transactions.push(
+      ...(page?.items || []).filter((item) => item && !item._deleted),
+    );
+
+    nextToken = page?.nextToken || null;
+
+    if (transactions.length > 1) {
+      throw new Error(`Multiple active transactions found for ${reference}.`);
+    }
+  } while (nextToken);
 
   return transactions[0] || null;
 }
 
-/*
-===============================================================
-5. EARNINGS TRANSACTION VALIDATION
-===============================================================
-
-Validate that the original allocation transaction matches the
-Order, Wallet and earnings amount.
-
-This prevents releasing earnings based on a missing or
-mismatched ledger entry.
-*/
+// =============================================================================
+// 7. VALIDATE EARNINGS TRANSACTION
+// =============================================================================
 
 function validateEarningsTransaction({
   transaction,
@@ -1056,9 +882,7 @@ function validateEarningsTransaction({
   }
 
   if (normalize(transaction.type) !== "CREDIT") {
-    throw new Error(
-      `Earnings transaction for Order ${orderID} is not a CREDIT.`,
-    );
+    throw new Error(`Earnings transaction for Order ${orderID} is not CREDIT.`);
   }
 
   if (money(transaction.amount) !== money(earnings)) {
@@ -1070,32 +894,21 @@ function validateEarningsTransaction({
   if (normalize(transaction.status) !== "COMPLETED") {
     throw new Error(
       `Earnings transaction is not COMPLETED. ` +
-        `Current status: ${transaction.status}`,
+        `Current status: ${transaction.status}.`,
     );
   }
 }
 
-/*
-===============================================================
-6. ORDER CLAIM MUTATION
-===============================================================
+// =============================================================================
+// 8. CLAIM ORDER FOR RELEASE
+// =============================================================================
 
-This mutation marks the Order RELEASED before changing the
-Wallet.
-
-The condition is intended to ensure that only an Order still
-in the required state can be claimed.
-
-IMPORTANT:
-A successful Order claim does not mean the Wallet has already
-been updated. If the Wallet update fails, the rollback helper
-attempts to restore the Order to HELD.
-
-This approach reduces duplicate processing but is not a fully
-atomic multi-record financial transaction.
-*/
-
-async function claimOrderRelease({ order, earnings, releaseTimestamp }) {
+async function claimOrderRelease({
+  order,
+  courierID,
+  earnings,
+  releaseTimestamp,
+}) {
   const input = {
     id: order.id,
     fundsStatus: "RELEASED",
@@ -1104,52 +917,40 @@ async function claimOrderRelease({ order, earnings, releaseTimestamp }) {
     fundsReleaseType: "MICRO_MOTO_DELIVERY",
   };
 
-  /*
-  Include the AppSync version if the record provides one.
-
-  Optimistic concurrency must be configured correctly in AppSync
-  for this version field to protect against concurrent updates.
-  */
-
   if (order._version != null) {
     input._version = order._version;
   }
 
-  /*
-  The condition checks that the Order remains in the expected
-  state at mutation time.
-  */
+  /**
+   * These conditions ensure that the Order is still eligible
+   * at the time of the claim.
+   *
+   * The courier and earnings checks prevent the claim from
+   * proceeding if the assignment or financial amount changed.
+   */
 
   const condition = {
     status: { eq: "DELIVERED" },
+    assignedCourierId: { eq: courierID },
+    courierEarnings: { eq: money(earnings) },
     fundsStatus: { eq: "HELD" },
     earningsAllocationStatus: { eq: "ALLOCATED" },
     paymentStatus: { eq: "PAID" },
     paymentMethod: { eq: "PAYSTACK" },
+    fundsReleaseBlocked: { ne: true },
   };
 
-  const response = await graphqlRequest(UPDATE_ORDER_MUTATION, {
+  const result = await graphqlRequest(UPDATE_ORDER_MUTATION, {
     input,
     condition,
   });
 
-  return response?.data?.updateOrder || null;
+  return result?.data?.updateOrder || null;
 }
 
-/*
-===============================================================
-7. ORDER CLAIM ROLLBACK
-===============================================================
-
-If the Order was claimed but the Wallet update failed, attempt
-to restore the Order to HELD.
-
-The version from the claimed record is included where available.
-
-If this rollback fails, the Lambda reports a critical error.
-An administrator should inspect the Order and Wallet before
-retrying the release.
-*/
+// =============================================================================
+// 9. ROLLBACK ORDER CLAIM
+// =============================================================================
 
 async function rollbackOrderClaim(claimedOrder) {
   const input = {
@@ -1164,48 +965,56 @@ async function rollbackOrderClaim(claimedOrder) {
     input._version = claimedOrder._version;
   }
 
+  /**
+   * Roll back only the exact claim made by this invocation.
+   *
+   * This prevents the rollback from overwriting a later release
+   * or a separate administrative change.
+   */
+
   const condition = {
     fundsStatus: { eq: "RELEASED" },
+    fundsReleasedAmount: {
+      eq: money(claimedOrder.fundsReleasedAmount),
+    },
+    fundsReleasedAt: {
+      eq: claimedOrder.fundsReleasedAt,
+    },
+    fundsReleaseType: {
+      eq: "MICRO_MOTO_DELIVERY",
+    },
   };
 
-  const response = await graphqlRequest(UPDATE_ORDER_MUTATION, {
+  const result = await graphqlRequest(UPDATE_ORDER_MUTATION, {
     input,
     condition,
   });
 
-  if (!response?.data?.updateOrder) {
+  const updatedOrder = result?.data?.updateOrder;
+
+  if (!updatedOrder) {
     throw new Error("AppSync did not confirm the Order claim rollback.");
   }
 
-  return response.data.updateOrder;
+  return updatedOrder;
 }
 
-/*
-===============================================================
-8. WALLET UPDATE MUTATION
-===============================================================
-
-Update the Wallet's balances after the Order has been claimed.
-
-The values are supplied by the handler:
-- pendingBalance decreases by courier earnings.
-- availableBalance increases by courier earnings.
-- lifetimeEarnings increases according to this implementation.
-
-Including _version helps only when AppSync concurrency
-protection is correctly configured.
-*/
+// =============================================================================
+// 10. CONDITIONAL WALLET UPDATE
+// =============================================================================
 
 async function updateWallet({
   wallet,
-  availableBalance,
   pendingBalance,
+  availableBalance,
   lifetimeEarnings,
 }) {
   const input = {
     id: wallet.id,
-    availableBalance: money(availableBalance),
     pendingBalance: money(pendingBalance),
+    availableBalance: money(availableBalance),
+
+    // Do not increment lifetimeEarnings during a balance transfer.
     lifetimeEarnings: money(lifetimeEarnings),
   };
 
@@ -1213,9 +1022,34 @@ async function updateWallet({
     input._version = wallet._version;
   }
 
-  const response = await graphqlRequest(UPDATE_WALLET_MUTATION, { input });
+  /**
+   * Prevent stale wallet data from overwriting a concurrent
+   * financial operation.
+   *
+   * If any expected old value has changed, AppSync must reject
+   * the mutation.
+   */
 
-  const updatedWallet = response?.data?.updateWallet;
+  const condition = {
+    ownerID: { eq: wallet.ownerID },
+    ownerType: { eq: "COURIER" },
+    pendingBalance: {
+      eq: money(wallet.pendingBalance ?? 0),
+    },
+    availableBalance: {
+      eq: money(wallet.availableBalance ?? 0),
+    },
+    lifetimeEarnings: {
+      eq: money(wallet.lifetimeEarnings ?? 0),
+    },
+  };
+
+  const result = await graphqlRequest(UPDATE_WALLET_MUTATION, {
+    input,
+    condition,
+  });
+
+  const updatedWallet = result?.data?.updateWallet;
 
   if (!updatedWallet) {
     throw new Error(`Wallet ${wallet.id} update returned no record.`);
@@ -1224,20 +1058,16 @@ async function updateWallet({
   return updatedWallet;
 }
 
-/*
-===============================================================
-9. SMALL UTILITY FUNCTIONS
-===============================================================
-*/
+// =============================================================================
+// 11. UTILITIES
+// =============================================================================
 
-// Convert enum/string values into a consistent uppercase format.
 function normalize(value) {
-  return String(value || "")
+  return String(value ?? "")
     .trim()
     .toUpperCase();
 }
 
-// Validate and round monetary values to two decimal places.
 function money(value) {
   const amount = Number(value);
 
@@ -1247,14 +1077,6 @@ function money(value) {
 
   return Number(amount.toFixed(2));
 }
-
-/*
-Return a structured result.
-
-This format is useful when the Lambda is invoked directly.
-Callers must inspect the JSON body rather than relying only
-on statusCode.
-*/
 
 function response(body) {
   return {
@@ -1266,18 +1088,10 @@ function response(body) {
   };
 }
 
-/*
-===============================================================
-10. GRAPHQL OPERATIONS
-===============================================================
+// =============================================================================
+// 12. GRAPHQL OPERATIONS
+// =============================================================================
 
-These operations must match your deployed Amplify schema.
-
-If your schema uses different field names, enum values, model
-names or generated input types, update the operations to match.
-*/
-
-// Retrieve the Order and all fields needed for release validation.
 const GET_ORDER_QUERY = /* GraphQL */ `
   query GetOrder($id: ID!) {
     getOrder(id: $id) {
@@ -1302,7 +1116,6 @@ const GET_ORDER_QUERY = /* GraphQL */ `
   }
 `;
 
-// Retrieve the assigned Courier and its Wallet reference.
 const GET_COURIER_QUERY = /* GraphQL */ `
   query GetCourier($id: ID!) {
     getCourier(id: $id) {
@@ -1314,7 +1127,6 @@ const GET_COURIER_QUERY = /* GraphQL */ `
   }
 `;
 
-// Retrieve one Wallet by ID.
 const GET_WALLET_QUERY = /* GraphQL */ `
   query GetWallet($id: ID!) {
     getWallet(id: $id) {
@@ -1330,10 +1142,13 @@ const GET_WALLET_QUERY = /* GraphQL */ `
   }
 `;
 
-// Search for Wallets belonging to a Courier.
 const LIST_WALLETS_QUERY = /* GraphQL */ `
-  query ListWallets($filter: ModelWalletFilterInput, $limit: Int) {
-    listWallets(filter: $filter, limit: $limit) {
+  query ListWallets(
+    $filter: ModelWalletFilterInput
+    $limit: Int
+    $nextToken: String
+  ) {
+    listWallets(filter: $filter, limit: $limit, nextToken: $nextToken) {
       items {
         id
         ownerID
@@ -1344,14 +1159,18 @@ const LIST_WALLETS_QUERY = /* GraphQL */ `
         _version
         _deleted
       }
+      nextToken
     }
   }
 `;
 
-// Search for the original earnings allocation transaction.
 const LIST_TRANSACTIONS_QUERY = /* GraphQL */ `
-  query ListTransactions($filter: ModelTransactionFilterInput, $limit: Int) {
-    listTransactions(filter: $filter, limit: $limit) {
+  query ListTransactions(
+    $filter: ModelTransactionFilterInput
+    $limit: Int
+    $nextToken: String
+  ) {
+    listTransactions(filter: $filter, limit: $limit, nextToken: $nextToken) {
       items {
         id
         walletID
@@ -1363,27 +1182,11 @@ const LIST_TRANSACTIONS_QUERY = /* GraphQL */ `
         _version
         _deleted
       }
+      nextToken
     }
   }
 `;
 
-// Update the courier's Wallet balances.
-const UPDATE_WALLET_MUTATION = /* GraphQL */ `
-  mutation UpdateWallet($input: UpdateWalletInput!) {
-    updateWallet(input: $input) {
-      id
-      ownerID
-      ownerType
-      availableBalance
-      pendingBalance
-      lifetimeEarnings
-      _version
-      _deleted
-    }
-  }
-`;
-
-// Claim or restore the Order's release state.
 const UPDATE_ORDER_MUTATION = /* GraphQL */ `
   mutation UpdateOrder(
     $input: UpdateOrderInput!
@@ -1392,6 +1195,7 @@ const UPDATE_ORDER_MUTATION = /* GraphQL */ `
     updateOrder(input: $input, condition: $condition) {
       id
       status
+      assignedCourierId
       paymentStatus
       paymentMethod
       fundsStatus
@@ -1399,6 +1203,24 @@ const UPDATE_ORDER_MUTATION = /* GraphQL */ `
       fundsReleasedAmount
       fundsReleasedAt
       fundsReleaseType
+      _version
+      _deleted
+    }
+  }
+`;
+
+const UPDATE_WALLET_MUTATION = /* GraphQL */ `
+  mutation UpdateWallet(
+    $input: UpdateWalletInput!
+    $condition: ModelWalletConditionInput
+  ) {
+    updateWallet(input: $input, condition: $condition) {
+      id
+      ownerID
+      ownerType
+      availableBalance
+      pendingBalance
+      lifetimeEarnings
       _version
       _deleted
     }

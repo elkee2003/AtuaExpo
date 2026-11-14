@@ -115,9 +115,9 @@ export const pricingEngine = ({ type, distanceKm, date = new Date() }) => {
   // Saturday or Sunday
   const isWeekend = day === 0 || day === 6;
 
-  // Peak surcharge = +10%
+  // Peak surcharge = +8%
   if (isPeak) {
-    operationalFare *= 1.1;
+    operationalFare *= 1.08;
   }
 
   // Night surcharge = +₦300

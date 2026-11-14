@@ -176,6 +176,15 @@ const TransactionStatus = {
   "REVERSED": "REVERSED"
 };
 
+const PayoutReservationStatus = {
+  "PENDING": "PENDING",
+  "WALLET_DEBITED": "WALLET_DEBITED",
+  "RESERVED": "RESERVED",
+  "COMPLETED": "COMPLETED",
+  "FAILED": "FAILED",
+  "REVERSED": "REVERSED"
+};
+
 const PayoutStatus = {
   "PENDING": "PENDING",
   "PROCESSING": "PROCESSING",
@@ -281,6 +290,15 @@ const OrderPaymentMethod = {
   "CASH": "CASH"
 };
 
+const CourierDebtStatus = {
+  "OPEN": "OPEN",
+  "PARTIALLY_PAID": "PARTIALLY_PAID",
+  "PAID": "PAID",
+  "OVERDUE": "OVERDUE",
+  "REVERSED": "REVERSED",
+  "WAIVED": "WAIVED"
+};
+
 const CourierReconciliationStatus = {
   "PENDING": "PENDING",
   "CALCULATED": "CALCULATED",
@@ -328,7 +346,7 @@ const CourierReportStatus = {
   "DISMISSED": "DISMISSED"
 };
 
-const { FleetWallet, FleetTransaction, FleetSubscription, FleetOrder, Fleet, FleetMember, FleetInvitation, FleetVehicle, PaymentMethod, Payout, Transaction, Wallet, Payment, Offer, OrderCancellation, CourierDebtPayment, CourierReconciliation, CashCollection, Order, CourierReport, CourierReview, AdminAlert, CourierLiveLocation, Courier, User, VerifyAtuaPaymentResult, VerifiedPaymentDetails, ChargeAtuaPaymentMethodResult, DeleteSavedPaymentMethodResult, InitializeAtuaPaymentResult, InitializeDeliveryPaymentResult, RecordCashCollectionResult, SelectDeliveryPaymentMethodResult, InitializeCourierDebtPaymentResult, VerifyCourierDebtPaymentResult, ProcessPayoutsResponse, ReversePayoutResponse } = initSchema(schema);
+const { FleetWallet, FleetTransaction, FleetSubscription, FleetOrder, Fleet, FleetMember, FleetInvitation, FleetVehicle, PaymentMethod, PayoutReservation, Payout, Transaction, Wallet, Payment, Offer, OrderCancellation, CourierDebt, CourierDebtPayment, CourierReconciliation, CashCollection, Order, CourierReport, CourierReview, AdminAlert, CourierLiveLocation, Courier, User, VerifyAtuaPaymentResult, VerifiedPaymentDetails, ChargeAtuaPaymentMethodResult, DeleteSavedPaymentMethodResult, InitializeAtuaPaymentResult, InitializeDeliveryPaymentResult, RecordCashCollectionResult, SelectDeliveryPaymentMethodResult, InitializeCourierDebtPaymentResult, VerifyCourierDebtPaymentResult, ProcessPayoutsResponse, ReversePayoutResponse } = initSchema(schema);
 
 export {
   FleetWallet,
@@ -340,12 +358,14 @@ export {
   FleetInvitation,
   FleetVehicle,
   PaymentMethod,
+  PayoutReservation,
   Payout,
   Transaction,
   Wallet,
   Payment,
   Offer,
   OrderCancellation,
+  CourierDebt,
   CourierDebtPayment,
   CourierReconciliation,
   CashCollection,
@@ -382,6 +402,7 @@ export {
   PaymentStatus,
   TransactionType,
   TransactionStatus,
+  PayoutReservationStatus,
   PayoutStatus,
   PayoutSource,
   OwnerType,
@@ -396,6 +417,7 @@ export {
   CancellationStatus,
   OrderPaymentTiming,
   OrderPaymentMethod,
+  CourierDebtStatus,
   CourierReconciliationStatus,
   CourierReconciliationDirection,
   CashCollectionStatus,

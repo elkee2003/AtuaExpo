@@ -30,6 +30,8 @@
 
 const { SSMClient, GetParameterCommand } = require("@aws-sdk/client-ssm");
 
+const { LambdaClient, InvokeCommand } = require("@aws-sdk/client-lambda");
+
 const https = require("https");
 
 const crypto = require("crypto");
@@ -43,6 +45,15 @@ const GRAPHQL_ENDPOINT = process.env.API_ATUA_GRAPHQLAPIENDPOINTOUTPUT;
 const GRAPHQL_API_KEY = process.env.API_ATUA_GRAPHQLAPIKEYOUTPUT;
 
 const REGION = process.env.REGION || process.env.AWS_REGION;
+
+// The deployed Lambda function name or ARN for reservePayoutWallet.
+const RESERVE_PAYOUT_WALLET_FUNCTION_NAME =
+  process.env.RESERVE_PAYOUT_WALLET_FUNCTION_NAME;
+
+// AWS Lambda client used to invoke reservePayoutWallet.
+const lambdaClient = new LambdaClient({
+  region: REGION,
+});
 
 /* ==========================================================
    PAYOUT FINANCIAL RULES
@@ -193,6 +204,54 @@ const isFailedTransferStatus = (status) => {
   return ["failed", "reversed", "abandoned", "blocked", "rejected"].includes(
     normalizedStatus,
   );
+};
+
+/* ==========================================================
+   INVOKE RESERVE PAYOUT WALLET
+========================================================== */
+
+const invokeReservePayoutWallet = async (payoutID) => {
+  if (!payoutID) {
+    throw new Error("Payout ID is required for wallet reservation.");
+  }
+
+  if (!RESERVE_PAYOUT_WALLET_FUNCTION_NAME) {
+    throw new Error(
+      "RESERVE_PAYOUT_WALLET_FUNCTION_NAME environment variable is missing.",
+    );
+  }
+
+  const command = new InvokeCommand({
+    FunctionName: RESERVE_PAYOUT_WALLET_FUNCTION_NAME,
+
+    InvocationType: "RequestResponse",
+
+    Payload: Buffer.from(
+      JSON.stringify({
+        payoutID,
+      }),
+    ),
+  });
+
+  const response = await lambdaClient.send(command);
+
+  if (response.FunctionError) {
+    throw new Error(
+      `reservePayoutWallet Lambda execution failed: ${response.FunctionError}`,
+    );
+  }
+
+  let result;
+
+  try {
+    result = JSON.parse(Buffer.from(response.Payload || []).toString("utf8"));
+  } catch (error) {
+    throw new Error("Could not parse the reservePayoutWallet Lambda response.");
+  }
+
+  console.log("RESERVE PAYOUT WALLET RESPONSE:", result);
+
+  return result;
 };
 
 /* ==========================================================
@@ -441,7 +500,14 @@ const paystackRequest = async ({ method, path, secretKey, body = null }) => {
         try {
           parsed = JSON.parse(data);
         } catch {
-          return reject(new Error(`Paystack returned invalid JSON: ${data}`));
+          const error = new Error(`Paystack returned invalid JSON: ${data}`);
+
+          // We cannot safely determine whether Paystack
+          // processed the transfer from an unreadable response.
+          error.isPaystackAmbiguousResponse = true;
+          error.paystackStatusCode = response.statusCode;
+
+          return reject(error);
         }
 
         resolve({
@@ -488,6 +554,7 @@ const getCourier = async (courierID) => {
     query GetCourier($id: ID!) {
       getCourier(id: $id) {
         id
+        sub
 
         firstName
         lastName
@@ -498,6 +565,12 @@ const getCourier = async (courierID) => {
         accountNumber
 
         isApproved
+        isBlocked
+
+        debtDueAt
+        debtBlockedAt
+        debtBlockReason
+        debtRestrictionActive
 
         walletID
       }
@@ -516,14 +589,140 @@ const getCourier = async (courierID) => {
 };
 
 /* ==========================================================
+   VERIFY COURIER PAYOUT REQUESTER
+========================================================== */
+
+const assertCourierOwnsPayoutRequest = async (event, courierID) => {
+  const callerSub =
+    event?.identity?.sub || event?.identity?.claims?.sub || null;
+
+  if (!callerSub) {
+    throw new Error("Unauthorized: authenticated courier access is required.");
+  }
+
+  if (!courierID) {
+    throw new Error("Courier ID is required.");
+  }
+
+  // courierID is the database Courier.id, not Cognito sub.
+  const courier = await getCourier(courierID);
+
+  if (!courier) {
+    throw new Error("Courier account was not found.");
+  }
+
+  if (!courier.sub || courier.sub !== callerSub) {
+    throw new Error(
+      "Unauthorized: you cannot request a payout for another courier.",
+    );
+  }
+
+  return courier;
+};
+
+/* ==========================================================
+   VERIFY ADMIN PAYOUT REQUESTER
+========================================================== */
+
+const assertAdminPayoutRequester = (event) => {
+  const callerSub =
+    event?.identity?.sub || event?.identity?.claims?.sub || null;
+
+  if (!callerSub) {
+    throw new Error(
+      "Unauthorized: authenticated administrator access is required.",
+    );
+  }
+
+  const adminGroup = process.env.ADMIN_GROUP_NAME;
+
+  if (!adminGroup) {
+    throw new Error("ADMIN_GROUP_NAME environment variable is not configured.");
+  }
+
+  const rawGroups =
+    event?.identity?.groups ||
+    event?.identity?.claims?.["cognito:groups"] ||
+    [];
+
+  let groups = [];
+
+  if (Array.isArray(rawGroups)) {
+    groups = rawGroups;
+  } else if (typeof rawGroups === "string") {
+    try {
+      const parsed = JSON.parse(rawGroups);
+      groups = Array.isArray(parsed)
+        ? parsed
+        : rawGroups.split(",").map((group) => group.trim());
+    } catch {
+      groups = rawGroups.split(",").map((group) => group.trim());
+    }
+  }
+
+  if (!groups.includes(adminGroup)) {
+    throw new Error("Unauthorized: administrator privileges are required.");
+  }
+};
+
+/* ==========================================================
    GET COURIER WALLET
 ========================================================== */
 
-const getCourierWallet = async (courierID) => {
+const getCourierWallet = async (courierID, preferredWalletID = null) => {
   if (!courierID) {
     throw new Error("courierID is required.");
   }
 
+  /*
+   * FIRST CHOICE:
+   * If the Courier record already has walletID,
+   * retrieve that exact wallet.
+   */
+  if (preferredWalletID) {
+    const query = `
+      query GetCourierWallet($id: ID!) {
+        getWallet(id: $id) {
+          id
+          ownerID
+          ownerType
+          availableBalance
+          pendingBalance
+          lifetimeEarnings
+          outstandingDebt
+          _version
+        }
+      }
+    `;
+
+    const data = await graphqlRequest(
+      query,
+      { id: preferredWalletID },
+      "GetCourierWalletByID",
+    );
+
+    const wallet = data?.getWallet;
+
+    if (!wallet) {
+      throw new Error(
+        `Courier wallet ${preferredWalletID} could not be found.`,
+      );
+    }
+
+    if (wallet.ownerID !== courierID || wallet.ownerType !== "COURIER") {
+      throw new Error(
+        "The wallet linked to this courier does not belong to that courier.",
+      );
+    }
+
+    return wallet;
+  }
+
+  /*
+   * FALLBACK:
+   * If Courier.walletID is empty, search for the courier's
+   * wallet. Do not arbitrarily select the first result.
+   */
   const query = `
     query ListWallets(
       $filter: ModelWalletFilterInput
@@ -537,22 +736,20 @@ const getCourierWallet = async (courierID) => {
       ) {
         items {
           id
-
           ownerID
           ownerType
-
           availableBalance
           pendingBalance
           lifetimeEarnings
-
+          outstandingDebt
           _version
         }
-
         nextToken
       }
     }
   `;
 
+  const allWallets = [];
   let nextToken = null;
 
   do {
@@ -560,17 +757,10 @@ const getCourierWallet = async (courierID) => {
       query,
       {
         filter: {
-          ownerID: {
-            eq: courierID,
-          },
-
-          ownerType: {
-            eq: "COURIER",
-          },
+          ownerID: { eq: courierID },
+          ownerType: { eq: "COURIER" },
         },
-
         limit: 1000,
-
         nextToken,
       },
       "GetCourierWallet",
@@ -578,16 +768,29 @@ const getCourierWallet = async (courierID) => {
 
     const wallets = data?.listWallets?.items || [];
 
-    const wallet = wallets[0];
-
-    if (wallet) {
-      return wallet;
-    }
+    allWallets.push(
+      ...wallets.filter(
+        (wallet) =>
+          wallet &&
+          wallet.ownerID === courierID &&
+          wallet.ownerType === "COURIER",
+      ),
+    );
 
     nextToken = data?.listWallets?.nextToken || null;
   } while (nextToken);
 
-  return null;
+  if (allWallets.length === 0) {
+    return null;
+  }
+
+  if (allWallets.length > 1) {
+    throw new Error(
+      `Multiple courier wallets found for ${courierID}. Manual wallet reconciliation is required.`,
+    );
+  }
+
+  return allWallets[0];
 };
 
 /* ==========================================================
@@ -2037,9 +2240,40 @@ const getEligibleWallets = async () => {
     const items = data?.listWallets?.items || [];
 
     for (const wallet of items) {
+      const courierID = wallet?.ownerID;
+
       const balance = Number(wallet?.availableBalance || 0);
 
+      if (!courierID) {
+        continue;
+      }
+
       if (!Number.isFinite(balance) || balance <= 0) {
+        continue;
+      }
+
+      /*
+       * Check the courier's current restriction status
+       * before including the wallet in the payout plan.
+       */
+      const courier = await getCourier(courierID);
+
+      if (!courier) {
+        console.warn("Skipping wallet: courier not found.", {
+          courierID,
+          walletID: wallet.id,
+        });
+
+        continue;
+      }
+
+      if (courier.isBlocked === true) {
+        console.log("Skipping administratively blocked courier:", courierID);
+        continue;
+      }
+
+      if (courier.debtRestrictionActive === true) {
+        console.log("Skipping debt-restricted courier:", courierID);
         continue;
       }
 
@@ -2803,19 +3037,21 @@ const getPayoutWallet = async ({ courierID, walletID = null }) => {
 
        COURIER_REQUESTED
        -----------------
-       availableBalance -= payout + ₦100
+       availableBalance -= payout + applicable tiered fee
 
        ADMIN_MANUAL
        ------------
-       availableBalance -= payout
+       availableBalance -= payout + ₦100
 
        SYSTEM / AUTOMATIC
        ------------------
-       availableBalance -= payout + ₦50
+       availableBalance -= payout + ₦100
 
    IMPORTANT:
 
-   The automatic ₦50 is a reserve, NOT an Atua fee.
+   The automatic ₦100 is the Atua payout fee.
+   Paystack transfer fees and stamp duty are calculated
+   separately and are not deducted from the courier wallet.
 ========================================================== */
 
 const reserveWalletBalance = async ({ wallet, totalWalletDebit }) => {
@@ -2906,13 +3142,13 @@ const reserveWalletBalance = async ({ wallet, totalWalletDebit }) => {
    That means:
 
        COURIER_REQUESTED
-       -> payout + ₦100
+       -> payout + applicable tiered fee
 
        ADMIN_MANUAL
-       -> payout
+       -> payout + ₦100
 
        SYSTEM / AUTOMATIC
-       -> payout + ₦50
+       -> payout + ₦100
 ========================================================== */
 
 const restorePayoutWallet = async ({ wallet, amountToRestore }) => {
@@ -3590,18 +3826,17 @@ const requestPayoutReversal = async ({
 
    IMPORTANT:
 
-   The ₦50 automatic reserve is NOT an Atua fee.
+   The automatic payout has a flat ₦100 Atua payout fee.
 
    For automatic payouts:
 
        Wallet = ₦7,000
-       Reserve = ₦50
-       Courier receives = ₦6,950
+       Atua fee = ₦100
+       Courier receives = ₦6,900
        Wallet debit = ₦7,000
 
-   The actual Paystack transfer fee is calculated
-   separately.
-
+   The actual Paystack transfer fee and stamp duty
+   are calculated separately.
 ========================================================== */
 
 const processCourierPayout = async ({
@@ -3663,11 +3898,38 @@ const processCourierPayout = async ({
     throw new Error(`Courier not found: ${courierID}`);
   }
 
+  /*
+   * Prevent payouts to couriers who have been
+   * administratively blocked.
+   *
+   * This remains independent of debt restrictions.
+   */
+  if (courier.isBlocked === true) {
+    throw new Error(
+      "Payout unavailable. This courier account has been blocked by administration.",
+    );
+  }
+
+  /*
+   * Prevent payouts when the debt-enforcement process
+   * has activated the courier's debt restriction.
+   *
+   * IMPORTANT:
+   * Outstanding debt by itself does not trigger this.
+   * The 24-hour repayment period must be respected.
+   */
+  if (courier.debtRestrictionActive === true) {
+    throw new Error(
+      courier.debtBlockReason ||
+        "Payout unavailable. This courier has an active outstanding-debt restriction.",
+    );
+  }
+
   /* ========================================================
      GET WALLET
   ======================================================== */
 
-  const wallet = await getCourierWallet(courierID);
+  const wallet = await getCourierWallet(courierID, courier.walletID);
 
   if (!wallet) {
     throw new Error(`Courier wallet not found: ${courierID}`);
@@ -3749,33 +4011,86 @@ const processCourierPayout = async ({
      CREATE PAYOUT RECORD
   ======================================================== */
 
-  let payout = await createPayout({
-    courierID,
+  // Create the payout record.
+  // If AppSync creates it but the response is lost, look it up
+  // using the unique reference before deciding that creation failed.
 
-    walletID: wallet.id,
+  let payout = null;
 
-    amount: financials.payoutAmount,
+  try {
+    payout = await createPayout({
+      courierID,
 
-    payoutAmount: financials.payoutAmount,
+      walletID: wallet.id,
 
-    requestedAmount: financials.payoutAmount,
+      amount: financials.payoutAmount,
 
-    payoutFee: financials.payoutFee,
+      payoutAmount: financials.payoutAmount,
 
-    actualPaystackTransferFee: financials.actualPaystackTransferFee,
+      requestedAmount: financials.payoutAmount,
 
-    paystackStampDuty: financials.paystackStampDuty,
+      payoutFee: financials.payoutFee,
 
-    totalWalletDebit: financials.totalWalletDebit,
+      actualPaystackTransferFee: financials.actualPaystackTransferFee,
 
-    payoutMethod: normalizedMethod,
+      paystackStampDuty: financials.paystackStampDuty,
 
-    payoutSource: normalizedSource,
+      totalWalletDebit: financials.totalWalletDebit,
 
-    reference,
+      payoutMethod: normalizedMethod,
 
-    status: PAYOUT_STATUS.PENDING,
-  });
+      payoutSource: normalizedSource,
+
+      bankName: courier.bankName,
+
+      accountNumber: courier.accountNumber,
+
+      reference,
+
+      status: PAYOUT_STATUS.PENDING,
+    });
+  } catch (createError) {
+    console.error(
+      "PAYOUT CREATION RESPONSE FAILED. CHECKING WHETHER THE RECORD EXISTS:",
+      {
+        courierID,
+        reference,
+        error: createError?.message,
+      },
+    );
+
+    try {
+      // The create request may have succeeded even though
+      // the Lambda did not receive its response.
+      payout = await getPayoutByReference(reference);
+    } catch (lookupError) {
+      console.error("Could not verify payout creation:", lookupError);
+
+      // Do not reserve wallet funds when we cannot establish
+      // whether the payout record exists.
+      throw new Error(
+        `Payout creation is uncertain for reference ${reference}. No wallet reservation was attempted. Original error: ${createError?.message}`,
+      );
+    }
+
+    if (!payout) {
+      // We could not find a created payout record.
+      // Stop before touching the wallet.
+      throw createError;
+    }
+
+    console.log("PAYOUT RECORD RECOVERED AFTER CREATE RESPONSE FAILURE:", {
+      payoutID: payout.id,
+      reference: payout.reference,
+      status: payout.status,
+    });
+  }
+
+  if (!payout?.id) {
+    throw new Error(
+      `Payout record could not be confirmed for reference ${reference}.`,
+    );
+  }
 
   console.log("Payout record created:", payout?.id);
 
@@ -3803,46 +4118,178 @@ const processCourierPayout = async ({
   ======================================================== */
 
   let walletReserved = false;
+
+  let reservationAttempted = false;
+
+  let reservation = null;
+
   let transaction = null;
+
   let transferStarted = false;
 
+  // True when Paystack may have received the transfer request,
+  // even if the Lambda did not receive a usable response.
+  let transferOutcomeUncertain = false;
+
   try {
-    const reservedWallet = await reserveWalletBalance({
-      wallet,
-      totalWalletDebit: financials.totalWalletDebit,
-    });
+    /* ======================================================
+     RESERVE WALLET THROUGH reservePayoutWallet
+  ====================================================== */
+
+    /*
+     * Set this BEFORE invoking the Lambda.
+     *
+     * If the invocation times out, the reservation Lambda
+     * might still have deducted the wallet.
+     *
+     * Therefore, we must not assume that an invocation error
+     * means no wallet deduction happened.
+     */
+    reservationAttempted = true;
+
+    const reservationResult = await invokeReservePayoutWallet(payout.id);
+
+    /*
+     * The reservation Lambda must explicitly confirm success.
+     */
+    if (!reservationResult?.success) {
+      const definitelyNotReserved =
+        reservationResult?.status === "FAILED" &&
+        reservationResult?.walletDebited === false;
+
+      const failureMessage =
+        reservationResult?.message ||
+        "Payout wallet reservation could not be confirmed.";
+
+      if (definitelyNotReserved) {
+        payout = await updatePayoutStatus({
+          payout,
+          status: PAYOUT_STATUS.FAILED,
+          updates: {
+            failedAt: new Date().toISOString(),
+            processedAt: new Date().toISOString(),
+            failureReason: failureMessage,
+          },
+        });
+      } else {
+        payout = await updatePayoutStatus({
+          payout,
+          status: PAYOUT_STATUS.PROCESSING,
+          updates: {
+            processedAt: new Date().toISOString(),
+            failureReason: `${failureMessage} Reservation outcome requires reconciliation.`,
+          },
+        });
+      }
+
+      return {
+        success: false,
+        status: definitelyNotReserved
+          ? "FAILED"
+          : "FAILED_RECONCILIATION_REQUIRED",
+        transferStarted: false,
+        courierID,
+        payout,
+        transaction: null,
+        reservation: reservationResult || null,
+        payoutSource: normalizedSource,
+        payoutMethod: normalizedMethod,
+        financials,
+        message: failureMessage,
+      };
+    }
+
+    /*
+     * At this point reservePayoutWallet has confirmed:
+     *
+     * 1. The wallet was debited.
+     * 2. The debit transaction exists.
+     * 3. The reservation status is RESERVED.
+     */
+
+    const reservedWalletID = reservationResult.walletID;
+    const reservedPayoutID = reservationResult.payoutID;
+
+    const reservedAmount = Number(
+      reservationResult.totalWalletDebit ?? reservationResult.amountReserved,
+    );
+
+    if (
+      reservationResult.status !== "RESERVED" ||
+      !reservationResult.transactionID ||
+      !reservedWalletID ||
+      !reservedPayoutID ||
+      reservationResult.reference !== reference ||
+      reservedAmount !== Number(financials.totalWalletDebit) ||
+      reservedWalletID !== wallet.id ||
+      reservedPayoutID !== payout.id
+    ) {
+      throw new Error(
+        "The reservation Lambda returned incomplete or mismatched reservation details.",
+      );
+    }
 
     walletReserved = true;
 
-    /* ======================================================
-       CREATE DEBIT TRANSACTION
-    ====================================================== */
+    reservation = reservationResult;
 
-    transaction = await createDebitTransaction({
-      courierID,
+    /*
+     * Reconstruct the transaction object using the exact
+     * values returned by reservePayoutWallet.
+     *
+     * requestPayoutReversal requires:
+     *
+     * transaction.id
+     * transaction.walletID
+     * transaction.amount
+     */
 
-      walletID: wallet.id,
-
-      payoutID: payout?.id,
-
-      amount: financials.totalWalletDebit,
-
-      payoutAmount: financials.payoutAmount,
-
-      payoutFee: financials.payoutFee,
-
-      actualPaystackTransferFee: financials.actualPaystackTransferFee,
-
-      paystackStampDuty: financials.paystackStampDuty,
-
+    transaction = {
+      id: reservationResult.transactionID,
+      walletID: reservedWalletID,
+      payoutID: reservedPayoutID,
+      type: "DEBIT",
+      amount: reservedAmount,
       reference,
+      status: "PENDING",
+    };
 
-      payoutSource: normalizedSource,
+    /*
+     * Validate the reservation response before proceeding.
+     */
+    if (
+      !transaction.id ||
+      transaction.walletID !== wallet.id ||
+      transaction.payoutID !== payout.id ||
+      Number(transaction.amount) !== Number(financials.totalWalletDebit)
+    ) {
+      throw new Error(
+        "The reservation Lambda returned transaction details that do not match the payout.",
+      );
+    }
 
-      payoutMethod: normalizedMethod,
+    console.log("PAYOUT WALLET RESERVATION CONFIRMED:", {
+      payoutID: payout.id,
+
+      reservationID: reservationResult.reservationID,
+
+      transactionID: transaction.id,
+
+      walletID: transaction.walletID,
+
+      amountReserved: transaction.amount,
+
+      reservationStatus: reservationResult.status,
     });
 
-    console.log("Debit transaction created:", transaction?.id);
+    /* ======================================================
+     CONTINUE WITH EXISTING PAYOUT PROCESSING
+  ====================================================== */
+
+    /*
+     * Keep your existing MARK PAYOUT PROCESSING section
+     * immediately below this point.
+     */
 
     /* ======================================================
        MARK PAYOUT PROCESSING
@@ -3910,7 +4357,13 @@ const processCourierPayout = async ({
        * whether the wallet can be restored.
        */
 
-      if (transferError?.isPaystackNetworkError) {
+      if (
+        transferError?.isPaystackNetworkError ||
+        transferError?.isPaystackAmbiguousResponse ||
+        Number(transferError?.paystackStatusCode) >= 500
+      ) {
+        transferOutcomeUncertain = true;
+
         console.warn("Paystack transfer request encountered a network error.");
 
         console.warn(
@@ -3920,11 +4373,10 @@ const processCourierPayout = async ({
         let verification = null;
 
         try {
-          verification = await verifyPaystackTransfer({
+          verification = await verifyPaystackTransfer(
             reference,
-
-            secretKey: resolvedSecretKey,
-          });
+            resolvedSecretKey,
+          );
         } catch (verificationError) {
           console.error(
             "Paystack verification also failed:",
@@ -3949,14 +4401,18 @@ const processCourierPayout = async ({
           verifiedStatus === "completed";
 
         if (verifiedIsSuccess) {
+          transaction = await markTransactionCompleted(reference);
+
+          if (!transaction) {
+            throw new Error(
+              "Paystack confirmed the transfer, but the payout debit transaction could not be confirmed.",
+            );
+          }
+
           payout = await markPayoutPaid({
             payout,
-
             transfer: verification,
           });
-
-          transaction =
-            (await markTransactionCompleted(reference)) || transaction;
 
           return {
             success: true,
@@ -4312,6 +4768,45 @@ const processCourierPayout = async ({
         "Paystack returned an unrecognized transfer state. Payout remains processing.",
     };
   } catch (error) {
+    /*
+     * Recover an ambiguous debit-transaction creation.
+     *
+     * AppSync may have created the transaction even if the
+     * Lambda did not receive the successful response.
+     *
+     * Check by reference before treating the transaction
+     * as missing or deciding what to do with the wallet.
+     */
+    if ((walletReserved || reservationAttempted) && !transaction && reference) {
+      try {
+        transaction = await getPayoutTransactionWithRetry({
+          reference,
+          walletID: wallet?.id,
+          maxAttempts: 5,
+          retryDelayMs: 500,
+        });
+
+        if (transaction) {
+          walletReserved = true;
+          console.log(
+            "DEBIT TRANSACTION RECOVERED AFTER AMBIGUOUS CREATE RESPONSE:",
+            {
+              transactionID: transaction.id,
+              reference: transaction.reference,
+              status: transaction.status,
+            },
+          );
+        } else {
+          console.error(
+            "DEBIT TRANSACTION NOT FOUND AFTER RETRIES:",
+            reference,
+          );
+        }
+      } catch (lookupError) {
+        console.error("DEBIT TRANSACTION RECOVERY LOOKUP FAILED:", lookupError);
+      }
+    }
+
     console.error("==================================================");
 
     console.error("PAYOUT PROCESSING ERROR");
@@ -4342,7 +4837,12 @@ const processCourierPayout = async ({
            courier gets paid twice
     ====================================================== */
 
-    if (error?.isPaystackNetworkError) {
+    if (
+      transferOutcomeUncertain ||
+      error?.isPaystackNetworkError ||
+      error?.isPaystackAmbiguousResponse ||
+      Number(error?.paystackStatusCode) >= 500
+    ) {
       try {
         payout = await updatePayoutStatus({
           payout,
@@ -4440,7 +4940,7 @@ const processCourierPayout = async ({
      * is available to identify the exact amount to reverse.
      * Do not blindly credit the wallet.
      */
-    if (walletReserved && !transaction) {
+    if ((walletReserved || reservationAttempted) && !transaction) {
       console.error(
         "CRITICAL: WALLET RESERVED BUT DEBIT TRANSACTION IS MISSING:",
         {
@@ -5584,35 +6084,15 @@ exports.handler = async (event, context) => {
     ====================================================== */
 
     if (isScheduledPayoutEvent(event)) {
-      console.log("SCHEDULED PAYOUT EVENT DETECTED.");
+      console.warn("AUTOMATIC FRIDAY PAYOUTS ARE DISABLED.");
 
-      /*
-       * Load the Paystack secret key.
-       */
-      const secretKey = await getPaystackSecretKey();
-
-      /*
-       * Run the complete automatic payout process.
-       *
-       * This includes:
-       *
-       *   - eligible courier discovery
-       *   - payout plan
-       *   - Paystack balance preflight
-       *   - zero-transfer protection
-       *   - actual payouts
-       *   - result reconciliation
-       */
-      const result = await runAutomaticPayouts({
-        secretKey,
-      });
-
-      console.log(
-        "SCHEDULED AUTOMATIC PAYOUT RESULT:",
-        JSON.stringify(result, null, 2),
-      );
-
-      return result;
+      return {
+        success: false,
+        status: "AUTOMATIC_PAYOUTS_DISABLED",
+        transferStarted: false,
+        message:
+          "Scheduled automatic courier payouts have been disabled. Admin must initiate payouts manually.",
+      };
     }
 
     /* ======================================================
@@ -5650,6 +6130,60 @@ exports.handler = async (event, context) => {
     console.log("APPSYNC FIELD NAME:", fieldName);
 
     console.log("APPSYNC ARGUMENTS:", JSON.stringify(args, null, 2));
+
+    /* ======================================================
+   4. AUTHORIZE PAYOUT REQUEST
+====================================================== */
+
+    const requestedCourierID = getArgumentValue(args, [
+      "courierID",
+      "courierId",
+      "courier_id",
+    ]);
+
+    const requestedPayoutMethod = String(
+      getArgumentValue(args, ["payoutMethod", "method"]) || "",
+    )
+      .trim()
+      .toUpperCase();
+
+    const requestedPayoutSource = String(
+      getArgumentValue(args, ["payoutSource", "source"]) || "",
+    )
+      .trim()
+      .toUpperCase();
+
+    /*
+     * ADMIN REQUESTS
+     *
+     * These routes must only be accessible to administrators.
+     */
+    const isAdminPayoutRequest =
+      fieldName === "adminMakePayout" ||
+      fieldName === "adminMakeAllPayouts" ||
+      requestedPayoutMethod === PAYOUT_METHOD.MANUAL_ALL ||
+      requestedPayoutSource === PAYOUT_SOURCE.ADMIN_MANUAL;
+
+    /*
+     * COURIER REQUESTS
+     *
+     * These routes must only be accessible to the
+     * authenticated courier whose Courier.sub matches
+     * the Cognito identity sub.
+     */
+    const isCourierPayoutRequest =
+      fieldName === "requestPayout" ||
+      fieldName === "courierRequestPayout" ||
+      requestedPayoutMethod === "BANK_TRANSFER" ||
+      requestedPayoutMethod === PAYOUT_METHOD.MANUAL_SINGLE;
+
+    if (isAdminPayoutRequest) {
+      assertAdminPayoutRequester(event);
+    } else if (isCourierPayoutRequest) {
+      await assertCourierOwnsPayoutRequest(event, requestedCourierID);
+    } else {
+      throw new Error("Unauthorized or unsupported payout request.");
+    }
 
     /* ======================================================
        4. LOAD PAYSTACK SECRET
@@ -6005,3 +6539,5 @@ exports.handler = async (event, context) => {
 };
 
 // Later we will add a proper automatic-payout retry mechanism. incase 6:00pm no sufficient money to pay, after top up, by 6:30pm or 7:00pm it should retry again
+
+// Automatic payments of fridays has been disable, even on amazon eventbridge.Code might still remain (dormant)

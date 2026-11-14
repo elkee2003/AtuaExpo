@@ -1,0 +1,5 @@
+⚠️ [33mWARNING: owners may reassign ownership for the following model(s) and role(s): PaymentMethod: [owner], OrderCancellation: [userID]. If this is not intentional, you may want to apply field-level authorization rules to these fields. To read more: https://docs.amplify.aws/cli/graphql/authorization-rules/#per-user--owner-based-data-access.[39m
+✅ [32mGraphQL schema compiled successfully.[39m
+[32m[39m
+[32mEdit your schema at C:\Users\DAMINI\Desktop\AteeNew\Atua\amplify\backend\api\Atua\schema.graphql or place .graphql files in a directory at C:\Users\DAMINI\Desktop\AteeNew\Atua\amplify\backend\api\Atua\schema[39m
+[0mSuccessfully generated models. Generated models can be found in C:\Users\DAMINI\Desktop\AteeNew\Atua\amplify-codegen-temp\models[0m

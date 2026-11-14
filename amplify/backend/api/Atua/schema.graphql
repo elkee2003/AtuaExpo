@@ -552,6 +552,83 @@
 # END OF ATUA COURIER PRO MASTER ARCHITECTURE
 # =============================================================================
 
+# =============================================================================
+# PAYOUT RESERVATION — COURIER WALLET FUNDS CONTROL
+# =============================================================================
+#
+# PURPOSE
+# PayoutReservation records the amount of a courier's available wallet
+# balance that Atua has set aside for a specific payout request.
+#
+# A reservation prevents the same funds from being withdrawn or used again
+# while Atua processes the corresponding payout.
+#
+# HOW IT WORKS
+#
+# 1. A courier requests a withdrawal, creating a Payout record.
+#
+# 2. Atua validates the payout, wallet ownership, requested amount and
+#    available balance.
+#
+# 3. Atua creates or retrieves the reservation associated with that payout.
+#
+# 4. The reserved amount is deducted from Wallet.availableBalance.
+#
+# 5. A corresponding DEBIT Transaction is recorded against the wallet.
+#
+# 6. The reservation tracks the outcome of the reservation process and
+#    provides a durable reference for retries, reconciliation and recovery.
+#
+# RESERVATION OUTCOMES
+#
+# - PENDING:
+#   The reservation process has started but is not yet confirmed complete.
+#
+# - WALLET_DEBITED:
+#   The wallet deduction has been confirmed, but the corresponding debit
+#   transaction or final reservation confirmation is still outstanding.
+#
+# - RESERVED:
+#   The wallet deduction and corresponding debit transaction have both
+#   been confirmed. The funds remain reserved for the payout.
+#
+# - FAILED:
+#   The reservation could not be completed. Any wallet deduction already
+#   made must be investigated and safely recovered before the payout can
+#   proceed.
+#
+# - REVERSED:
+#   The reservation has been released and the reserved funds restored
+#   to the courier's available wallet balance.
+#
+# IMPORTANT FINANCIAL RULES
+#
+# - A reservation is not a second wallet and does not represent additional
+#   money. It tracks funds already deducted from availableBalance.
+# - The Transaction model remains the financial ledger. This model does
+#   not replace or duplicate debit and reversal transactions.
+# - A reservation must be uniquely identifiable by its payout.
+# - Retrying the same payout must never deduct the same funds twice.
+# - A payout must not be transferred until its reservation is confirmed.
+# - Never restore reserved funds merely because a Paystack request timed
+#   out or returned an uncertain result.
+# - Funds may only be restored after the payout is confirmed failed and
+#   the reversal is safely recorded.
+# - All wallet changes must use concurrency protection and idempotency.
+# - The reservation amount must match the verified Payout.totalWalletDebit.
+#
+# RELATIONSHIP TO OTHER FINANCIAL MODELS
+#
+# Wallet             = Holds the courier's financial balances.
+# Payout             = Records the courier's withdrawal request.
+# Transaction        = Records the actual wallet debit or reversal.
+# PayoutReservation  = Tracks funds set aside for a particular payout.
+#
+# This model is an internal financial-control record. It must not be used
+# as a substitute for Paystack transfer verification or payout reconciliation.
+#
+# =============================================================================
+
 # ---------------- FLEET ENUMS ----------------
 
 enum FleetOrganisationType {
@@ -1046,10 +1123,20 @@ enum PaymentStatus {
 enum TransactionType {
   CREDIT
   DEBIT
+  DEBT_REPAYMENT
 }
 
 enum TransactionStatus {
   PENDING
+  COMPLETED
+  FAILED
+  REVERSED
+}
+
+enum PayoutReservationStatus {
+  PENDING
+  WALLET_DEBITED
+  RESERVED
   COMPLETED
   FAILED
   REVERSED
@@ -1158,6 +1245,15 @@ enum OrderPaymentTiming {
 enum OrderPaymentMethod {
   PAYSTACK
   CASH
+}
+
+enum CourierDebtStatus {
+  OPEN
+  PARTIALLY_PAID
+  PAID
+  OVERDUE
+  REVERSED
+  WAIVED
 }
 
 enum CourierReconciliationStatus {
@@ -1289,6 +1385,44 @@ type PaymentMethod
   updatedAt: AWSDateTime
 }
 
+type PayoutReservation
+  @model
+  @auth(
+    rules: [
+      { allow: private, provider: iam, operations: [create, read, update] }
+    ]
+  ) {
+  id: ID!
+
+  payoutID: ID! @index(name: "byPayoutReservation")
+
+  walletID: ID! @index(name: "byWalletReservation")
+
+  courierID: ID!
+
+  # Amount actually being reserved, including applicable payout fees.
+  totalWalletDebit: Float!
+
+  # Original amount being sent to the courier.
+  payoutAmount: Float!
+
+  # Fee included in the wallet deduction.
+  payoutFee: Float
+
+  # Unique reference for this payout reservation.
+  reference: String!
+
+  # ID of the corresponding DEBIT transaction.
+  transactionID: ID
+
+  status: PayoutReservationStatus!
+
+  failureReason: String
+
+  reservedAt: AWSDateTime
+  reversedAt: AWSDateTime
+}
+
 type Payout @model @auth(rules: [{ allow: public }]) {
   id: ID!
 
@@ -1403,10 +1537,13 @@ type Wallet
   # Total earnings generated by the courier over their lifetime
   lifetimeEarnings: Float
 
-  # Outstanding debt the courier owes Atua after reconciliation
-  # Example:  availableBalance = 1200, outstandingDebt = 2800
-  # means the courier has ₦1,200 available and still owes ₦2,800.
+  # Total unpaid debt owed by this courier to Atua.
+  # This is independent of the courier's online earnings.
+  # It must equal the sum of the remaining amounts on outstanding
+  # CourierDebt records.
   outstandingDebt: Float
+
+  activeCourierDebtID: ID
 
   transactions: [Transaction] @hasMany(indexName: "byWallet", fields: ["id"])
 }
@@ -1499,10 +1636,108 @@ type OrderCancellation
   updatedAt: AWSDateTime
 }
 
+type CourierDebtReconciliation
+  @model
+  @auth(
+    rules: [
+      # MVP: Allow API-key clients to read debt records.
+      # This supports courier and admin debt history screens.
+      { allow: public, provider: apiKey, operations: [read] }
+      # Preserve backend Lambda access.
+      { allow: private, provider: iam, operations: [create, read, update] }
+    ]
+  ) {
+  id: ID!
+
+  courierDebtID: ID! @index(name: "byCourierDebtReconciliation")
+
+  courierDebt: CourierDebt @belongsTo(fields: ["courierDebtID"])
+
+  reconciliationID: ID! @index(name: "byReconciliationDebt")
+
+  reconciliation: CourierReconciliation @belongsTo(fields: ["reconciliationID"])
+
+  amountAttributed: Float!
+
+  createdAt: AWSDateTime
+  updatedAt: AWSDateTime
+}
+
+type CourierDebt
+  @model
+  @auth(
+    rules: [
+      # MVP: Allow API-key clients to read debt records.
+      # This supports courier and admin debt history screens.
+      { allow: public, provider: apiKey, operations: [read] }
+      # Preserve backend Lambda access.
+      { allow: private, provider: iam, operations: [create, read, update] }
+    ]
+  ) {
+  id: ID!
+
+  courierID: ID! @index(name: "byCourierDebt", sortKeyFields: ["createdAt"])
+
+  courier: Courier @belongsTo(fields: ["courierID"])
+
+  walletID: ID!
+
+  payments: [CourierDebtPayment]
+    @hasMany(indexName: "byCourierDebtPaymentDebt", fields: ["id"])
+
+  # Full amount the courier owes Atua from cash collections.
+  # This is NOT reduced by online courier earnings.
+  amount: Float!
+
+  # Total amount recovered or repaid against this debt.
+  amountPaid: Float!
+
+  # Amount still outstanding.
+  # amount - amountPaid
+  remainingAmount: Float!
+
+  # Retained for historical compatibility.
+  # New reconciliations must not use online earnings to offset debt.
+  grossDebtAmount: Float
+
+  # Retained for historical compatibility.
+  # Must be zero for new reconciliations using separate accounting.
+  earningsOffsetAmount: Float
+
+  # Total amount recovered directly from the courier's available wallet.
+  walletRecoveredAmount: Float
+
+  # Total amount subsequently paid through external debt payments,
+  # such as Paystack.
+  externalPaymentsAmount: Float
+
+  status: CourierDebtStatus!
+    @index(name: "byDebtStatusDueAt", sortKeyFields: ["dueAt"])
+
+  debtStartedAt: AWSDateTime!
+  dueAt: AWSDateTime!
+
+  firstPaymentAt: AWSDateTime
+  settledAt: AWSDateTime
+
+  idempotencyKey: String! @index(name: "byCourierDebtIdempotency")
+
+  reconciliations: [CourierDebtReconciliation]
+    @hasMany(indexName: "byCourierDebtReconciliation", fields: ["id"])
+
+  createdAt: AWSDateTime
+  updatedAt: AWSDateTime
+}
+
 type CourierDebtPayment
   @model
   @auth(
     rules: [
+      # MVP: Allow API-key clients to read repayment records.
+      # Admin can see all courier repayment history.
+      # Couriers can also query their repayment history.
+      { allow: public, provider: apiKey, operations: [read] }
+      # Preserve IAM access for payment Lambdas.
       { allow: private, provider: iam, operations: [create, read, update] }
     ]
   ) {
@@ -1513,6 +1748,10 @@ type CourierDebtPayment
 
   # The courier's Wallet record.
   walletID: ID!
+
+  courierDebtID: ID @index(name: "byCourierDebtPaymentDebt")
+
+  courierDebt: CourierDebt @belongsTo(fields: ["courierDebtID"])
 
   # Amount requested from Paystack, in naira.
   amount: Float!
@@ -1535,6 +1774,21 @@ type CourierDebtPayment
 
   # When Paystack payment was confirmed.
   paidAt: AWSDateTime
+
+  # Amount actually applied to outstanding debt
+  amountApplied: Float
+
+  # Outstanding debt before payment was applied
+  debtBefore: Float
+
+  # Outstanding debt after payment was applied
+  debtAfter: Float
+
+  # ID of the wallet transaction created for this payment
+  transactionID: ID
+
+  # When the payment was applied to the debt
+  processedAt: AWSDateTime
 
   # Optional diagnostic information for failed initialization.
   failureReason: String
@@ -1578,8 +1832,12 @@ type CourierReconciliation
   previousSettlements: Float!
   adjustments: Float!
 
-  # Final net position
+  # Legacy net-position fields retained for compatibility.
+  # They must not be used to offset cash debt against online earnings.
   netAmount: Float!
+
+  # Legacy summary direction.
+  # The two gross obligations above remain independently authoritative.
   direction: CourierReconciliationDirection!
 
   status: CourierReconciliationStatus!
@@ -1596,6 +1854,9 @@ type CourierReconciliation
   settledAt: AWSDateTime
   settlementReference: String
   notes: String
+
+  debtAllocations: [CourierDebtReconciliation]
+    @hasMany(indexName: "byReconciliationDebt", fields: ["id"])
 
   createdAt: AWSDateTime
   updatedAt: AWSDateTime
@@ -1631,6 +1892,16 @@ type CashCollection
   # Optional reconciliation details
   reconciledAt: AWSDateTime
   reconciliationReference: String
+
+  # Debt cycle receiving this cash collection
+  courierDebtID: ID @index(name: "byCashCollectionDebt")
+
+  # Atua's share of this cash collection:
+  # commission + platform fee + VAT
+  atuaShareAmount: Float
+
+  # Timestamp when the amount was applied to the debt
+  debtAppliedAt: AWSDateTime
 
   createdAt: AWSDateTime
   updatedAt: AWSDateTime
@@ -1835,6 +2106,10 @@ type Order @model @auth(rules: [{ allow: public }]) {
 
   payoutStatus: OrderPayoutStatus
   fundsStatus: FundsStatus # HELD | PARTIALLY_RELEASED | RELEASED
+  # Courier financial reconciliation tracking
+  courierReconciliationID: ID
+  courierReconciledAt: AWSDateTime
+
   # ---------------- EARNINGS ALLOCATION ----------------
 
   earningsAllocationStatus: EarningsAllocationStatus
@@ -2111,7 +2386,16 @@ type CourierLiveLocation @model @auth(rules: [{ allow: public }]) {
   lastSeenAt: AWSDateTime!
 }
 
-type Courier @model @auth(rules: [{ allow: public }]) {
+type Courier
+  @model
+  @auth(
+    rules: [
+      # Existing access — retained
+      { allow: public }
+      # New access — added for IAM-authorized Lambda operations
+      { allow: private, provider: iam, operations: [read, update] }
+    ]
+  ) {
   id: ID!
 
   sub: String! @index(name: "byCourierSub", queryField: "couriersBySub")
@@ -2167,11 +2451,25 @@ type Courier @model @auth(rules: [{ allow: public }]) {
   reviewCount: Int
   totalReports: Int
 
+  #Exact deadline for paying outstanding debt
+  debtDueAt: AWSDateTime
+
+  #When the courier was blocked for non-payment
+  debtBlockedAt: AWSDateTime
+
+  #Explains why the account was blocked
+  debtBlockReason: String
+
+  #Identifies an active debt restriction
+  debtRestrictionActive: Boolean
+
   availabilityStatus: CourierAvailabilityStatus
   lastLocationUpdateAt: AWSDateTime
 
   reconciliations: [CourierReconciliation]
     @hasMany(indexName: "byCourierReconciliation", fields: ["id"])
+
+  debts: [CourierDebt] @hasMany(indexName: "byCourierDebt", fields: ["id"])
 
   fleetMemberships: [FleetMember]
     @hasMany(indexName: "byCourier", fields: ["id"])
@@ -2398,7 +2696,10 @@ type Mutation {
     @auth(rules: [{ allow: private, provider: userPools }])
     @function(name: "selectDeliveryPaymentMethod-${env}")
 
-  initializeCourierDebtPayment: InitializeCourierDebtPaymentResult
+  initializeCourierDebtPayment(
+    courierDebtID: ID!
+    requestedAmount: Float!
+  ): InitializeCourierDebtPaymentResult
     @auth(rules: [{ allow: private, provider: userPools }])
     @function(name: "initializeCourierDebtPayment-${env}")
 

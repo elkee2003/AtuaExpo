@@ -59,12 +59,12 @@
         "FunctionName": {
           "Fn::If": [
             "ShouldNotCreateEnvResources",
-            "settleCourierBalance",
+            "enforceCourierDebtDeadline",
             {
               "Fn::Join": [
                 "",
                 [
-                  "settleCourierBalance",
+                  "enforceCourierDebtDeadline",
                   "-",
                   {
                     "Ref": "env"
@@ -110,12 +110,12 @@
         "RoleName": {
           "Fn::If": [
             "ShouldNotCreateEnvResources",
-            "atuaLambdaRolec6e9bc96",
+            "atuaLambdaRole59e82008",
             {
               "Fn::Join": [
                 "",
                 [
-                  "atuaLambdaRolec6e9bc96",
+                  "atuaLambdaRole59e82008",
                   "-",
                   {
                     "Ref": "env"

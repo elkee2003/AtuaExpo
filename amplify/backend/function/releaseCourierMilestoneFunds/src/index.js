@@ -5,85 +5,52 @@ ATUA — RELEASE COURIER MILESTONE FUNDS
 
 PURPOSE
 -------
-This Lambda handles Maxi courier earnings in two milestones.
+This Lambda releases MAXI courier earnings in two milestones:
 
-NORMAL FLOW
------------
+1. PICKED_UP:
+   - Release 50% of courierEarnings.
+   - Move that amount from pendingBalance to availableBalance.
+   - Set fundsStatus to PARTIALLY_RELEASED.
 
-1. Customer payment is verified.
-2. Courier earnings are allocated to pendingBalance.
-3. Order reaches PICKED_UP.
-4. 50% of courier earnings moves from pendingBalance to availableBalance.
-5. Order.fundsStatus becomes PARTIALLY_RELEASED.
-6. Order reaches DELIVERED.
-7. The remaining courier earnings move to availableBalance.
-8. Order.fundsStatus becomes RELEASED.
+2. DELIVERED:
+   - If 50% was previously released, release the remaining balance.
+   - If nothing was previously released, release the full amount as a
+     catch-up release.
+   - Set fundsStatus to RELEASED.
 
-LATE-PAYMENT FLOW
------------------
+IMPORTANT FINANCIAL RULES
+-------------------------
+- MAXI orders only.
+- PAYSTACK orders only.
+- paymentStatus must be PAID.
+- earningsAllocationStatus must be ALLOCATED.
+- Cash orders are never released through this Lambda.
+- The original EARNINGS-{orderID} transaction must exist and be valid.
+- outstandingDebt is never deducted here.
+- This Lambda does not initiate bank payouts.
 
-An order may reach DELIVERED before payment and earnings allocation
-are complete.
+DATABASE LIMITATION
+-------------------
+Order and Wallet are separate AppSync records.
 
-If this Lambda is subsequently invoked with milestone DELIVERED,
-and the order is still HELD, it releases the full earnings once
-payment is confirmed and allocation is complete.
+Their updates are NOT one atomic transaction.
 
-This is a catch-up release because both milestones have already
-occurred. It does not falsely record a pickup release at an earlier
-time when no release actually happened.
+This implementation:
+- Uses AppSync _version where available.
+- Checks wallet balances again after ambiguous update errors.
+- Uses conditional Order updates.
+- Attempts compensating wallet rollback if the Order update fails.
+- Stops and reports reconciliation when it cannot safely determine the
+  financial outcome.
 
-CASH ORDERS
------------
+A crash after the Wallet update but before the Order update can still
+require manual reconciliation. Do not treat this as a fully atomic ledger.
 
-Cash orders must not be treated as electronically funded orders.
-
-This Lambda skips cash orders. If cash earnings have already been
-allocated through the electronic wallet flow, it flags the case
-for reconciliation instead of moving balances again.
-
-MAXI RELEASE AMOUNTS
---------------------
-
-At pickup:
-    Release 50% of courierEarnings.
-
-At delivery after pickup:
-    Release courierEarnings - fundsReleasedAmount.
-
-At delivery without a previous release:
-    Release all courierEarnings as a catch-up release.
-
-WALLET MOVEMENT
----------------
-
-    pendingBalance decreases
-    availableBalance increases
-    lifetimeEarnings increases
-
-This Lambda does NOT:
-- Verify a Paystack transaction directly.
-- Allocate initial courier earnings.
-- Initiate a bank payout.
-- Handle Micro or Moto orders.
-- Process cash collection.
-
-REQUIRED ENVIRONMENT VARIABLES
-------------------------------
+ENVIRONMENT VARIABLES
+---------------------
 API_ATUA_GRAPHQLAPIENDPOINTOUTPUT
 API_ATUA_GRAPHQLAPIKEYOUTPUT
 
-IMPORTANT DATABASE LIMITATION
------------------------------
-Wallet and Order are separate AppSync records. Their updates are
-not one atomic database transaction.
-
-This code uses conditional Order updates, wallet version checks
-when supported, and compensating rollback. If rollback fails,
-financial reconciliation is required.
-
-Before production use, test duplicate invocations and concurrent
-wallet updates in staging.
 ===============================================================================
 */
 
@@ -97,17 +64,6 @@ const API_KEY = process.env.API_ATUA_GRAPHQLAPIKEYOUTPUT;
 ===============================================================================
 1. MAIN HANDLER
 ===============================================================================
-
-AWS Lambda invokes this function.
-
-Expected payload examples:
-
-    { "orderID": "ORDER_ID", "milestone": "PICKED_UP" }
-
-    { "orderID": "ORDER_ID", "milestone": "DELIVERED" }
-
-The milestone can also be inferred from Order.status if the caller
-does not provide it.
 */
 
 exports.handler = async (event) => {
@@ -119,13 +75,9 @@ exports.handler = async (event) => {
     console.log("================================================");
 
     /*
-    ---------------------------------------------------------------------------
-    STEP 1: EXTRACT ORDER ID
-    ---------------------------------------------------------------------------
-
-    Support the payload formats used by direct calls and other Lambdas.
-    */
-
+     * Accept the payload formats used by direct Lambda invocations
+     * and by financialOrderTrigger.
+     */
     orderID =
       event?.orderID ||
       event?.orderId ||
@@ -141,13 +93,9 @@ exports.handler = async (event) => {
     }
 
     /*
-    ---------------------------------------------------------------------------
-    STEP 2: EXTRACT REQUESTED MILESTONE
-    ---------------------------------------------------------------------------
-
-    If a milestone is provided, normalize it to uppercase.
-    */
-
+     * The milestone is optional. If omitted, the latest Order.status
+     * determines which milestone should be processed.
+     */
     const suppliedMilestone =
       event?.milestone ||
       event?.arguments?.milestone ||
@@ -155,7 +103,7 @@ exports.handler = async (event) => {
       event?.detail?.milestone ||
       null;
 
-    let requestedMilestone = suppliedMilestone
+    const requestedMilestone = suppliedMilestone
       ? normalize(suppliedMilestone)
       : null;
 
@@ -173,14 +121,9 @@ exports.handler = async (event) => {
     console.log("REQUESTED MILESTONE:", requestedMilestone);
 
     /*
-    ---------------------------------------------------------------------------
-    STEP 3: FETCH THE LATEST ORDER
-    ---------------------------------------------------------------------------
-
-    Do not rely solely on the event payload for financial values.
-    Fetch the latest Order from AppSync.
-    */
-
+     * Always retrieve the latest Order.
+     * Never trust financial amounts supplied in the event payload.
+     */
     const order = await getOrder(orderID);
 
     if (!order || order._deleted === true) {
@@ -192,7 +135,7 @@ exports.handler = async (event) => {
     const paymentMethod = normalize(order.paymentMethod);
     const allocationStatus = normalize(order.earningsAllocationStatus);
 
-    let fundsStatus = normalize(order.fundsStatus);
+    const fundsStatus = normalize(order.fundsStatus);
 
     console.log(
       "CURRENT ORDER STATE:",
@@ -200,39 +143,45 @@ exports.handler = async (event) => {
         status: orderStatus,
         paymentStatus,
         paymentMethod,
-        earningsAllocationStatus: allocationStatus,
+        allocationStatus,
         fundsStatus,
+        fundsReleasedAmount: order.fundsReleasedAmount,
       }),
     );
 
     /*
-    ---------------------------------------------------------------------------
-    STEP 4: VERIFY THIS IS A MAXI ORDER
-    ---------------------------------------------------------------------------
-
-    Micro and Moto orders must use releaseFunds instead.
-    */
-
+     * -------------------------------------------------------------------------
+     * VERIFY MAXI ORDER
+     * -------------------------------------------------------------------------
+     *
+     * Do not accept an Order where transportationType and vehicleClass
+     * explicitly contradict each other.
+     */
     const transportationType = normalize(order.transportationType);
-
     const vehicleClass = normalize(order.vehicleClass);
 
-    const isMaxi = transportationType === "MAXI" || vehicleClass === "MAXI";
-
-    if (!isMaxi) {
+    if (transportationType && transportationType !== "MAXI") {
       throw new Error(
-        `Order ${orderID} is not a MAXI order. ` +
-          `transportationType=${transportationType}; ` +
-          `vehicleClass=${vehicleClass}.`,
+        `Order ${orderID} has transportationType ` +
+          `"${transportationType}", not MAXI.`,
       );
     }
 
-    /*
-    ---------------------------------------------------------------------------
-    STEP 5: VERIFY ASSIGNED COURIER
-    ---------------------------------------------------------------------------
-    */
+    if (vehicleClass && vehicleClass !== "MAXI") {
+      throw new Error(
+        `Order ${orderID} has vehicleClass "${vehicleClass}", not MAXI.`,
+      );
+    }
 
+    if (transportationType !== "MAXI" && vehicleClass !== "MAXI") {
+      throw new Error(`Order ${orderID} cannot be identified as a MAXI order.`);
+    }
+
+    /*
+     * -------------------------------------------------------------------------
+     * VERIFY ASSIGNED COURIER
+     * -------------------------------------------------------------------------
+     */
     const courierID = order.assignedCourierId;
 
     if (!courierID) {
@@ -240,21 +189,16 @@ exports.handler = async (event) => {
     }
 
     /*
-    ---------------------------------------------------------------------------
-    STEP 6: HANDLE CASH ORDERS
-    ---------------------------------------------------------------------------
-
-    Cash collection is not the same as receiving money through Paystack.
-
-    Do not transfer wallet balances through this electronic release flow.
-
-    If a cash order has already been allocated, return a reconciliation
-    flag because the existing allocation may have changed pendingBalance.
-    */
-
+     * -------------------------------------------------------------------------
+     * CASH ORDERS MUST NEVER ENTER THIS RELEASE FLOW
+     * -------------------------------------------------------------------------
+     */
     if (paymentMethod === "CASH") {
       if (allocationStatus === "ALLOCATED") {
-        console.error("MAXI CASH ORDER REQUIRES RECONCILIATION:", orderID);
+        console.error(
+          "CASH ORDER HAS ELECTRONIC EARNINGS ALLOCATION:",
+          orderID,
+        );
 
         return successResponse({
           success: false,
@@ -262,11 +206,12 @@ exports.handler = async (event) => {
           reconciliationRequired: true,
           orderID,
           courierID,
-          paymentMethod: "CASH",
+          paymentMethod,
           fundsStatus,
           message:
-            "Cash earnings were already allocated. Review the wallet " +
-            "and ledger before making any adjustment.",
+            "This cash Order has already been allocated through the " +
+            "electronic wallet flow. Review the wallet and ledger " +
+            "before making any adjustment.",
         });
       }
 
@@ -275,7 +220,7 @@ exports.handler = async (event) => {
         skipped: true,
         orderID,
         courierID,
-        paymentMethod: "CASH",
+        paymentMethod,
         message:
           "Cash orders are not released through the electronic " +
           "Maxi milestone flow.",
@@ -283,34 +228,18 @@ exports.handler = async (event) => {
     }
 
     /*
-    ---------------------------------------------------------------------------
-    STEP 7: VERIFY ELECTRONIC PAYMENT METHOD
-    ---------------------------------------------------------------------------
-
-    This implementation supports PAYSTACK orders only.
-
-    If your schema uses a different enum value for electronic payment,
-    update this comparison to match your deployed schema.
-    */
-
+     * Only Paystack-funded orders can enter this Lambda.
+     */
     if (paymentMethod !== "PAYSTACK") {
       throw new Error(
         `Unsupported payment method "${order.paymentMethod}". ` +
-          "This Lambda only releases PAYSTACK-funded orders.",
+          "Only PAYSTACK orders are supported.",
       );
     }
 
     /*
-    ---------------------------------------------------------------------------
-    STEP 8: VERIFY PAYMENT STATUS
-    ---------------------------------------------------------------------------
-
-    The payment backend must verify the Paystack payment before setting
-    paymentStatus to PAID.
-
-    This Lambda does not itself contact Paystack.
-    */
-
+     * Paystack verification must already have succeeded elsewhere.
+     */
     if (paymentStatus !== "PAID") {
       throw new Error(
         `Order ${orderID} is not PAID. ` +
@@ -319,16 +248,8 @@ exports.handler = async (event) => {
     }
 
     /*
-    ---------------------------------------------------------------------------
-    STEP 9: VERIFY EARNINGS ALLOCATION
-    ---------------------------------------------------------------------------
-
-    allocateCourierEarnings must have completed successfully.
-
-    A PAID order alone is not sufficient: courier earnings must already
-    have been allocated to the courier's pending balance.
-    */
-
+     * Earnings must already have been allocated to pendingBalance.
+     */
     if (allocationStatus !== "ALLOCATED") {
       throw new Error(
         `Courier earnings are not allocated for Order ${orderID}. ` +
@@ -337,16 +258,9 @@ exports.handler = async (event) => {
     }
 
     /*
-    ---------------------------------------------------------------------------
-    STEP 10: CHECK ADMINISTRATIVE HOLD
-    ---------------------------------------------------------------------------
-
-    Do not release earnings while an administrator has blocked the release.
-    */
-
+     * Respect administrative holds.
+     */
     if (order.fundsReleaseBlocked === true) {
-      console.log(`Funds release is blocked for Order ${orderID}.`);
-
       return successResponse({
         success: true,
         skipped: true,
@@ -362,11 +276,8 @@ exports.handler = async (event) => {
     }
 
     /*
-    ---------------------------------------------------------------------------
-    STEP 11: VALIDATE TOTAL COURIER EARNINGS
-    ---------------------------------------------------------------------------
-    */
-
+     * Validate the amount that was allocated to the courier.
+     */
     const earnings = normalizeMoney(order.courierEarnings);
 
     if (earnings <= 0) {
@@ -377,22 +288,10 @@ exports.handler = async (event) => {
     }
 
     /*
-    ---------------------------------------------------------------------------
-    STEP 12: VALIDATE AMOUNT ALREADY RELEASED
-    ---------------------------------------------------------------------------
-
-    At pickup:
-        fundsReleasedAmount should normally be 0.
-
-    After pickup:
-        fundsReleasedAmount should normally equal 50% of earnings.
-
-    After delivery:
-        fundsReleasedAmount should equal 100% of earnings.
-    */
-
+     * Read the amount already released.
+     */
     const currentReleasedAmount = normalizeMoney(
-      order.fundsReleasedAmount || 0,
+      order.fundsReleasedAmount ?? 0,
     );
 
     if (currentReleasedAmount < 0) {
@@ -407,50 +306,34 @@ exports.handler = async (event) => {
     }
 
     /*
-    ---------------------------------------------------------------------------
-    STEP 13: DETERMINE THE EFFECTIVE MILESTONE
-    ---------------------------------------------------------------------------
-
-    Prefer the milestone supplied by the caller.
-
-    If no milestone is supplied, use Order.status.
-
-    A stream event can be slightly behind the latest database record.
-    For example, a PICKED_UP event may be processed after the Order
-    has already reached DELIVERED.
-
-    In that case, use DELIVERED so the Lambda can catch up rather than
-    incorrectly treating the old pickup event as the current milestone.
-    */
-
+     * -------------------------------------------------------------------------
+     * DETERMINE THE EFFECTIVE MILESTONE
+     * -------------------------------------------------------------------------
+     *
+     * Use the latest Order status to protect against stale stream events.
+     *
+     * Example:
+     * A PICKED_UP stream event may be processed after the Order is already
+     * DELIVERED. In that case, process DELIVERED catch-up instead.
+     */
     let milestone = requestedMilestone || orderStatus;
 
     if (milestone === "PICKED_UP" && orderStatus === "DELIVERED") {
       console.log(
         `Order ${orderID} is already DELIVERED. ` +
-          "Using DELIVERED catch-up processing.",
+          "Switching to delivery catch-up processing.",
       );
 
       milestone = "DELIVERED";
     }
 
     if (milestone !== "PICKED_UP" && milestone !== "DELIVERED") {
-      throw new Error(
-        `Cannot release Maxi funds at milestone "${milestone}". ` +
-          "Expected PICKED_UP or DELIVERED.",
-      );
+      throw new Error(`Cannot process milestone "${milestone}".`);
     }
 
     /*
-    ---------------------------------------------------------------------------
-    STEP 14: ENSURE MILESTONE IS CONSISTENT WITH ORDER STATUS
-    ---------------------------------------------------------------------------
-
-    PICKED_UP is valid only while the latest Order status is PICKED_UP.
-
-    DELIVERED is valid only when the latest Order status is DELIVERED.
-    */
-
+     * A pickup release is valid only when the current Order is PICKED_UP.
+     */
     if (milestone === "PICKED_UP" && orderStatus !== "PICKED_UP") {
       throw new Error(
         `Cannot process PICKED_UP for Order ${orderID}. ` +
@@ -458,6 +341,9 @@ exports.handler = async (event) => {
       );
     }
 
+    /*
+     * A delivery release is valid only when the current Order is DELIVERED.
+     */
     if (milestone === "DELIVERED" && orderStatus !== "DELIVERED") {
       throw new Error(
         `Cannot process DELIVERED for Order ${orderID}. ` +
@@ -468,18 +354,17 @@ exports.handler = async (event) => {
     console.log("EFFECTIVE MILESTONE:", milestone);
 
     /*
-    ---------------------------------------------------------------------------
-    STEP 15: HANDLE ALREADY-COMPLETED RELEASES
-    ---------------------------------------------------------------------------
-
-    Repeated delivery events must not release earnings a second time.
-    */
-
+     * -------------------------------------------------------------------------
+     * DUPLICATE DELIVERY PROTECTION
+     * -------------------------------------------------------------------------
+     *
+     * If the Order already says RELEASED, do not move the Wallet again.
+     */
     if (milestone === "DELIVERED" && fundsStatus === "RELEASED") {
       if (Math.abs(currentReleasedAmount - earnings) > 0.01) {
         throw new Error(
-          `Order ${orderID} is RELEASED but fundsReleasedAmount ` +
-            "does not match total courier earnings. Reconciliation required.",
+          `Order ${orderID} is RELEASED, but fundsReleasedAmount ` +
+            "does not equal courierEarnings. Reconciliation required.",
         );
       }
 
@@ -496,13 +381,13 @@ exports.handler = async (event) => {
     }
 
     /*
-    ---------------------------------------------------------------------------
-    STEP 16: HANDLE REPEATED PICKUP EVENTS
-    ---------------------------------------------------------------------------
-
-    If the pickup release has already happened, do not release another 50%.
-    */
-
+     * -------------------------------------------------------------------------
+     * DUPLICATE PICKUP PROTECTION
+     * -------------------------------------------------------------------------
+     *
+     * If the pickup milestone has already been processed, do not release
+     * another 50%.
+     */
     if (
       milestone === "PICKED_UP" &&
       (fundsStatus === "PARTIALLY_RELEASED" || fundsStatus === "RELEASED")
@@ -530,13 +415,10 @@ exports.handler = async (event) => {
     }
 
     /*
-    ---------------------------------------------------------------------------
-    STEP 17: LOAD THE COURIER WALLET
-    ---------------------------------------------------------------------------
-
-    The wallet must belong to the courier assigned to the Order.
-    */
-
+     * -------------------------------------------------------------------------
+     * LOAD THE COURIER WALLET
+     * -------------------------------------------------------------------------
+     */
     const wallet = await getCourierWallet(courierID);
 
     if (!wallet) {
@@ -546,22 +428,17 @@ exports.handler = async (event) => {
     verifyCourierWallet(wallet, courierID);
 
     /*
-    ---------------------------------------------------------------------------
-    STEP 18: VERIFY ORIGINAL EARNINGS TRANSACTION
-    ---------------------------------------------------------------------------
-
-    allocateCourierEarnings should have created:
-
-        EARNINGS-{orderID}
-
-    Confirm that this transaction:
-    - Exists exactly once.
-    - Belongs to the expected wallet and Order.
-    - Is a CREDIT.
-    - Matches courierEarnings.
-    - Has status COMPLETED.
-    */
-
+     * -------------------------------------------------------------------------
+     * VERIFY THE ORIGINAL EARNINGS TRANSACTION
+     * -------------------------------------------------------------------------
+     *
+     * allocateCourierEarnings should have created:
+     *
+     *     EARNINGS-{orderID}
+     *
+     * This transaction must match the assigned courier's Wallet and
+     * the full courier earnings amount.
+     */
     const earningsReference = `EARNINGS-${orderID}`;
 
     const earningsTransaction =
@@ -575,33 +452,23 @@ exports.handler = async (event) => {
     });
 
     /*
-    ---------------------------------------------------------------------------
-    STEP 19: CALCULATE THE RELEASE AMOUNT
-    ---------------------------------------------------------------------------
-
-    PICKED_UP + HELD:
-        Release 50%.
-
-    DELIVERED + PARTIALLY_RELEASED:
-        Release the remaining amount.
-
-    DELIVERED + HELD:
-        Both milestones have occurred, but no release was recorded.
-        Release the full earnings as a catch-up release.
-
-    DELIVERED + RELEASED:
-        Already handled above.
-    */
-
+     * -------------------------------------------------------------------------
+     * CALCULATE THE MILESTONE RELEASE
+     * -------------------------------------------------------------------------
+     */
     let releaseAmount = 0;
     let nextFundsStatus = null;
     let releaseType = null;
+
     let pickupTimestamp = null;
     let deliveryTimestamp = null;
 
     const now = new Date().toISOString();
 
     if (milestone === "PICKED_UP") {
+      /*
+       * The first milestone must start from HELD.
+       */
       if (fundsStatus !== "HELD") {
         throw new Error(
           `Pickup release requires fundsStatus HELD. ` +
@@ -611,20 +478,30 @@ exports.handler = async (event) => {
 
       if (Math.abs(currentReleasedAmount) > 0.01) {
         throw new Error(
-          `Order ${orderID} is HELD but already has a released amount. ` +
+          `Order ${orderID} is HELD but already records released funds. ` +
             "Reconciliation is required.",
         );
       }
 
-      // Release the first 50% at pickup.
+      /*
+       * Release the first half.
+       *
+       * normalizeMoney handles rounding to two decimal places.
+       * The delivery milestone will release the exact remainder.
+       */
       releaseAmount = normalizeMoney(earnings / 2);
 
       nextFundsStatus = "PARTIALLY_RELEASED";
       releaseType = "MAXI_PICKUP";
       pickupTimestamp = now;
-    } else if (milestone === "DELIVERED") {
+    }
+
+    if (milestone === "DELIVERED") {
       if (fundsStatus === "PARTIALLY_RELEASED") {
-        // Release only what remains. Do not pay the first half twice.
+        /*
+         * Normal delivery flow:
+         * Release only the amount that remains.
+         */
         releaseAmount = normalizeMoney(earnings - currentReleasedAmount);
 
         nextFundsStatus = "RELEASED";
@@ -632,17 +509,14 @@ exports.handler = async (event) => {
         deliveryTimestamp = now;
       } else if (fundsStatus === "HELD") {
         /*
-        Both pickup and delivery have occurred, but no previous
-        release was recorded.
-
-        This is the late-payment/allocation catch-up path. The
-        entire earnings amount is released once, after payment and
-        allocation have been verified.
-
-        We do not set pickupFundsReleasedAt because no pickup
-        release actually happened at pickup time.
-        */
-
+         * Catch-up flow:
+         *
+         * The Order is already DELIVERED, but no milestone release
+         * has been recorded. Release all earnings once.
+         *
+         * Do not write pickupFundsReleasedAt because no pickup
+         * release actually occurred.
+         */
         if (Math.abs(currentReleasedAmount) > 0.01) {
           throw new Error(
             `Order ${orderID} is HELD but already records released funds. ` +
@@ -651,6 +525,7 @@ exports.handler = async (event) => {
         }
 
         releaseAmount = earnings;
+
         nextFundsStatus = "RELEASED";
         releaseType = "MAXI_DELIVERY_CATCHUP";
         deliveryTimestamp = now;
@@ -668,20 +543,8 @@ exports.handler = async (event) => {
     }
 
     /*
-    ---------------------------------------------------------------------------
-    STEP 20: CALCULATE EXPECTED TOTAL RELEASED
-    ---------------------------------------------------------------------------
-
-    At pickup:
-        current released amount + 50%.
-
-    At delivery:
-        current released amount + remaining amount = total earnings.
-
-    Catch-up at delivery:
-        0 + full earnings = total earnings.
-    */
-
+     * Calculate the new cumulative amount released.
+     */
     const newReleasedAmount = normalizeMoney(
       currentReleasedAmount + releaseAmount,
     );
@@ -693,13 +556,16 @@ exports.handler = async (event) => {
       );
     }
 
+    /*
+     * A final release must equal the full courier earnings amount.
+     */
     if (
       nextFundsStatus === "RELEASED" &&
       Math.abs(newReleasedAmount - earnings) > 0.01
     ) {
       throw new Error(
-        `Final release amount does not equal total earnings for ` +
-          `Order ${orderID}. Reconciliation is required.`,
+        `Final release does not equal total courier earnings ` +
+          `for Order ${orderID}. Reconciliation required.`,
       );
     }
 
@@ -720,20 +586,15 @@ exports.handler = async (event) => {
     );
 
     /*
-    ---------------------------------------------------------------------------
-    STEP 21: VALIDATE WALLET BALANCES
-    ---------------------------------------------------------------------------
+     * -------------------------------------------------------------------------
+     * VALIDATE WALLET BALANCES
+     * -------------------------------------------------------------------------
+     */
+    const pendingBalance = normalizeMoney(wallet.pendingBalance ?? 0);
 
-    The pending balance must contain the amount being released.
+    const availableBalance = normalizeMoney(wallet.availableBalance ?? 0);
 
-    The available balance receives the released amount.
-    */
-
-    const pendingBalance = normalizeMoney(wallet.pendingBalance || 0);
-
-    const availableBalance = normalizeMoney(wallet.availableBalance || 0);
-
-    const lifetimeEarnings = normalizeMoney(wallet.lifetimeEarnings || 0);
+    const lifetimeEarnings = normalizeMoney(wallet.lifetimeEarnings ?? 0);
 
     if (pendingBalance < 0 || availableBalance < 0 || lifetimeEarnings < 0) {
       throw new Error(`Wallet ${wallet.id} has a negative balance.`);
@@ -747,23 +608,13 @@ exports.handler = async (event) => {
     }
 
     /*
-    ---------------------------------------------------------------------------
-    STEP 22: CALCULATE NEW WALLET BALANCES
-    ---------------------------------------------------------------------------
-
-    Example:
-        Pending balance before:   ₦20,000
-        Available balance before: ₦5,000
-        Release amount:           ₦7,500
-
-    After release:
-        Pending balance:          ₦12,500
-        Available balance:        ₦12,500
-
-    lifetimeEarnings is increased by the amount released, following
-    the accounting convention used by the existing Lambda.
-    */
-
+     * Calculate the new Wallet balances.
+     *
+     * This preserves the accounting convention in the supplied Lambda:
+     * lifetimeEarnings increases as each milestone is released.
+     *
+     * outstandingDebt is deliberately not changed here.
+     */
     const newPendingBalance = normalizeMoney(pendingBalance - releaseAmount);
 
     const newAvailableBalance = normalizeMoney(
@@ -775,17 +626,8 @@ exports.handler = async (event) => {
     );
 
     /*
-    ---------------------------------------------------------------------------
-    STEP 23: SAVE THE ORIGINAL WALLET VALUES
-    ---------------------------------------------------------------------------
-
-    If the Order update fails after the Wallet update, these values
-    are used for a compensating rollback.
-
-    The rollback uses the version returned by the successful Wallet
-    update, not the old version read at the beginning.
-    */
-
+     * Preserve the original Wallet state for rollback.
+     */
     const originalWalletState = {
       availableBalance,
       pendingBalance,
@@ -797,47 +639,106 @@ exports.handler = async (event) => {
 
     try {
       /*
-      -------------------------------------------------------------------------
-      STEP 24: UPDATE THE WALLET
-      -------------------------------------------------------------------------
+       * -----------------------------------------------------------------------
+       * UPDATE WALLET
+       * -----------------------------------------------------------------------
+       *
+       * Include _version when available.
+       *
+       * AppSync must enforce optimistic concurrency for _version to protect
+       * against concurrent Wallet updates.
+       */
+      try {
+        updatedWallet = await updateWallet({
+          wallet,
+          availableBalance: newAvailableBalance,
+          pendingBalance: newPendingBalance,
+          lifetimeEarnings: newLifetimeEarnings,
+        });
 
-      Include _version when available. For this to protect against
-      concurrent updates, AppSync optimistic concurrency must be
-      configured to enforce the version.
+        walletUpdated = true;
+      } catch (walletUpdateError) {
+        /*
+         * An HTTP timeout or network error does not always mean the
+         * database mutation failed.
+         *
+         * Re-read the Wallet before deciding whether to retry or stop.
+         */
+        console.error(
+          "Wallet update returned an error. Checking latest Wallet state:",
+          walletUpdateError.message,
+        );
 
-      A conflict should fail the update rather than silently
-      overwrite a newer wallet balance.
-      */
+        const latestWallet = await getWallet(wallet.id);
 
-      updatedWallet = await updateWallet({
-        wallet,
-        availableBalance: newAvailableBalance,
-        pendingBalance: newPendingBalance,
-        lifetimeEarnings: newLifetimeEarnings,
-      });
+        if (!latestWallet) {
+          throw new Error(
+            `Wallet ${wallet.id} could not be re-read after an ` +
+              "ambiguous update result. Reconciliation required.",
+          );
+        }
 
-      walletUpdated = true;
+        const latestAvailable = normalizeMoney(
+          latestWallet.availableBalance ?? 0,
+        );
+
+        const latestPending = normalizeMoney(latestWallet.pendingBalance ?? 0);
+
+        const latestLifetime = normalizeMoney(
+          latestWallet.lifetimeEarnings ?? 0,
+        );
+
+        const walletHasExpectedValues =
+          moneyEqual(latestAvailable, newAvailableBalance) &&
+          moneyEqual(latestPending, newPendingBalance) &&
+          moneyEqual(latestLifetime, newLifetimeEarnings);
+
+        const walletHasOriginalValues =
+          moneyEqual(
+            latestAvailable,
+            pendingSafe(originalWalletState.availableBalance),
+          ) &&
+          moneyEqual(latestPending, originalWalletState.pendingBalance) &&
+          moneyEqual(latestLifetime, originalWalletState.lifetimeEarnings);
+
+        if (walletHasExpectedValues) {
+          /*
+           * The update appears to have committed despite the error response.
+           * Continue with the Order update.
+           */
+          updatedWallet = latestWallet;
+          walletUpdated = true;
+        } else if (walletHasOriginalValues) {
+          /*
+           * The Wallet still has the original balances.
+           * The update did not commit.
+           */
+          throw walletUpdateError;
+        } else {
+          /*
+           * Another update may have changed the Wallet, or the outcome
+           * cannot be determined safely.
+           *
+           * Do not overwrite the Wallet.
+           */
+          throw new Error(
+            `CRITICAL FINANCIAL RECONCILIATION REQUIRED. ` +
+              `Wallet ${wallet.id} has balances that match neither ` +
+              "the original nor the expected release values. " +
+              `Original error: ${walletUpdateError.message}`,
+          );
+        }
+      }
 
       /*
-      -------------------------------------------------------------------------
-      STEP 25: UPDATE THE ORDER'S FINANCIAL STATE
-      -------------------------------------------------------------------------
-
-      At pickup:
-          HELD -> PARTIALLY_RELEASED
-
-      At delivery after pickup:
-          PARTIALLY_RELEASED -> RELEASED
-
-      At delivery catch-up:
-          HELD -> RELEASED
-
-      The update has a condition that checks the original state.
-      This reduces the chance of duplicate releases.
-
-      If the Order update fails, the Wallet update is rolled back.
-      */
-
+       * -----------------------------------------------------------------------
+       * UPDATE ORDER FINANCIAL STATE
+       * -----------------------------------------------------------------------
+       *
+       * Only update the Order after the Wallet mutation has succeeded.
+       *
+       * The conditional update checks the original financial state.
+       */
       const updatedOrder = await updateOrder({
         order,
         milestone,
@@ -845,15 +746,12 @@ exports.handler = async (event) => {
         newReleasedAmount,
         pickupFundsReleasedAt: pickupTimestamp,
         fundsReleasedAt: deliveryTimestamp,
-        fundsReleaseType: releaseType,
+        fundsReleaseType,
       });
 
       /*
-      -------------------------------------------------------------------------
-      STEP 26: LOG SUCCESS
-      -------------------------------------------------------------------------
-      */
-
+       * Log the successful release.
+       */
       console.log(
         "MAXI MILESTONE RELEASE SUCCESS:",
         JSON.stringify({
@@ -873,12 +771,6 @@ exports.handler = async (event) => {
           walletVersion: updatedWallet._version,
         }),
       );
-
-      /*
-      -------------------------------------------------------------------------
-      STEP 27: RETURN SUCCESS
-      -------------------------------------------------------------------------
-      */
 
       return successResponse({
         success: true,
@@ -900,20 +792,15 @@ exports.handler = async (event) => {
       });
     } catch (releaseError) {
       /*
-      -------------------------------------------------------------------------
-      STEP 28: ROLL BACK THE WALLET IF THE ORDER UPDATE FAILED
-      -------------------------------------------------------------------------
-
-      This rollback is only attempted if the Wallet update succeeded.
-
-      IMPORTANT:
-      We use the latest version returned by updateWallet. We do not
-      blindly overwrite a newer Wallet record.
-
-      If rollback fails, the Order and Wallet must be reconciled
-      before the Lambda is retried.
-      */
-
+       * -----------------------------------------------------------------------
+       * COMPENSATING WALLET ROLLBACK
+       * -----------------------------------------------------------------------
+       *
+       * If the Wallet update succeeded but the Order update failed,
+       * attempt to restore the original Wallet balances.
+       *
+       * The rollback uses the latest Wallet version returned by AppSync.
+       */
       if (walletUpdated && updatedWallet) {
         console.error(`Attempting Wallet rollback for Order ${orderID}.`);
 
@@ -946,23 +833,9 @@ exports.handler = async (event) => {
         }
       }
 
-      // Pass the original failure to the outer error handler.
       throw releaseError;
     }
   } catch (error) {
-    /*
-    ---------------------------------------------------------------------------
-    STEP 29: LOG AND RETURN FAILURE
-    ---------------------------------------------------------------------------
-
-    The Lambda returns a 500 response for the caller to inspect.
-
-    If financialOrderTrigger invokes this Lambda, it must check the
-    returned statusCode and the JSON body's success value. A returned
-    statusCode of 500 does not, by itself, mean AWS Lambda reported
-    a FunctionError when the handler returned normally.
-    */
-
     console.error(
       "ATUA MAXI MILESTONE RELEASE FAILED:",
       JSON.stringify({
@@ -988,15 +861,8 @@ exports.handler = async (event) => {
 
 /*
 ===============================================================================
-2. FETCH ORDER
+2. GET ORDER
 ===============================================================================
-
-Retrieve the fields required for:
-- Payment validation.
-- Courier validation.
-- Maxi identification.
-- Milestone processing.
-- Funds-state validation.
 */
 
 async function getOrder(orderID) {
@@ -1039,15 +905,50 @@ async function getOrder(orderID) {
 
 /*
 ===============================================================================
-3. FIND COURIER WALLET
+3. GET WALLET BY ID
 ===============================================================================
 
-Find exactly one active wallet belonging to this courier.
+Used to verify an ambiguous Wallet update result.
+*/
 
-If there are no wallets, stop.
+async function getWallet(walletID) {
+  const query = /* GraphQL */ `
+    query GetWallet($id: ID!) {
+      getWallet(id: $id) {
+        id
+        ownerID
+        ownerType
+        availableBalance
+        pendingBalance
+        lifetimeEarnings
+        _version
+        _deleted
+      }
+    }
+  `;
 
-If there are multiple wallets, stop rather than risk releasing
-earnings to the wrong wallet.
+  const response = await graphqlRequest(query, {
+    id: walletID,
+  });
+
+  const wallet = response?.data?.getWallet || null;
+
+  if (!wallet || wallet._deleted === true) {
+    return null;
+  }
+
+  return wallet;
+}
+
+/*
+===============================================================================
+4. FIND COURIER WALLET
+===============================================================================
+
+Find exactly one active COURIER wallet.
+
+If there are multiple matching wallets, stop rather than risk paying
+the wrong wallet.
 */
 
 async function getCourierWallet(courierID) {
@@ -1103,7 +1004,7 @@ async function getCourierWallet(courierID) {
 
 /*
 ===============================================================================
-4. VALIDATE WALLET OWNERSHIP
+5. VERIFY WALLET OWNERSHIP
 ===============================================================================
 */
 
@@ -1129,14 +1030,14 @@ function verifyCourierWallet(wallet, courierID) {
 
 /*
 ===============================================================================
-5. FIND THE ORIGINAL EARNINGS TRANSACTION
+6. FIND ORIGINAL EARNINGS TRANSACTION
 ===============================================================================
 
 Expected reference:
 
     EARNINGS-{orderID}
 
-There must be exactly one active matching transaction.
+There must be exactly one active matching Transaction.
 */
 
 async function getTransactionByReference(reference) {
@@ -1193,19 +1094,8 @@ async function getTransactionByReference(reference) {
 
 /*
 ===============================================================================
-6. VERIFY EARNINGS TRANSACTION
+7. VERIFY EARNINGS TRANSACTION
 ===============================================================================
-
-The original allocation transaction must:
-- Exist.
-- Belong to the correct wallet.
-- Belong to the correct Order.
-- Be a CREDIT.
-- Match the full courier earnings amount.
-- Have status COMPLETED.
-
-This checks that the original earnings allocation exists before
-the milestone release changes the Wallet.
 */
 
 function verifyEarningsTransaction({
@@ -1234,7 +1124,7 @@ function verifyEarningsTransaction({
     throw new Error(`Earnings transaction for Order ${orderID} is not CREDIT.`);
   }
 
-  if (normalizeMoney(transaction.amount) !== normalizeMoney(earnings)) {
+  if (!moneyEqual(normalizeMoney(transaction.amount), earnings)) {
     throw new Error(
       `Earnings transaction amount mismatch for Order ${orderID}.`,
     );
@@ -1252,15 +1142,13 @@ function verifyEarningsTransaction({
 
 /*
 ===============================================================================
-7. UPDATE WALLET
+8. UPDATE WALLET
 ===============================================================================
 
-Move earnings from pendingBalance to availableBalance.
+Moves the milestone amount from pendingBalance to availableBalance.
 
-The mutation includes _version when available.
-
-AppSync must be configured to enforce optimistic concurrency for
-the version to protect against concurrent wallet updates.
+The _version is included when available. AppSync must have optimistic
+concurrency enabled for version checks to protect concurrent updates.
 */
 
 async function updateWallet({
@@ -1312,16 +1200,13 @@ async function updateWallet({
 
 /*
 ===============================================================================
-8. ROLL BACK WALLET
+9. ROLL BACK WALLET
 ===============================================================================
 
-This is a compensating operation used if the Wallet update succeeded
-but the Order update failed.
+Compensating operation used when the Wallet update succeeded but the
+Order update failed.
 
-IMPORTANT:
 Use the _version returned by the successful Wallet update.
-
-Do not use the old Wallet version because it may be stale.
 */
 
 async function rollbackWallet({
@@ -1373,7 +1258,7 @@ async function rollbackWallet({
 
 /*
 ===============================================================================
-9. UPDATE ORDER FINANCIAL STATE
+10. UPDATE ORDER FINANCIAL STATE
 ===============================================================================
 
 Allowed transitions:
@@ -1387,9 +1272,8 @@ DELIVERY AFTER PICKUP:
 DELIVERY CATCH-UP:
     HELD -> RELEASED
 
-The conditional update checks the original financial state and
-allocation status so a stale invocation cannot freely overwrite
-a newer state.
+The condition checks the original state so a stale invocation cannot
+freely overwrite a newer financial state.
 */
 
 async function updateOrder({
@@ -1431,26 +1315,26 @@ async function updateOrder({
     fundsReleaseType,
   };
 
-  // Only write the pickup timestamp when a pickup release actually occurs.
+  /*
+   * Only write the pickup timestamp when the pickup release occurs.
+   */
   if (pickupFundsReleasedAt) {
     input.pickupFundsReleasedAt = pickupFundsReleasedAt;
   }
 
-  // Write the final-release timestamp at delivery.
+  /*
+   * Write the final-release timestamp at delivery.
+   */
   if (fundsReleasedAt) {
     input.fundsReleasedAt = fundsReleasedAt;
   }
 
-  // Include the Order version when it is available.
+  /*
+   * Include Order version when available.
+   */
   if (order._version !== undefined && order._version !== null) {
     input._version = order._version;
   }
-
-  /*
-  Build a condition that matches the state read earlier.
-
-  The current Order.status must also match the milestone being processed.
-  */
 
   let condition;
 
@@ -1476,14 +1360,6 @@ async function updateOrder({
       },
     };
   } else if (milestone === "DELIVERED" && nextFundsStatus === "RELEASED") {
-    /*
-    Delivery can start from either HELD (catch-up) or
-    PARTIALLY_RELEASED (normal second milestone).
-
-    The condition below is combined with the current fundsStatus
-    so the update cannot succeed if the state changed after reading.
-    */
-
     condition = {
       status: {
         eq: "DELIVERED",
@@ -1527,16 +1403,8 @@ async function updateOrder({
 
 /*
 ===============================================================================
-10. GRAPHQL REQUEST HELPER
+11. GRAPHQL REQUEST HELPER
 ===============================================================================
-
-Every query and mutation uses this helper.
-
-It:
-- Validates the endpoint and API key.
-- Sends the request to AppSync.
-- Parses the response.
-- Throws on HTTP errors or GraphQL errors.
 */
 
 async function graphqlRequest(query, variables = {}) {
@@ -1552,19 +1420,42 @@ async function graphqlRequest(query, variables = {}) {
     );
   }
 
-  const response = await fetch(GRAPHQL_ENDPOINT, {
-    method: "POST",
+  const controller =
+    typeof AbortController !== "undefined" ? new AbortController() : null;
 
-    headers: {
-      "Content-Type": "application/json",
-      "x-api-key": API_KEY,
-    },
+  /*
+   * Avoid waiting indefinitely for an AppSync request.
+   */
+  const timeout = controller
+    ? setTimeout(() => controller.abort(), 15000)
+    : null;
 
-    body: JSON.stringify({
-      query,
-      variables,
-    }),
-  });
+  let response;
+
+  try {
+    response = await fetch(GRAPHQL_ENDPOINT, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": API_KEY,
+      },
+      body: JSON.stringify({
+        query,
+        variables,
+      }),
+      ...(controller ? { signal: controller.signal } : {}),
+    });
+  } catch (error) {
+    if (error?.name === "AbortError") {
+      throw new Error("AppSync request timed out after 15 seconds.");
+    }
+
+    throw error;
+  } finally {
+    if (timeout) {
+      clearTimeout(timeout);
+    }
+  }
 
   const responseText = await response.text();
 
@@ -1592,18 +1483,22 @@ async function graphqlRequest(query, variables = {}) {
 
 /*
 ===============================================================================
-11. UTILITY FUNCTIONS
+12. UTILITY FUNCTIONS
 ===============================================================================
 */
 
-// Normalize strings and enum values before comparing them.
+/*
+ * Normalize strings and enum values before comparing them.
+ */
 function normalize(value) {
-  return String(value || "")
+  return String(value ?? "")
     .trim()
     .toUpperCase();
 }
 
-// Normalize monetary values to two decimal places.
+/*
+ * Normalize monetary values to two decimal places.
+ */
 function normalizeMoney(value) {
   const number = Number(value);
 
@@ -1615,11 +1510,23 @@ function normalizeMoney(value) {
 }
 
 /*
-Return a structured response.
+ * Compare money values using a one-kobo tolerance.
+ */
+function moneyEqual(first, second) {
+  return Math.abs(normalizeMoney(first) - normalizeMoney(second)) < 0.01;
+}
 
-The calling Lambda must inspect the response body as well as statusCode.
-*/
+/*
+ * Kept as an explicit helper so all balance comparisons use
+ * normalized monetary values.
+ */
+function pendingSafe(value) {
+  return normalizeMoney(value);
+}
 
+/*
+ * Return a structured successful response.
+ */
 function successResponse(body) {
   return {
     statusCode: 200,
