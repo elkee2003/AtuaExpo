@@ -368,16 +368,21 @@ async function fetchAllPages(query, rootField, variables = {}) {
 async function getAllOutstandingDebts() {
   const all = [];
 
+  // Use the standard generated listCourierDebts query.
+  // This avoids depending on the missing custom index query.
   for (const status of ACTIVE_DEBT_STATUSES) {
-    const page = await fetchAllPages(
-      DEBTS_BY_STATUS,
-      "courierDebtsByDebtStatusDueAt",
-      { status },
-    );
+    const page = await fetchAllPages(LIST_COURIER_DEBTS, "listCourierDebts", {
+      filter: {
+        status: {
+          eq: status,
+        },
+      },
+    });
 
     all.push(...page);
   }
 
+  // Remove duplicates and deleted records.
   const unique = new Map();
 
   for (const debt of all) {
@@ -386,6 +391,7 @@ async function getAllOutstandingDebts() {
     }
   }
 
+  // Only return debts that still have an amount outstanding.
   return [...unique.values()].filter(isOutstandingDebt);
 }
 

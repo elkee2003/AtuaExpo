@@ -2,93 +2,33 @@
 
 /**
  * ============================================================
- * reconcilePayouts
+ * ATUA - RECONCILE PAYOUTS
  * ============================================================
  *
  * PURPOSE
  * ------------------------------------------------------------
- * This Lambda is the SAFETY-NET for courier payouts.
+ * Safely reconciles courier payouts left in PROCESSING.
  *
- * processPayouts:
- *
- *     Creates Payout
- *          ↓
- *     Initiates Paystack transfer
- *          ↓
- *     Payout = PROCESSING
- *
- * paystackWebhook:
- *
- *     Normally receives the final Paystack result.
- *
- * reconcilePayouts:
- *
- *     Checks PROCESSING payouts directly with Paystack.
- *
- * This protects Atua when:
- *
- *     - Paystack webhook is delayed
- *     - webhook is missed
- *     - webhook processing fails
- *     - database update failed
- *
+ * RESPONSIBILITIES
+ * ------------------------------------------------------------
+ * 1. Retrieve all PROCESSING payouts.
+ * 2. Verify their wallet reservations.
+ * 3. Recover safe, interrupted reservation operations.
+ * 4. Verify existing Paystack transfers.
+ * 5. Mark successful payouts as PAID.
+ * 6. Send confirmed failed/reversed transfers to reversePayout.
  *
  * IMPORTANT
  * ------------------------------------------------------------
+ * This Lambda NEVER initiates a new Paystack transfer.
  *
- * This Lambda NEVER creates another Paystack transfer.
+ * It NEVER directly credits or debits a wallet.
  *
- * It ONLY verifies an existing transfer.
- *
- *
- * FINAL STATES
- * ------------------------------------------------------------
- *
- * Paystack success:
- *
- *     Transaction -> COMPLETED
- *     Payout      -> PAID
- *
- *
- * Paystack failed/reversed/abandoned/blocked/rejected:
- *
- *     reversePayout
- *          ↓
- *     Wallet restored
- *          ↓
- *     Transaction -> REVERSED
- *     Payout      -> FAILED
- *
- *
- * IMPORTANT
- * ------------------------------------------------------------
- *
- * REVERSED means:
- *
- *     The Paystack payout failed
- *     AND
- *     The wallet debit was successfully restored.
- *
- * Therefore:
- *
- *     Transaction -> REVERSED
- *
- * must only happen after wallet restoration has been
- * successfully confirmed.
- *
- *
- * Paystack pending/unknown:
- *
- *     Nothing changes.
- *     Payout remains PROCESSING.
- *
+ * Uncertain wallet operations are never automatically
+ * repeated.
  *
  * ============================================================
  */
-
-/* ============================================================
-   AWS SSM
-============================================================ */
 
 const { SSMClient, GetParameterCommand } = require("@aws-sdk/client-ssm");
 
@@ -100,17 +40,16 @@ const GRAPHQL_ENDPOINT = process.env.API_ATUA_GRAPHQLAPIENDPOINTOUTPUT;
 
 const GRAPHQL_API_KEY = process.env.API_ATUA_GRAPHQLAPIKEYOUTPUT;
 
-/*
- * IMPORTANT:
- *
- * PAYSTACK_SECRET_KEY is the SSM parameter name/path.
- *
- * It is NOT the actual Paystack secret itself.
- */
 const PAYSTACK_SECRET_PARAMETER = process.env.PAYSTACK_SECRET_KEY;
 
+const REGION = process.env.AWS_REGION || "eu-north-1";
+
+const ssmClient = new SSMClient({
+  region: REGION,
+});
+
 /* ============================================================
-   CONFIGURATION VALIDATION
+   VALIDATE CONFIGURATION
 ============================================================ */
 
 if (!GRAPHQL_ENDPOINT) {
@@ -122,26 +61,48 @@ if (!GRAPHQL_API_KEY) {
 }
 
 if (!PAYSTACK_SECRET_PARAMETER) {
-  throw new Error("Missing PAYSTACK_SECRET_KEY secret configuration.");
+  throw new Error("Missing PAYSTACK_SECRET_KEY.");
 }
 
 /* ============================================================
-   SSM CLIENT
+   GENERAL HELPERS
 ============================================================ */
 
-const ssmClient = new SSMClient({});
+function money(value) {
+  const number = Number(value);
+
+  if (!Number.isFinite(number)) {
+    throw new Error("Invalid monetary amount.");
+  }
+
+  return Number(number.toFixed(2));
+}
+
+function sameMoney(first, second) {
+  return Math.abs(money(first) - money(second)) < 0.005;
+}
+
+function errorText(error) {
+  return error?.message || String(error || "Unknown error.");
+}
+
+function normalizeStatus(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase();
+}
 
 /* ============================================================
-   GET PAYSTACK SECRET
+   GET PAYSTACK SECRET FROM SSM
 ============================================================ */
 
 async function getPaystackSecret() {
-  const command = new GetParameterCommand({
-    Name: PAYSTACK_SECRET_PARAMETER,
-    WithDecryption: true,
-  });
-
-  const result = await ssmClient.send(command);
+  const result = await ssmClient.send(
+    new GetParameterCommand({
+      Name: PAYSTACK_SECRET_PARAMETER,
+      WithDecryption: true,
+    }),
+  );
 
   const secret = result?.Parameter?.Value;
 
@@ -153,7 +114,7 @@ async function getPaystackSecret() {
 }
 
 /* ============================================================
-   GRAPHQL REQUEST
+   APPSYNC GRAPHQL REQUEST
 ============================================================ */
 
 async function graphqlRequest(
@@ -166,7 +127,6 @@ async function graphqlRequest(
 
     headers: {
       "Content-Type": "application/json",
-
       "x-api-key": GRAPHQL_API_KEY,
     },
 
@@ -175,6 +135,8 @@ async function graphqlRequest(
       variables,
       operationName,
     }),
+
+    signal: AbortSignal.timeout(20000),
   });
 
   const responseText = await response.text();
@@ -183,21 +145,27 @@ async function graphqlRequest(
 
   try {
     result = JSON.parse(responseText);
-  } catch (error) {
-    throw new Error(
-      `GraphQL returned invalid JSON. HTTP ${response.status}: ${responseText}`,
-    );
+  } catch {
+    throw new Error(`${operationName}: Invalid GraphQL JSON response.`);
   }
 
   if (!response.ok) {
     throw new Error(
-      `GraphQL HTTP ${response.status}: ${JSON.stringify(result)}`,
+      `${operationName}: HTTP ${response.status}: ${responseText}`,
     );
   }
 
-  if (result.errors && result.errors.length > 0) {
+  if (result.errors?.length) {
+    console.error(
+      `APPSYNC ERRORS - ${operationName}:`,
+      JSON.stringify(result.errors),
+    );
+
     throw new Error(
-      `GraphQL ${operationName} failed: ${JSON.stringify(result.errors)}`,
+      result.errors
+        .map((item) => item.message)
+        .filter(Boolean)
+        .join(" | "),
     );
   }
 
@@ -208,12 +176,6 @@ async function graphqlRequest(
    GET PROCESSING PAYOUTS
 ============================================================ */
 
-/**
- * Retrieves every payout currently in PROCESSING.
- *
- * Pagination is used so this does not stop at the first
- * 100 records.
- */
 async function getProcessingPayouts() {
   const payouts = [];
 
@@ -229,11 +191,13 @@ async function getProcessingPayouts() {
         listPayouts(filter: $filter, limit: $limit, nextToken: $nextToken) {
           items {
             id
-
             courierID
             walletID
 
             amount
+            payoutFee
+            totalWalletDebit
+
             status
 
             bankName
@@ -252,12 +216,12 @@ async function getProcessingPayouts() {
             processedAt
             paidAt
             failedAt
+            walletRestoredAt
 
             createdAt
             updatedAt
 
             _version
-            _lastChangedAt
             _deleted
           }
 
@@ -286,10 +250,7 @@ async function getProcessingPayouts() {
 
     const items = page.items || [];
 
-    /*
-     * Do not include deleted records.
-     */
-    payouts.push(...items.filter((item) => item && !item._deleted));
+    payouts.push(...items.filter((item) => item && item._deleted !== true));
 
     nextToken = page.nextToken || null;
   } while (nextToken);
@@ -298,163 +259,494 @@ async function getProcessingPayouts() {
 }
 
 /* ============================================================
-   GET PAYOUT TRANSACTION
+   GET PAYOUT BY ID
 ============================================================ */
 
-/**
- * Retrieves the original wallet DEBIT transaction belonging
- * to a payout.
- *
- * IMPORTANT:
- * ------------------------------------------------------------
- * We intentionally use the generated DynamoDB/AppSync index
- * query for Transaction.reference instead of:
- *
- *     listTransactions(filter: { reference: { eq: ... } })
- *
- * The diagnostic testing proved that the generic list/filter
- * query does NOT return the existing Transaction, even though:
- *
- *     getTransaction(id)
- *
- * can see the exact record.
- *
- * Transaction.reference is indexed using:
- *
- *     @index(name: "byTransactionReference")
- *
- * Therefore Amplify generates the dedicated query:
- *
- *     transactionsByReference
- *
- * We use that indexed query here.
- *
- * SECURITY / ACCOUNTING:
- * ------------------------------------------------------------
- * After retrieving the indexed results, we STILL verify:
- *
- *     1. record is not deleted
- *     2. reference exactly matches
- *     3. walletID exactly matches
- *     4. type is DEBIT
- *
- * This prevents an unrelated Transaction from ever being
- * associated with a payout.
- */
-async function getPayoutTransaction(payout) {
-  if (!payout?.reference) {
-    throw new Error("Payout reference is required.");
-  }
-
-  if (!payout?.walletID) {
-    throw new Error("Payout walletID is required.");
-  }
-
+async function getPayout(payoutID) {
   const query = /* GraphQL */ `
-    query TransactionsByReference($reference: String!, $limit: Int) {
-      transactionsByReference(reference: $reference, limit: $limit) {
-        items {
-          id
-          walletID
-          type
-          amount
-          description
-          orderID
-          paymentID
-          reference
-          status
-          _version
-          _deleted
-          _lastChangedAt
-          createdAt
-          updatedAt
-        }
+    query GetPayout($id: ID!) {
+      getPayout(id: $id) {
+        id
+        courierID
+        walletID
+
+        amount
+        payoutFee
+        totalWalletDebit
+
+        status
+        reference
+
+        transferCode
+        transferID
+
+        failureReason
+
+        processedAt
+        paidAt
+        failedAt
+        walletRestoredAt
+
+        _version
+        _deleted
       }
     }
   `;
 
-  console.log("GETTING PAYOUT TRANSACTION BY INDEX:", {
-    payoutID: payout.id,
-    walletID: payout.walletID,
-    reference: payout.reference,
-  });
+  const data = await graphqlRequest(query, { id: payoutID }, "GetPayout");
 
-  const data = await graphqlRequest(
-    query,
-    {
-      reference: payout.reference,
-      limit: 20,
-    },
-    "TransactionsByReference",
-  );
+  const payout = data?.getPayout || null;
 
-  const transactions = data?.transactionsByReference?.items || [];
-
-  console.log("INDEX QUERY TRANSACTIONS:", transactions);
-
-  /**
-   * Find the exact Transaction belonging to this payout.
-   *
-   * We do not blindly trust the reference index result.
-   * Every identity field is checked again.
-   */
-  const transaction = transactions.find((item) => {
-    if (!item) {
-      return false;
-    }
-
-    // Ignore deleted/tombstone records.
-    if (item._deleted === true) {
-      return false;
-    }
-
-    // Reference must match the payout exactly.
-    if (item.reference !== payout.reference) {
-      return false;
-    }
-
-    // Wallet must match the payout wallet exactly.
-    if (item.walletID !== payout.walletID) {
-      return false;
-    }
-
-    // Only the original wallet debit belongs here.
-    if (item.type !== "DEBIT") {
-      return false;
-    }
-
-    return true;
-  });
-
-  if (!transaction) {
-    console.error("NO MATCHING PAYOUT TRANSACTION FOUND:", {
-      payoutID: payout.id,
-      walletID: payout.walletID,
-      reference: payout.reference,
-      indexedResults: transactions,
-    });
-
+  if (payout?._deleted === true) {
     return null;
   }
 
-  console.log("PAYOUT TRANSACTION FOUND:", {
-    transactionID: transaction.id,
-    walletID: transaction.walletID,
-    reference: transaction.reference,
-    type: transaction.type,
-    amount: transaction.amount,
-    status: transaction.status,
-    version: transaction._version,
-  });
+  return payout;
+}
+
+/* ============================================================
+   GET PAYOUT RESERVATION
+============================================================ */
+
+async function getReservation(payoutID) {
+  const query = /* GraphQL */ `
+    query GetPayoutReservation($id: ID!) {
+      getPayoutReservation(id: $id) {
+        id
+
+        payoutID
+        walletID
+        courierID
+
+        totalWalletDebit
+        payoutAmount
+        payoutFee
+
+        reference
+        transactionID
+
+        status
+        failureReason
+
+        reservedAt
+        reversedAt
+
+        _version
+        _deleted
+      }
+    }
+  `;
+
+  const data = await graphqlRequest(
+    query,
+    { id: payoutID },
+    "GetPayoutReservation",
+  );
+
+  const reservation = data?.getPayoutReservation || null;
+
+  if (reservation?._deleted === true) {
+    return null;
+  }
+
+  return reservation;
+}
+
+/* ============================================================
+   GET DETERMINISTIC PAYOUT DEBIT TRANSACTION
+============================================================ */
+
+async function getPayoutDebitTransaction(transactionID) {
+  const query = /* GraphQL */ `
+    query GetPayoutDebitTransaction($id: ID!) {
+      getTransaction(id: $id) {
+        id
+
+        walletID
+        payoutID
+
+        type
+        amount
+
+        description
+        reference
+        status
+
+        _version
+        _deleted
+      }
+    }
+  `;
+
+  const data = await graphqlRequest(
+    query,
+    { id: transactionID },
+    "GetPayoutDebitTransaction",
+  );
+
+  const transaction = data?.getTransaction || null;
+
+  if (transaction?._deleted === true) {
+    return null;
+  }
 
   return transaction;
+}
+
+/* ============================================================
+   VALIDATE PAYOUT FINANCIAL INFORMATION
+============================================================ */
+
+function validatePayoutFinancials({ payout, reservation }) {
+  if (!payout?.id) {
+    throw new Error("Payout ID is missing.");
+  }
+
+  if (!payout.courierID) {
+    throw new Error("Payout courierID is missing.");
+  }
+
+  if (!payout.walletID) {
+    throw new Error("Payout walletID is missing.");
+  }
+
+  if (!payout.reference) {
+    throw new Error("Payout reference is missing.");
+  }
+
+  const payoutAmount = money(payout.amount);
+
+  const payoutFee = money(payout.payoutFee || 0);
+
+  const expectedWalletDebit = money(payoutAmount + payoutFee);
+
+  if (payoutAmount <= 0) {
+    throw new Error("Payout amount must be positive.");
+  }
+
+  if (
+    payout.totalWalletDebit != null &&
+    !sameMoney(payout.totalWalletDebit, expectedWalletDebit)
+  ) {
+    throw new Error(
+      "Payout totalWalletDebit does not match amount plus payoutFee.",
+    );
+  }
+
+  if (
+    reservation.payoutID !== payout.id ||
+    reservation.walletID !== payout.walletID ||
+    reservation.courierID !== payout.courierID ||
+    reservation.reference !== payout.reference
+  ) {
+    throw new Error("Payout and reservation identity mismatch.");
+  }
+
+  if (!sameMoney(reservation.payoutAmount, payoutAmount)) {
+    throw new Error("Reservation payoutAmount does not match Payout.amount.");
+  }
+
+  if (!sameMoney(reservation.payoutFee || 0, payoutFee)) {
+    throw new Error("Reservation payoutFee does not match Payout.payoutFee.");
+  }
+
+  if (!sameMoney(reservation.totalWalletDebit, expectedWalletDebit)) {
+    throw new Error(
+      "Reservation totalWalletDebit does not match payout financials.",
+    );
+  }
+
+  return expectedWalletDebit;
+}
+
+/* ============================================================
+   VALIDATE DEBIT TRANSACTION
+============================================================ */
+
+function validateDebitTransaction({ payout, reservation, transaction }) {
+  if (!transaction) {
+    throw new Error("Payout debit transaction does not exist.");
+  }
+
+  const expectedID = `${payout.id}-PAYOUT-DEBIT`;
+
+  if (transaction.id !== expectedID) {
+    throw new Error(
+      "Payout debit transaction ID is not the expected deterministic ID.",
+    );
+  }
+
+  if (transaction.walletID !== payout.walletID) {
+    throw new Error("Payout debit transaction walletID mismatch.");
+  }
+
+  if (transaction.payoutID !== payout.id) {
+    throw new Error("Payout debit transaction payoutID mismatch.");
+  }
+
+  if (transaction.type !== "DEBIT") {
+    throw new Error("Payout transaction is not a DEBIT.");
+  }
+
+  if (transaction.reference !== payout.reference) {
+    throw new Error("Payout transaction reference mismatch.");
+  }
+
+  if (!sameMoney(transaction.amount, reservation.totalWalletDebit)) {
+    throw new Error(
+      "Payout debit transaction amount does not match reservation.",
+    );
+  }
+
+  if (
+    reservation.transactionID &&
+    reservation.transactionID !== transaction.id
+  ) {
+    throw new Error(
+      "Reservation transactionID does not match the debit transaction.",
+    );
+  }
+
+  return true;
+}
+
+/* ============================================================
+   CREATE MISSING DEBIT TRANSACTION
+============================================================ */
+
+/**
+ * This function is only used when the reservation is
+ * WALLET_DEBITED.
+ *
+ * That status confirms the wallet deduction succeeded.
+ *
+ * We therefore repair the missing deterministic ledger
+ * transaction without deducting the wallet again.
+ *
+ * NEVER call this for an uncertain PENDING reservation
+ * when its debit transaction is absent.
+ */
+
+async function createMissingDebitTransaction({ payout, reservation }) {
+  const transactionID = `${payout.id}-PAYOUT-DEBIT`;
+
+  const existing = await getPayoutDebitTransaction(transactionID);
+
+  if (existing) {
+    validateDebitTransaction({
+      payout,
+      reservation,
+      transaction: existing,
+    });
+
+    return existing;
+  }
+
+  const mutation = /* GraphQL */ `
+    mutation CreatePayoutDebitTransaction($input: CreateTransactionInput!) {
+      createTransaction(input: $input) {
+        id
+
+        walletID
+        payoutID
+
+        type
+        amount
+
+        description
+        reference
+        status
+
+        _version
+      }
+    }
+  `;
+
+  const input = {
+    id: transactionID,
+
+    walletID: payout.walletID,
+    payoutID: payout.id,
+
+    type: "DEBIT",
+
+    amount: money(reservation.totalWalletDebit),
+
+    description: `Atua payout reservation - ${payout.id}`,
+
+    reference: payout.reference,
+
+    status: "PENDING",
+  };
+
+  try {
+    const data = await graphqlRequest(
+      mutation,
+      { input },
+      "CreatePayoutDebitTransaction",
+    );
+
+    const transaction = data?.createTransaction;
+
+    if (!transaction) {
+      throw new Error("Debit transaction creation was not confirmed.");
+    }
+
+    validateDebitTransaction({
+      payout,
+      reservation,
+      transaction,
+    });
+
+    return transaction;
+  } catch (error) {
+    // The create mutation may have succeeded even if
+    // the response was lost. Check the deterministic ID.
+
+    const retryRead = await getPayoutDebitTransaction(transactionID);
+
+    if (retryRead) {
+      validateDebitTransaction({
+        payout,
+        reservation,
+        transaction: retryRead,
+      });
+
+      return retryRead;
+    }
+
+    throw error;
+  }
+}
+
+/* ============================================================
+   UPDATE PAYOUT RESERVATION
+============================================================ */
+
+async function updateReservation(reservation, fields) {
+  if (!reservation?.id) {
+    throw new Error("Reservation ID is required.");
+  }
+
+  if (reservation._version == null) {
+    throw new Error("Reservation _version is required.");
+  }
+
+  const mutation = /* GraphQL */ `
+    mutation UpdatePayoutReservation($input: UpdatePayoutReservationInput!) {
+      updatePayoutReservation(input: $input) {
+        id
+
+        payoutID
+        walletID
+        courierID
+
+        totalWalletDebit
+        payoutAmount
+        payoutFee
+
+        reference
+        transactionID
+
+        status
+        failureReason
+
+        reservedAt
+        reversedAt
+
+        _version
+      }
+    }
+  `;
+
+  const data = await graphqlRequest(
+    mutation,
+    {
+      input: {
+        id: reservation.id,
+        _version: reservation._version,
+        ...fields,
+      },
+    },
+    "UpdatePayoutReservation",
+  );
+
+  const updated = data?.updatePayoutReservation;
+
+  if (!updated) {
+    throw new Error("Payout reservation update was not confirmed.");
+  }
+
+  return updated;
+}
+
+/* ============================================================
+   UPDATE TRANSACTION
+============================================================ */
+
+async function updateTransaction(transaction, fields) {
+  if (!transaction?.id) {
+    throw new Error("Transaction ID is required.");
+  }
+
+  if (transaction._version == null) {
+    throw new Error("Transaction _version is required.");
+  }
+
+  const mutation = /* GraphQL */ `
+    mutation UpdateTransaction($input: UpdateTransactionInput!) {
+      updateTransaction(input: $input) {
+        id
+
+        walletID
+        payoutID
+
+        type
+        amount
+
+        description
+        reference
+        status
+
+        _version
+      }
+    }
+  `;
+
+  const data = await graphqlRequest(
+    mutation,
+    {
+      input: {
+        id: transaction.id,
+        _version: transaction._version,
+        ...fields,
+      },
+    },
+    "UpdateTransaction",
+  );
+
+  const updated = data?.updateTransaction;
+
+  if (!updated) {
+    throw new Error("Transaction update was not confirmed.");
+  }
+
+  return updated;
 }
 
 /* ============================================================
    UPDATE PAYOUT
 ============================================================ */
 
-async function updatePayout({ payout, fields }) {
+async function updatePayout(payout, fields) {
+  if (!payout?.id) {
+    throw new Error("Payout ID is required.");
+  }
+
+  if (payout._version == null) {
+    throw new Error("Payout _version is required.");
+  }
+
   const mutation = /* GraphQL */ `
     mutation UpdatePayout($input: UpdatePayoutInput!) {
       updatePayout(input: $input) {
@@ -464,11 +756,10 @@ async function updatePayout({ payout, fields }) {
         walletID
 
         amount
+        payoutFee
+        totalWalletDebit
+
         status
-
-        bankName
-        accountNumber
-
         reference
 
         transferCode
@@ -476,149 +767,64 @@ async function updatePayout({ payout, fields }) {
 
         failureReason
 
-        payoutMethod
-        payoutSource
-
         processedAt
         paidAt
         failedAt
-
-        createdAt
-        updatedAt
+        walletRestoredAt
 
         _version
-        _lastChangedAt
-        _deleted
       }
     }
   `;
 
-  const input = {
-    id: payout.id,
-
-    ...fields,
-  };
-
-  /*
-   * Amplify optimistic concurrency.
-   */
-  if (payout._version !== undefined && payout._version !== null) {
-    input._version = payout._version;
-  }
-
   const data = await graphqlRequest(
     mutation,
     {
-      input,
+      input: {
+        id: payout.id,
+        _version: payout._version,
+        ...fields,
+      },
     },
     "UpdatePayout",
   );
 
-  const updatedPayout = data?.updatePayout;
+  const updated = data?.updatePayout;
 
-  if (!updatedPayout) {
-    throw new Error(`Payout ${payout.id} was not returned after update.`);
+  if (!updated) {
+    throw new Error("Payout update was not confirmed.");
   }
 
-  return updatedPayout;
+  return updated;
 }
 
 /* ============================================================
-   UPDATE TRANSACTION
-============================================================ */
-
-async function updateTransaction({ transaction, fields }) {
-  const mutation = /* GraphQL */ `
-    mutation UpdateTransaction($input: UpdateTransactionInput!) {
-      updateTransaction(input: $input) {
-        id
-
-        walletID
-
-        type
-        amount
-
-        description
-
-        orderID
-        paymentID
-
-        reference
-
-        status
-
-        createdAt
-        updatedAt
-
-        _version
-        _lastChangedAt
-        _deleted
-      }
-    }
-  `;
-
-  const input = {
-    id: transaction.id,
-
-    ...fields,
-  };
-
-  /*
-   * Amplify optimistic concurrency.
-   */
-  if (transaction._version !== undefined && transaction._version !== null) {
-    input._version = transaction._version;
-  }
-
-  const data = await graphqlRequest(
-    mutation,
-    {
-      input,
-    },
-    "UpdateTransaction",
-  );
-
-  const updatedTransaction = data?.updateTransaction;
-
-  if (!updatedTransaction) {
-    throw new Error(
-      `Transaction ${transaction.id} was not returned after update.`,
-    );
-  }
-
-  return updatedTransaction;
-}
-
-/* ============================================================
-   VERIFY PAYSTACK TRANSFER
+   VERIFY EXISTING PAYSTACK TRANSFER
 ============================================================ */
 
 /**
- * Verifies an EXISTING Paystack transfer.
+ * This endpoint verifies an existing transfer by reference.
  *
- * This function NEVER creates a transfer.
+ * It does not initiate a transfer.
  */
+
 async function verifyPaystackTransfer({ reference, secretKey }) {
   if (!reference) {
     throw new Error("Paystack transfer reference is required.");
   }
 
-  if (!secretKey) {
-    throw new Error("Paystack secret key is required.");
-  }
-
   const url =
-    `https://api.paystack.co/transfer/verify/` +
-    `${encodeURIComponent(reference)}`;
+    "https://api.paystack.co/transfer/verify/" + encodeURIComponent(reference);
 
   const response = await fetch(url, {
     method: "GET",
 
     headers: {
       Authorization: `Bearer ${secretKey}`,
-
-      "Content-Type": "application/json",
+      Accept: "application/json",
     },
+
+    signal: AbortSignal.timeout(20000),
   });
 
   const responseText = await response.text();
@@ -627,20 +833,10 @@ async function verifyPaystackTransfer({ reference, secretKey }) {
 
   try {
     result = JSON.parse(responseText);
-  } catch (error) {
-    throw new Error(
-      `Paystack returned invalid JSON. HTTP ${response.status}: ${responseText}`,
-    );
+  } catch {
+    throw new Error(`Paystack returned invalid JSON. HTTP ${response.status}.`);
   }
 
-  /*
-   * IMPORTANT:
-   *
-   * A Paystack API/HTTP error is NOT automatically treated
-   * as a failed transfer.
-   *
-   * We leave the payout PROCESSING and retry later.
-   */
   if (!response.ok) {
     throw new Error(
       `Paystack verification HTTP ${response.status}: ${JSON.stringify(result)}`,
@@ -649,12 +845,12 @@ async function verifyPaystackTransfer({ reference, secretKey }) {
 
   if (result?.status !== true) {
     throw new Error(
-      result?.message || `Paystack could not verify transfer ${reference}.`,
+      result?.message || "Paystack could not verify this transfer.",
     );
   }
 
   if (!result.data) {
-    throw new Error(`Paystack returned no transfer data for ${reference}.`);
+    throw new Error("Paystack returned no transfer data.");
   }
 
   return result.data;
@@ -664,104 +860,66 @@ async function verifyPaystackTransfer({ reference, secretKey }) {
    VALIDATE PAYSTACK TRANSFER
 ============================================================ */
 
-/**
- * Makes sure the transfer returned by Paystack is actually
- * the transfer belonging to this Atua Payout.
- *
- * IMPORTANT ACCOUNTING DISTINCTION:
- *
- * Payout.amount
- *     =
- *     amount sent to Paystack
- *
- * Transaction.amount
- *     =
- *     amount removed from wallet
- *
- * Therefore Payout.amount is used when validating Paystack's
- * transfer amount.
- */
-function validateTransfer({ payout, transfer }) {
+function validatePaystackTransfer({ payout, transfer }) {
   if (!transfer) {
-    throw new Error(`Paystack returned no transfer for ${payout.reference}.`);
+    throw new Error("Paystack transfer information is missing.");
   }
 
-  /*
-   * Reference must match.
-   */
   if (transfer.reference !== payout.reference) {
     throw new Error(
-      `Paystack reference mismatch for payout ${payout.reference}.`,
+      "Paystack transfer reference does not match payout reference.",
     );
   }
 
-  /*
-   * Validate payout amount.
-   */
-  const payoutAmount = Number(payout.amount);
+  const expectedKobo = Math.round(Number(payout.amount) * 100);
 
-  if (!Number.isFinite(payoutAmount) || payoutAmount <= 0) {
+  const receivedKobo = Number(transfer.amount);
+
+  if (!Number.isSafeInteger(expectedKobo) || expectedKobo <= 0) {
+    throw new Error("Invalid payout amount.");
+  }
+
+  if (!Number.isSafeInteger(receivedKobo) || receivedKobo <= 0) {
+    throw new Error("Invalid Paystack transfer amount.");
+  }
+
+  if (receivedKobo !== expectedKobo) {
     throw new Error(
-      `Invalid payout amount for ${payout.reference}: ${payout.amount}`,
+      `Paystack amount mismatch. Expected ${expectedKobo} kobo, received ${receivedKobo} kobo.`,
     );
   }
 
-  /*
-   * Paystack returns transfer amounts in kobo.
-   */
-  const transferAmountNaira = Number(transfer.amount) / 100;
+  if (String(transfer.currency || "").toUpperCase() !== "NGN") {
+    throw new Error(`Unexpected Paystack currency: ${transfer.currency}`);
+  }
 
-  if (!Number.isFinite(transferAmountNaira)) {
+  if (
+    payout.transferID &&
+    transfer.id != null &&
+    String(payout.transferID) !== String(transfer.id)
+  ) {
     throw new Error(
-      `Invalid Paystack transfer amount for ${payout.reference}: ${transfer.amount}`,
+      "Paystack transfer ID does not match the saved payout transferID.",
     );
   }
 
-  const expected = Number(payoutAmount.toFixed(2));
-
-  const received = Number(transferAmountNaira.toFixed(2));
-
-  if (expected !== received) {
+  if (
+    payout.transferCode &&
+    transfer.transfer_code &&
+    payout.transferCode !== transfer.transfer_code
+  ) {
     throw new Error(
-      `Paystack amount mismatch for ${payout.reference}. Expected ${expected}, received ${received}.`,
+      "Paystack transfer code does not match the saved payout transferCode.",
     );
   }
 
-  /*
-   * Atua payout transfers are NGN.
-   */
-  if (transfer.currency && String(transfer.currency).toUpperCase() !== "NGN") {
-    throw new Error(
-      `Unexpected Paystack currency for ${payout.reference}: ${transfer.currency}`,
-    );
-  }
+  return true;
 }
 
 /* ============================================================
-   REVERSE PAYOUT
+   REQUEST PAYOUT REVERSAL
 ============================================================ */
 
-/**
- * Sends the failed/reversed payout to the dedicated
- * reversePayout Lambda.
- *
- * IMPORTANT:
- *
- * reconcilePayouts does NOT directly modify the wallet.
- *
- * reversePayout owns wallet restoration.
- *
- * reversePayout is also responsible for making sure the
- * Transaction is marked REVERSED only after the wallet
- * restoration succeeds.
- *
- * Expected final result:
- *
- *     Wallet restored
- *          ↓
- *     Transaction -> REVERSED
- *     Payout      -> FAILED
- */
 async function requestPayoutReversal({
   payout,
   transaction,
@@ -782,7 +940,6 @@ async function requestPayoutReversal({
         transactionStatus
 
         restoredAmount
-
         alreadyReversed
 
         message
@@ -799,12 +956,6 @@ async function requestPayoutReversal({
 
     reference: payout.reference,
 
-    /*
-     * This is supplementary.
-     *
-     * reversePayout re-reads Transaction.amount and uses
-     * that as the authoritative restoration amount.
-     */
     restorationAmount: Number(transaction.amount),
 
     eventType,
@@ -815,107 +966,210 @@ async function requestPayoutReversal({
       transfer?.id != null ? String(transfer.id) : payout.transferID || null,
 
     failureReason:
-      failureReason ||
-      "Paystack transfer failed or was reversed during reconciliation.",
+      failureReason || `Paystack ${eventType} during payout reconciliation.`,
   };
+
+  if (!input.transferCode && !input.transferID) {
+    throw new Error(
+      "No Paystack transfer identifier is available for reversal.",
+    );
+  }
 
   console.log("REQUESTING PAYOUT REVERSAL:", {
     payoutID: input.payoutID,
-
     transactionID: input.transactionID,
-
     walletID: input.walletID,
-
     reference: input.reference,
-
     eventType: input.eventType,
-
-    restorationAmount: input.restorationAmount,
-
-    transferCode: input.transferCode,
-
-    transferID: input.transferID,
   });
 
-  const data = await graphqlRequest(
-    mutation,
-    {
-      input,
-    },
-    "ReversePayout",
-  );
+  const data = await graphqlRequest(mutation, { input }, "ReversePayout");
 
   const result = data?.reversePayout;
 
   if (!result) {
-    throw new Error(
-      `reversePayout returned no result for ${payout.reference}.`,
-    );
+    throw new Error("reversePayout returned no result.");
   }
 
   if (result.success !== true) {
-    throw new Error(
-      result.message || `reversePayout failed for ${payout.reference}.`,
-    );
+    throw new Error(result.message || "Payout reversal was not successful.");
   }
 
-  /*
-   * Confirm that reversePayout actually reached the expected
-   * final states.
-   *
-   * IMPORTANT:
-   *
-   * Payout and Transaction have different meanings here.
-   *
-   * Payout:
-   *
-   *     FAILED
-   *
-   * means the Paystack payout itself failed/reversed.
-   *
-   * Transaction:
-   *
-   *     REVERSED
-   *
-   * means the original wallet debit was successfully
-   * reversed/restored.
-   *
-   * Therefore we expect:
-   *
-   *     Payout      -> FAILED
-   *     Transaction -> REVERSED
-   */
   if (result.payoutStatus !== "FAILED") {
     throw new Error(
-      `reversePayout returned payout status ${result.payoutStatus} for ${payout.reference}.`,
+      `Unexpected reversal payout status: ${result.payoutStatus}`,
     );
   }
 
   if (result.transactionStatus !== "REVERSED") {
     throw new Error(
-      `reversePayout returned transaction status ${result.transactionStatus} for ${payout.reference}. Expected REVERSED after successful wallet restoration.`,
+      `Unexpected reversal transaction status: ${result.transactionStatus}`,
     );
   }
 
-  console.log("PAYOUT REVERSAL RESULT:", {
-    payoutID: result.payoutID,
+  if (
+    result.payoutID !== payout.id ||
+    result.transactionID !== transaction.id ||
+    result.walletID !== payout.walletID
+  ) {
+    throw new Error(
+      "Reversal returned mismatched payout, transaction or wallet IDs.",
+    );
+  }
 
-    transactionID: result.transactionID,
-
-    walletID: result.walletID,
-
-    payoutStatus: result.payoutStatus,
-
-    transactionStatus: result.transactionStatus,
-
-    restoredAmount: result.restoredAmount,
-
-    alreadyReversed: result.alreadyReversed,
-
-    message: result.message,
-  });
+  console.log("PAYOUT REVERSAL CONFIRMED:", result);
 
   return result;
+}
+
+/* ============================================================
+   RECOVER PAYOUT RESERVATION
+============================================================ */
+
+/**
+ * Reservation recovery rules:
+ *
+ * PENDING:
+ *   - If deterministic debit transaction exists and matches,
+ *     the debit is evidenced by the reservation workflow.
+ *   - If it does not exist, do not assume whether the wallet
+ *     was debited. Require manual reconciliation.
+ *
+ * WALLET_DEBITED:
+ *   - Wallet debit was confirmed by reservePayoutWallet.
+ *   - Repair/create the deterministic debit transaction.
+ *   - Never deduct the wallet again.
+ *
+ * RESERVED:
+ *   - Reservation is ready for Paystack reconciliation.
+ *
+ * COMPLETED:
+ *   - Reservation was finalized after successful payout.
+ *
+ * REVERSAL_STARTED:
+ *   - Do not retry wallet restoration.
+ *   - reversePayout or manual reconciliation must resolve it.
+ *
+ * FAILED / REVERSED:
+ *   - Do not restart the payout automatically.
+ */
+
+async function recoverReservation({ payout, reservation }) {
+  const expectedTransactionID = `${payout.id}-PAYOUT-DEBIT`;
+
+  let transaction = await getPayoutDebitTransaction(expectedTransactionID);
+
+  if (reservation.status === "PENDING") {
+    if (!transaction) {
+      return {
+        safe: false,
+        action: "MANUAL_RECONCILIATION_REQUIRED",
+        reason:
+          "Reservation is PENDING and the deterministic debit transaction does not exist. The wallet debit outcome is uncertain. No wallet changes were made.",
+      };
+    }
+
+    validateDebitTransaction({
+      payout,
+      reservation,
+      transaction,
+    });
+
+    if (
+      transaction.status !== "PENDING" &&
+      transaction.status !== "COMPLETED"
+    ) {
+      return {
+        safe: false,
+        action: "MANUAL_RECONCILIATION_REQUIRED",
+        reason: `Unexpected debit transaction status: ${transaction.status}.`,
+      };
+    }
+
+    reservation = await updateReservation(reservation, {
+      status: "WALLET_DEBITED",
+      transactionID: transaction.id,
+      failureReason: null,
+    });
+
+    console.log("RECOVERED PENDING RESERVATION TO WALLET_DEBITED:", payout.id);
+  }
+
+  if (reservation.status === "WALLET_DEBITED") {
+    if (!transaction) {
+      transaction = await createMissingDebitTransaction({
+        payout,
+        reservation,
+      });
+    } else {
+      validateDebitTransaction({
+        payout,
+        reservation,
+        transaction,
+      });
+    }
+
+    if (
+      transaction.status !== "PENDING" &&
+      transaction.status !== "COMPLETED"
+    ) {
+      return {
+        safe: false,
+        action: "MANUAL_RECONCILIATION_REQUIRED",
+        reason: `Cannot resume reservation with transaction status ${transaction.status}.`,
+      };
+    }
+
+    reservation = await updateReservation(reservation, {
+      transactionID: transaction.id,
+      status: "RESERVED",
+      failureReason: null,
+      reservedAt: reservation.reservedAt || new Date().toISOString(),
+    });
+
+    console.log("RECOVERED WALLET_DEBITED RESERVATION TO RESERVED:", payout.id);
+  }
+
+  if (reservation.status === "REVERSAL_STARTED") {
+    return {
+      safe: false,
+      action: "MANUAL_RECONCILIATION_REQUIRED",
+      reason:
+        "Reservation is REVERSAL_STARTED. The wallet restoration may have occurred. Do not credit the wallet again automatically.",
+    };
+  }
+
+  if (reservation.status === "FAILED" || reservation.status === "REVERSED") {
+    return {
+      safe: false,
+      action: "MANUAL_RECONCILIATION_REQUIRED",
+      reason: `Reservation is already ${reservation.status}. It cannot be restarted automatically.`,
+    };
+  }
+
+  if (reservation.status !== "RESERVED" && reservation.status !== "COMPLETED") {
+    return {
+      safe: false,
+      action: "MANUAL_RECONCILIATION_REQUIRED",
+      reason: `Unsupported reservation status: ${reservation.status}.`,
+    };
+  }
+
+  // Re-read the transaction after any reservation recovery.
+
+  transaction = await getPayoutDebitTransaction(expectedTransactionID);
+
+  validateDebitTransaction({
+    payout,
+    reservation,
+    transaction,
+  });
+
+  return {
+    safe: true,
+    reservation,
+    transaction,
+  };
 }
 
 /* ============================================================
@@ -927,309 +1181,266 @@ async function reconcileOnePayout({ payout, secretKey }) {
 
   console.log("RECONCILING PAYOUT:", {
     payoutID: payout.id,
-
     courierID: payout.courierID,
-
     walletID: payout.walletID,
-
     amount: payout.amount,
-
     reference: payout.reference,
-
-    currentStatus: payout.status,
+    status: payout.status,
   });
 
-  /* ==========================================================
-     BASIC VALIDATION
-  ========================================================== */
+  if (payout.status !== "PROCESSING") {
+    return {
+      payoutID: payout.id,
+      status: payout.status,
+      action: "NO_CHANGE",
+      reason: "Payout is no longer PROCESSING.",
+    };
+  }
 
   if (!payout.reference) {
-    throw new Error(`Payout ${payout.id} has no reference.`);
+    throw new Error("Payout reference is missing.");
   }
 
   if (!payout.walletID) {
-    throw new Error(`Payout ${payout.id} has no walletID.`);
+    throw new Error("Payout walletID is missing.");
   }
 
-  /* ==========================================================
-     GET ORIGINAL PAYOUT TRANSACTION
-  ========================================================== */
+  /* ----------------------------------------------------------
+     1. GET RESERVATION
+  ---------------------------------------------------------- */
 
-  const transaction = await getPayoutTransaction(payout);
+  const reservation = await getReservation(payout.id);
 
-  if (!transaction) {
+  if (!reservation) {
     throw new Error(
-      `No DEBIT transaction found for payout ${payout.reference}.`,
+      "Payout reservation is missing. Manual reconciliation is required.",
     );
   }
 
-  /* ==========================================================
-     VALIDATE TRANSACTION IDENTITY
-  ========================================================== */
+  /* ----------------------------------------------------------
+     2. VALIDATE PAYOUT AND RESERVATION FINANCIALS
+  ---------------------------------------------------------- */
 
-  if (transaction.walletID !== payout.walletID) {
-    throw new Error(`Wallet mismatch for payout ${payout.reference}.`);
+  validatePayoutFinancials({
+    payout,
+    reservation,
+  });
+
+  /* ----------------------------------------------------------
+     3. RECOVER SAFE RESERVATION STATES
+  ---------------------------------------------------------- */
+
+  const recovery = await recoverReservation({
+    payout,
+    reservation,
+  });
+
+  if (!recovery.safe) {
+    return {
+      payoutID: payout.id,
+      reference: payout.reference,
+      status: "PROCESSING",
+      action: recovery.action,
+      reason: recovery.reason,
+    };
   }
 
-  if (transaction.reference !== payout.reference) {
-    throw new Error(
-      `Reference mismatch between payout and transaction for ${payout.reference}.`,
-    );
-  }
+  const currentReservation = recovery.reservation;
 
-  if (transaction.type !== "DEBIT") {
-    throw new Error(
-      `Transaction ${transaction.id} is not a DEBIT transaction.`,
-    );
-  }
+  const transaction = recovery.transaction;
 
-  const transactionAmount = Number(transaction.amount);
-
-  if (!Number.isFinite(transactionAmount) || transactionAmount <= 0) {
-    throw new Error(
-      `Invalid payout transaction amount for ${payout.reference}: ${transaction.amount}`,
-    );
-  }
-
-  /* ==========================================================
-     VERIFY EXISTING PAYSTACK TRANSFER
-  ========================================================== */
+  /* ----------------------------------------------------------
+     4. VERIFY EXISTING PAYSTACK TRANSFER
+  ---------------------------------------------------------- */
 
   const transfer = await verifyPaystackTransfer({
     reference: payout.reference,
-
     secretKey,
   });
 
-  /* ==========================================================
-     VALIDATE PAYSTACK TRANSFER
-  ========================================================== */
+  /* ----------------------------------------------------------
+     5. VALIDATE PAYSTACK TRANSFER
+  ---------------------------------------------------------- */
 
-  validateTransfer({
+  validatePaystackTransfer({
     payout,
-
     transfer,
   });
 
-  /* ==========================================================
-     GET TRANSFER STATUS
-  ========================================================== */
+  const transferStatus = normalizeStatus(transfer.status);
 
-  const transferStatus = String(transfer.status || "").toLowerCase();
-
-  console.log("PAYSTACK TRANSFER STATUS:", {
+  console.log("PAYSTACK TRANSFER RESULT:", {
+    payoutID: payout.id,
     reference: payout.reference,
-
+    transferStatus,
     transferID: transfer.id,
-
     transferCode: transfer.transfer_code,
-
-    status: transferStatus,
-
     amount: transfer.amount,
-
     currency: transfer.currency,
   });
 
   /* ==========================================================
-     TRANSFER SUCCESS
+     SUCCESSFUL TRANSFER
   ========================================================== */
 
   if (transferStatus === "success") {
-    console.log("PAYSTACK TRANSFER SUCCESS:", payout.reference);
+    console.log("PAYSTACK CONFIRMED SUCCESS:", payout.reference);
 
-    /* --------------------------------------------------------
-       CRITICAL TRANSACTION STATE CHECK
-    -------------------------------------------------------- */
-
-    /**
-     * If Paystack says SUCCESS:
-     *
-     *     PENDING    -> COMPLETED
-     *
-     * is valid.
-     *
-     *     COMPLETED  -> COMPLETED
-     *
-     * is also valid.
-     *
-     * BUT:
-     *
-     *     FAILED -> COMPLETED
-     *
-     * is NEVER allowed automatically.
-     */
-
-    if (transaction.status === "FAILED") {
+    if (
+      currentReservation.status !== "RESERVED" &&
+      currentReservation.status !== "COMPLETED"
+    ) {
       throw new Error(
-        `Paystack reports SUCCESS for payout ${payout.reference}, but Transaction ${transaction.id} is already FAILED. Automatic reconciliation is unsafe; manual reconciliation is required.`,
+        `Cannot finalize successful transfer with reservation status ${currentReservation.status}.`,
       );
     }
 
+    if (transaction.status === "FAILED" || transaction.status === "REVERSED") {
+      throw new Error(
+        `Paystack reports SUCCESS but transaction is ${transaction.status}. Manual reconciliation is required.`,
+      );
+    }
+
+    if (
+      transaction.status !== "PENDING" &&
+      transaction.status !== "COMPLETED"
+    ) {
+      throw new Error(`Unexpected transaction status: ${transaction.status}.`);
+    }
+
     /* --------------------------------------------------------
-       COMPLETE PENDING TRANSACTION
+       A. COMPLETE TRANSACTION
     -------------------------------------------------------- */
 
     let updatedTransaction = transaction;
 
     if (transaction.status === "PENDING") {
-      updatedTransaction = await updateTransaction({
-        transaction,
-
-        fields: {
-          status: "COMPLETED",
-        },
+      updatedTransaction = await updateTransaction(transaction, {
+        status: "COMPLETED",
       });
     }
 
-    /* --------------------------------------------------------
-       VERIFY TRANSACTION COMPLETED
-    -------------------------------------------------------- */
-
     if (updatedTransaction.status !== "COMPLETED") {
-      throw new Error(
-        `Transaction ${updatedTransaction.id} could not be confirmed COMPLETED for payout ${payout.reference}.`,
-      );
+      throw new Error("Debit transaction could not be confirmed COMPLETED.");
     }
 
     /* --------------------------------------------------------
-       MARK PAYOUT PAID
+       B. COMPLETE RESERVATION
     -------------------------------------------------------- */
 
-    const updatedPayout = await updatePayout({
-      payout,
+    let updatedReservation = currentReservation;
 
-      fields: {
-        status: "PAID",
-
-        transferCode: transfer.transfer_code || payout.transferCode || null,
-
-        transferID:
-          transfer.id != null ? String(transfer.id) : payout.transferID || null,
-
-        paidAt: payout.paidAt || new Date().toISOString(),
-
+    if (currentReservation.status === "RESERVED") {
+      updatedReservation = await updateReservation(currentReservation, {
+        status: "COMPLETED",
+        transactionID: transaction.id,
         failureReason: null,
-      },
+      });
+    }
+
+    if (updatedReservation.status !== "COMPLETED") {
+      throw new Error("Payout reservation could not be confirmed COMPLETED.");
+    }
+
+    /* --------------------------------------------------------
+       C. MARK PAYOUT PAID
+    -------------------------------------------------------- */
+
+    const updatedPayout = await updatePayout(payout, {
+      status: "PAID",
+
+      transferCode: transfer.transfer_code || payout.transferCode || null,
+
+      transferID:
+        transfer.id != null ? String(transfer.id) : payout.transferID || null,
+
+      paidAt: payout.paidAt || new Date().toISOString(),
+
+      failureReason: null,
     });
 
-    /* --------------------------------------------------------
-       FINAL PAYOUT VALIDATION
-    -------------------------------------------------------- */
-
     if (updatedPayout.status !== "PAID") {
-      throw new Error(`Payout ${payout.reference} was not confirmed PAID.`);
+      throw new Error("Payout was not confirmed PAID.");
     }
 
-    console.log("PAYOUT RECONCILIATION SUCCESS:", {
-      payoutID: updatedPayout.id,
-
-      reference: updatedPayout.reference,
-
+    console.log("PAYOUT SUCCESSFULLY RECONCILED:", {
+      payoutID: payout.id,
+      transactionID: transaction.id,
+      reservationID: updatedReservation.id,
       payoutStatus: updatedPayout.status,
-
-      transactionID: updatedTransaction.id,
-
       transactionStatus: updatedTransaction.status,
+      reservationStatus: updatedReservation.status,
     });
 
     return {
       payoutID: payout.id,
-
       reference: payout.reference,
 
       status: "PAID",
 
       transactionStatus: "COMPLETED",
+      reservationStatus: "COMPLETED",
 
       action: "FINALIZED",
     };
   }
 
   /* ==========================================================
-     TERMINAL TRANSFER FAILURE
+     CONFIRMED TERMINAL FAILURE
   ========================================================== */
 
-  /*
-   * Paystack has several conclusive failure states.
+  /**
+   * Only these two statuses are automatically reversed:
    *
-   * These states mean the transfer will not complete successfully:
+   * failed
+   * reversed
    *
-   *     failed
-   *     reversed
-   *     abandoned
-   *     blocked
-   *     rejected
-   *
-   * Atua must restore the wallet for all of these states.
-   *
-   * Once wallet restoration succeeds:
-   *
-   *     Transaction -> REVERSED
-   *     Payout      -> FAILED
-   *
-   * REVERSED is used instead of FAILED for the Transaction
-   * because the original wallet debit has been successfully
-   * undone.
-   *
-   * We intentionally route:
-   *
-   *     reversed -> transfer.reversed
-   *     everything else -> transfer.failed
-   *
-   * because reversePayout accepts only the two event types above.
+   * Other statuses are not automatically treated as terminal.
    */
 
-  const terminalFailureStatuses = new Set([
-    "failed",
-    "reversed",
-    "abandoned",
-    "blocked",
-    "rejected",
-  ]);
-
-  if (terminalFailureStatuses.has(transferStatus)) {
-    const defaultFailureReasons = {
-      failed: "Paystack transfer failed.",
-
-      reversed: "Paystack transfer was reversed.",
-
-      abandoned: "Paystack transfer was abandoned before completion.",
-
-      blocked: "Paystack transfer was blocked by Paystack.",
-
-      rejected: "Paystack transfer was rejected by Paystack.",
-    };
-
-    const failureReason =
-      transfer.reason ||
-      transfer.gateway_response ||
-      (transfer.failures ? JSON.stringify(transfer.failures) : null) ||
-      defaultFailureReasons[transferStatus] ||
-      `Paystack transfer ended with terminal status: ${transferStatus}.`;
+  if (transferStatus === "failed" || transferStatus === "reversed") {
+    console.log("PAYSTACK CONFIRMED TERMINAL FAILURE:", {
+      payoutID: payout.id,
+      reference: payout.reference,
+      transferStatus,
+    });
 
     const eventType =
       transferStatus === "reversed" ? "transfer.reversed" : "transfer.failed";
 
-    console.log("PAYSTACK TRANSFER TERMINAL FAILURE:", {
-      reference: payout.reference,
+    const failureReason =
+      transfer.reason ||
+      transfer.gateway_response ||
+      `Paystack transfer ${transferStatus}.`;
 
-      transferStatus,
+    /* --------------------------------------------------------
+       A. CHECK WHETHER REVERSAL CAN SAFELY PROCEED
+    -------------------------------------------------------- */
 
-      eventType,
+    if (payout.walletRestoredAt) {
+      // reversePayout can repair final record states without
+      // crediting the wallet again when this marker exists.
+      console.log(
+        "WALLET RESTORATION MARKER EXISTS. REQUESTING STATUS REPAIR.",
+      );
+    } else if (
+      currentReservation.status !== "RESERVED" ||
+      transaction.status !== "PENDING"
+    ) {
+      throw new Error(
+        "Automatic reversal is unsafe. The reservation or transaction is not in the expected state. Manual reconciliation is required.",
+      );
+    }
 
-      failureReason,
-    });
+    /* --------------------------------------------------------
+       B. REQUEST DEDICATED REVERSAL
+    -------------------------------------------------------- */
 
     const reversal = await requestPayoutReversal({
       payout,
-
       transaction,
-
       transfer,
-
       eventType,
-
       failureReason,
     });
 
@@ -1237,12 +1448,10 @@ async function reconcileOnePayout({ payout, secretKey }) {
       payoutID: payout.id,
       reference: payout.reference,
 
-      // The Paystack payout itself failed.
       status: "FAILED",
 
       transferStatus,
 
-      // The wallet debit was successfully restored.
       transactionStatus: reversal.transactionStatus,
 
       action: reversal.alreadyReversed ? "ALREADY_REVERSED" : "REVERSED",
@@ -1250,32 +1459,20 @@ async function reconcileOnePayout({ payout, secretKey }) {
   }
 
   /* ==========================================================
-     PENDING / PROCESSING / UNKNOWN
+     PENDING / PROCESSING / UNKNOWN TRANSFER STATUS
   ========================================================== */
 
-  /**
-   * Anything that is not a confirmed final state is left
-   * completely untouched.
-   *
-   * We DO NOT:
-   *
-   *     - restore wallet
-   *     - mark payout FAILED
-   *     - mark payout PAID
-   *     - create another transfer
-   *
-   * It will be checked during the next reconciliation run.
-   */
-
-  console.log("PAYSTACK TRANSFER NOT FINAL:", {
+  console.log("PAYSTACK TRANSFER IS NOT FINAL:", {
+    payoutID: payout.id,
     reference: payout.reference,
-
     transferStatus,
   });
 
+  // Do not change the wallet, transaction, reservation
+  // or payout status for an unconfirmed transfer result.
+
   return {
     payoutID: payout.id,
-
     reference: payout.reference,
 
     status: "PROCESSING",
@@ -1283,87 +1480,66 @@ async function reconcileOnePayout({ payout, secretKey }) {
     transferStatus,
 
     action: "NO_CHANGE",
+
+    reason: "Paystack has not returned a confirmed terminal result.",
   };
 }
 
 /* ============================================================
-   MAIN HANDLER
+   MAIN LAMBDA HANDLER
 ============================================================ */
 
 exports.handler = async (event) => {
   console.log("============================================================");
 
-  console.log("RECONCILE PAYOUTS STARTED");
+  console.log("ATUA RECONCILE PAYOUTS STARTED");
 
-  console.log("Invocation event:", JSON.stringify(event || {}, null, 2));
+  console.log("INVOCATION EVENT:", JSON.stringify(event || {}));
 
   try {
-    /* ========================================================
-         STEP 1
-         GET PAYSTACK SECRET
-      ======================================================== */
+    /* --------------------------------------------------------
+       1. GET PAYSTACK SECRET
+    -------------------------------------------------------- */
 
     const secretKey = await getPaystackSecret();
 
-    /* ========================================================
-         STEP 2
-         GET PROCESSING PAYOUTS
-      ======================================================== */
+    /* --------------------------------------------------------
+       2. GET PROCESSING PAYOUTS
+    -------------------------------------------------------- */
 
     const payouts = await getProcessingPayouts();
 
     console.log("PROCESSING PAYOUT COUNT:", payouts.length);
 
-    /* ========================================================
-         NOTHING TO PROCESS
-      ======================================================== */
-
     if (payouts.length === 0) {
-      console.log("NO PROCESSING PAYOUTS FOUND.");
-
       return {
         success: true,
 
         processed: 0,
-
         finalized: 0,
-
         failed: 0,
-
         unchanged: 0,
-
         errors: 0,
 
         message: "No PROCESSING payouts require reconciliation.",
       };
     }
 
-    /* ========================================================
-         PROCESS PAYOUTS
-      ======================================================== */
+    /* --------------------------------------------------------
+       3. PROCESS PAYOUTS SEQUENTIALLY
+    -------------------------------------------------------- */
 
     const results = [];
 
     let finalized = 0;
-
     let failed = 0;
-
     let unchanged = 0;
-
     let errors = 0;
-
-    /*
-     * Process sequentially.
-     *
-     * This avoids sending a large number of simultaneous
-     * GraphQL/Paystack requests.
-     */
 
     for (const payout of payouts) {
       try {
         const result = await reconcileOnePayout({
           payout,
-
           secretKey,
         });
 
@@ -1377,102 +1553,54 @@ exports.handler = async (event) => {
           unchanged++;
         }
       } catch (error) {
-        /*
-         * IMPORTANT:
-         *
-         * One payout failing must NOT stop reconciliation
-         * for every other payout.
-         */
-
         errors++;
 
         console.error("PAYOUT RECONCILIATION ERROR:", {
           payoutID: payout.id,
-
           reference: payout.reference,
-
-          error: error?.message || String(error),
-
+          error: errorText(error),
           stack: error?.stack,
         });
 
-        /*
-         * Leave the payout PROCESSING.
-         *
-         * This means another reconciliation run can safely
-         * inspect it again.
-         */
-
         results.push({
           payoutID: payout.id,
-
           reference: payout.reference,
 
           status: "PROCESSING",
 
           action: "ERROR",
 
-          error: error?.message || String(error),
+          error: errorText(error),
         });
       }
     }
 
-    /* ========================================================
-         FINAL SUMMARY
-      ======================================================== */
+    /* --------------------------------------------------------
+       4. FINAL SUMMARY
+    -------------------------------------------------------- */
 
-    console.log("============================================================");
-
-    console.log("RECONCILE PAYOUTS FINISHED");
-
-    console.log({
-      processed: payouts.length,
-
-      finalized,
-
-      failed,
-
-      unchanged,
-
-      errors,
-    });
-
-    /*
-     * The reconciliation scan itself succeeded.
-     *
-     * Individual payout errors are returned in results.
-     *
-     * Those payouts remain PROCESSING and can be checked
-     * again during the next reconciliation run.
-     */
-
-    return {
+    const summary = {
       success: true,
 
       processed: payouts.length,
 
       finalized,
-
       failed,
-
       unchanged,
-
       errors,
 
       results,
     };
-  } catch (error) {
-    /*
-     * Global failures should fail the Lambda invocation.
-     *
-     * Examples:
-     *
-     *     - SSM unavailable
-     *     - GraphQL unavailable
-     *     - configuration failure
-     *     - Paystack secret unavailable
-     */
 
+    console.log("============================================================");
+
+    console.log(
+      "ATUA RECONCILE PAYOUTS FINISHED:",
+      JSON.stringify(summary, null, 2),
+    );
+
+    return summary;
+  } catch (error) {
     console.error("RECONCILE PAYOUTS FATAL ERROR:", error);
 
     throw error;

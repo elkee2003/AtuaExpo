@@ -590,13 +590,26 @@ exports.handler = async (event) => {
      * VALIDATE WALLET BALANCES
      * -------------------------------------------------------------------------
      */
+
     const pendingBalance = normalizeMoney(wallet.pendingBalance ?? 0);
-
     const availableBalance = normalizeMoney(wallet.availableBalance ?? 0);
-
     const lifetimeEarnings = normalizeMoney(wallet.lifetimeEarnings ?? 0);
 
-    if (pendingBalance < 0 || availableBalance < 0 || lifetimeEarnings < 0) {
+    const cashLifetimeEarnings = normalizeMoney(
+      wallet.cashLifetimeEarnings ?? 0,
+    );
+
+    const electronicLifetimeEarnings = normalizeMoney(
+      wallet.electronicLifetimeEarnings ?? 0,
+    );
+
+    if (
+      pendingBalance < 0 ||
+      availableBalance < 0 ||
+      lifetimeEarnings < 0 ||
+      cashLifetimeEarnings < 0 ||
+      electronicLifetimeEarnings < 0
+    ) {
       throw new Error(`Wallet ${wallet.id} has a negative balance.`);
     }
 
@@ -608,21 +621,34 @@ exports.handler = async (event) => {
     }
 
     /*
-     * Calculate the new Wallet balances.
+     * -------------------------------------------------------------------------
+     * CALCULATE NEW WALLET BALANCES
+     * -------------------------------------------------------------------------
      *
-     * This preserves the accounting convention in the supplied Lambda:
-     * lifetimeEarnings increases as each milestone is released.
+     * MAXI milestone releases:
+     * - Reduce pendingBalance.
+     * - Increase availableBalance.
+     * - Increase electronicLifetimeEarnings.
+     * - Preserve cashLifetimeEarnings.
+     * - Recalculate lifetimeEarnings as cash + electronic.
      *
-     * outstandingDebt is deliberately not changed here.
+     * outstandingDebt is deliberately not changed.
      */
+
     const newPendingBalance = normalizeMoney(pendingBalance - releaseAmount);
 
     const newAvailableBalance = normalizeMoney(
       availableBalance + releaseAmount,
     );
 
+    const newCashLifetimeEarnings = cashLifetimeEarnings;
+
+    const newElectronicLifetimeEarnings = normalizeMoney(
+      electronicLifetimeEarnings + releaseAmount,
+    );
+
     const newLifetimeEarnings = normalizeMoney(
-      lifetimeEarnings + releaseAmount,
+      newCashLifetimeEarnings + newElectronicLifetimeEarnings,
     );
 
     /*
@@ -632,6 +658,8 @@ exports.handler = async (event) => {
       availableBalance,
       pendingBalance,
       lifetimeEarnings,
+      cashLifetimeEarnings,
+      electronicLifetimeEarnings,
     };
 
     let updatedWallet = null;
@@ -654,6 +682,8 @@ exports.handler = async (event) => {
           availableBalance: newAvailableBalance,
           pendingBalance: newPendingBalance,
           lifetimeEarnings: newLifetimeEarnings,
+          cashLifetimeEarnings: newCashLifetimeEarnings,
+          electronicLifetimeEarnings: newElectronicLifetimeEarnings,
         });
 
         walletUpdated = true;
@@ -688,18 +718,33 @@ exports.handler = async (event) => {
           latestWallet.lifetimeEarnings ?? 0,
         );
 
+        const latestCashLifetime = normalizeMoney(
+          latestWallet.cashLifetimeEarnings ?? 0,
+        );
+
+        const latestElectronicLifetime = normalizeMoney(
+          latestWallet.electronicLifetimeEarnings ?? 0,
+        );
+
         const walletHasExpectedValues =
           moneyEqual(latestAvailable, newAvailableBalance) &&
           moneyEqual(latestPending, newPendingBalance) &&
-          moneyEqual(latestLifetime, newLifetimeEarnings);
+          moneyEqual(latestLifetime, newLifetimeEarnings) &&
+          moneyEqual(latestCashLifetime, newCashLifetimeEarnings) &&
+          moneyEqual(latestElectronicLifetime, newElectronicLifetimeEarnings);
 
         const walletHasOriginalValues =
-          moneyEqual(
-            latestAvailable,
-            pendingSafe(originalWalletState.availableBalance),
-          ) &&
+          moneyEqual(latestAvailable, originalWalletState.availableBalance) &&
           moneyEqual(latestPending, originalWalletState.pendingBalance) &&
-          moneyEqual(latestLifetime, originalWalletState.lifetimeEarnings);
+          moneyEqual(latestLifetime, originalWalletState.lifetimeEarnings) &&
+          moneyEqual(
+            latestCashLifetime,
+            originalWalletState.cashLifetimeEarnings,
+          ) &&
+          moneyEqual(
+            latestElectronicLifetime,
+            originalWalletState.electronicLifetimeEarnings,
+          );
 
         if (walletHasExpectedValues) {
           /*
@@ -746,7 +791,7 @@ exports.handler = async (event) => {
         newReleasedAmount,
         pickupFundsReleasedAt: pickupTimestamp,
         fundsReleasedAt: deliveryTimestamp,
-        fundsReleaseType,
+        fundsReleaseType: releaseType,
       });
 
       /*
@@ -810,6 +855,9 @@ exports.handler = async (event) => {
             availableBalance: originalWalletState.availableBalance,
             pendingBalance: originalWalletState.pendingBalance,
             lifetimeEarnings: originalWalletState.lifetimeEarnings,
+            cashLifetimeEarnings: originalWalletState.cashLifetimeEarnings,
+            electronicLifetimeEarnings:
+              originalWalletState.electronicLifetimeEarnings,
           });
 
           console.log(`Wallet rollback completed for Order ${orderID}.`);
@@ -921,6 +969,8 @@ async function getWallet(walletID) {
         availableBalance
         pendingBalance
         lifetimeEarnings
+        cashLifetimeEarnings
+        electronicLifetimeEarnings
         _version
         _deleted
       }
@@ -962,6 +1012,8 @@ async function getCourierWallet(courierID) {
           availableBalance
           pendingBalance
           lifetimeEarnings
+          cashLifetimeEarnings
+          electronicLifetimeEarnings
           _version
           _deleted
         }
@@ -1156,6 +1208,8 @@ async function updateWallet({
   availableBalance,
   pendingBalance,
   lifetimeEarnings,
+  cashLifetimeEarnings,
+  electronicLifetimeEarnings,
 }) {
   const mutation = /* GraphQL */ `
     mutation UpdateWallet($input: UpdateWalletInput!) {
@@ -1166,6 +1220,8 @@ async function updateWallet({
         availableBalance
         pendingBalance
         lifetimeEarnings
+        cashLifetimeEarnings
+        electronicLifetimeEarnings
         _version
         _deleted
       }
@@ -1177,6 +1233,8 @@ async function updateWallet({
     availableBalance: normalizeMoney(availableBalance),
     pendingBalance: normalizeMoney(pendingBalance),
     lifetimeEarnings: normalizeMoney(lifetimeEarnings),
+    cashLifetimeEarnings: normalizeMoney(cashLifetimeEarnings),
+    electronicLifetimeEarnings: normalizeMoney(electronicLifetimeEarnings),
   };
 
   if (wallet._version !== undefined && wallet._version !== null) {
@@ -1214,6 +1272,8 @@ async function rollbackWallet({
   availableBalance,
   pendingBalance,
   lifetimeEarnings,
+  cashLifetimeEarnings,
+  electronicLifetimeEarnings,
 }) {
   const mutation = /* GraphQL */ `
     mutation RollbackWallet($input: UpdateWalletInput!) {
@@ -1224,6 +1284,8 @@ async function rollbackWallet({
         availableBalance
         pendingBalance
         lifetimeEarnings
+        cashLifetimeEarnings
+        electronicLifetimeEarnings
         _version
         _deleted
       }
@@ -1235,6 +1297,8 @@ async function rollbackWallet({
     availableBalance: normalizeMoney(availableBalance),
     pendingBalance: normalizeMoney(pendingBalance),
     lifetimeEarnings: normalizeMoney(lifetimeEarnings),
+    cashLifetimeEarnings: normalizeMoney(cashLifetimeEarnings),
+    electronicLifetimeEarnings: normalizeMoney(electronicLifetimeEarnings),
   };
 
   if (updatedWallet._version !== undefined && updatedWallet._version !== null) {

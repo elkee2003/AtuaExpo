@@ -317,10 +317,17 @@ async function getCourierById(courierID) {
         sub
         email
         walletID
+
         debtRestrictionActive
         debtDueAt
         debtBlockedAt
         debtBlockReason
+
+        isOnline
+        isApproved
+        isBlocked
+        statusKey
+
         _version
       }
     }
@@ -880,6 +887,10 @@ async function syncCourierDebtRestriction(courierID) {
     );
   }
 
+  // ----------------------------------------------------------
+  // LOAD ALL COURIER DEBTS
+  // ----------------------------------------------------------
+
   const query = /* GraphQL */ `
     query ListCourierDebts(
       $filter: ModelCourierDebtFilterInput
@@ -923,6 +934,10 @@ async function syncCourierDebtRestriction(courierID) {
     nextToken = result.nextToken || null;
   } while (nextToken);
 
+  // ----------------------------------------------------------
+  // IDENTIFY ACTIVE AND OVERDUE DEBTS
+  // ----------------------------------------------------------
+
   const activeDebts = allDebts.filter((debt) => {
     const remaining = Number(debt.remainingAmount || 0);
 
@@ -950,17 +965,65 @@ async function syncCourierDebtRestriction(courierID) {
 
   const shouldRestrict = overdueDebts.length > 0;
 
+  // ----------------------------------------------------------
+  // CALCULATE DEBT RESTRICTION FIELDS
+  // ----------------------------------------------------------
+
   const debtBlockedAt = shouldRestrict
     ? courier.debtBlockedAt || new Date().toISOString()
     : null;
 
   const debtBlockReason = shouldRestrict ? "OVERDUE_DEBT" : null;
 
+  // ----------------------------------------------------------
+  // SYNCHRONISE STATUS KEY
+  // ----------------------------------------------------------
+
+  let updatedStatusKey = courier.statusKey || null;
+
+  /*
+   * If the courier still has overdue debt and is already
+   * offline, retain the debt-offline status.
+   */
+  if (
+    shouldRestrict &&
+    courier.isOnline !== true &&
+    courier.isBlocked !== true &&
+    courier.isApproved === true
+  ) {
+    updatedStatusKey = "OFFLINE#DEBT";
+  }
+
+  /*
+   * If the debt restriction has been cleared, restore the
+   * normal approved-offline status ONLY when the previous
+   * status was OFFLINE#DEBT.
+   *
+   * Do not accidentally overwrite:
+   * - ONLINE#APPROVED
+   * - OFFLINE#BLOCKED
+   * - OFFLINE#NOT_APPROVED
+   */
+  if (!shouldRestrict && courier.statusKey === "OFFLINE#DEBT") {
+    if (courier.isBlocked === true) {
+      updatedStatusKey = "OFFLINE#BLOCKED";
+    } else if (courier.isApproved !== true) {
+      updatedStatusKey = "OFFLINE#NOT_APPROVED";
+    } else {
+      updatedStatusKey = "OFFLINE#APPROVED";
+    }
+  }
+
+  // ----------------------------------------------------------
+  // CHECK WHETHER ANYTHING ACTUALLY CHANGED
+  // ----------------------------------------------------------
+
   const restrictionChanged =
     courier.debtRestrictionActive !== shouldRestrict ||
     (courier.debtDueAt || null) !== earliestDueAt ||
     (courier.debtBlockedAt || null) !== debtBlockedAt ||
-    (courier.debtBlockReason || null) !== debtBlockReason;
+    (courier.debtBlockReason || null) !== debtBlockReason ||
+    (courier.statusKey || null) !== updatedStatusKey;
 
   if (!restrictionChanged) {
     return {
@@ -968,16 +1031,24 @@ async function syncCourierDebtRestriction(courierID) {
       debtDueAt: earliestDueAt,
       activeDebtCount: activeDebts.length,
       overdueDebtCount: overdueDebts.length,
+      statusKey: updatedStatusKey,
       updated: false,
     };
   }
 
+  // ----------------------------------------------------------
+  // UPDATE COURIER THROUGH APPSYNC
+  // ----------------------------------------------------------
+
   const input = {
     id: courier.id,
+
     debtRestrictionActive: shouldRestrict,
     debtDueAt: earliestDueAt,
     debtBlockedAt,
     debtBlockReason,
+
+    statusKey: updatedStatusKey,
   };
 
   if (courier._version !== undefined && courier._version !== null) {
@@ -992,12 +1063,15 @@ async function syncCourierDebtRestriction(courierID) {
         debtDueAt
         debtBlockedAt
         debtBlockReason
+        statusKey
         _version
       }
     }
   `;
 
-  const updateData = await graphqlRequest(updateQuery, { input });
+  const updateData = await graphqlRequest(updateQuery, {
+    input,
+  });
 
   const updatedCourier = updateData?.updateCourier;
 
@@ -1005,11 +1079,20 @@ async function syncCourierDebtRestriction(courierID) {
     throw new Error("Could not update the courier's debt restriction.");
   }
 
+  console.log("COURIER DEBT RESTRICTION SYNCHRONISED:", {
+    courierID: courier.id,
+    debtRestrictionActive: updatedCourier.debtRestrictionActive,
+    statusKey: updatedCourier.statusKey,
+    activeDebtCount: activeDebts.length,
+    overdueDebtCount: overdueDebts.length,
+  });
+
   return {
     debtRestrictionActive: shouldRestrict,
     debtDueAt: earliestDueAt,
     activeDebtCount: activeDebts.length,
     overdueDebtCount: overdueDebts.length,
+    statusKey: updatedStatusKey,
     updated: true,
   };
 }

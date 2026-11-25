@@ -39,6 +39,35 @@ export const reversePayout = /* GraphQL */ `
     }
   }
 `;
+export const updateCourierOrderStatus = /* GraphQL */ `
+  mutation UpdateCourierOrderStatus(
+    $orderId: ID!
+    $newStatus: OrderStatus!
+    $verificationCode: String
+  ) {
+    updateCourierOrderStatus(
+      orderId: $orderId
+      newStatus: $newStatus
+      verificationCode: $verificationCode
+    ) {
+      success
+      message
+      orderId
+      assignedCourierId
+      status
+      acceptedAt
+      arrivedPickupAt
+      loadingStartedAt
+      tripStartedAt
+      arrivedDropoffAt
+      unloadingCompletedAt
+      updatedAt
+      _version
+      _lastChangedAt
+      __typename
+    }
+  }
+`;
 export const adminMakePayout = /* GraphQL */ `
   mutation AdminMakePayout($courierID: ID!, $requestedAmount: Float!) {
     adminMakePayout(courierID: $courierID, requestedAmount: $requestedAmount) {
@@ -51,23 +80,6 @@ export const adminMakePayout = /* GraphQL */ `
 export const adminMakeAllPayouts = /* GraphQL */ `
   mutation AdminMakeAllPayouts {
     adminMakeAllPayouts {
-      statusCode
-      body
-      __typename
-    }
-  }
-`;
-export const requestPayout = /* GraphQL */ `
-  mutation RequestPayout(
-    $courierID: ID!
-    $requestedAmount: Float!
-    $payoutMethod: String!
-  ) {
-    requestPayout(
-      courierID: $courierID
-      requestedAmount: $requestedAmount
-      payoutMethod: $payoutMethod
-    ) {
       statusCode
       body
       __typename
@@ -347,6 +359,7 @@ export const createFleetTransaction = /* GraphQL */ `
         transportationType
         vehicleClass
         status
+        statusBeforeAssignment
         supportCreatedByID
         receiverConfirmationStatus
         receiverConfirmedAt
@@ -576,6 +589,7 @@ export const updateFleetTransaction = /* GraphQL */ `
         transportationType
         vehicleClass
         status
+        statusBeforeAssignment
         supportCreatedByID
         receiverConfirmationStatus
         receiverConfirmedAt
@@ -805,6 +819,7 @@ export const deleteFleetTransaction = /* GraphQL */ `
         transportationType
         vehicleClass
         status
+        statusBeforeAssignment
         supportCreatedByID
         receiverConfirmationStatus
         receiverConfirmedAt
@@ -1217,6 +1232,7 @@ export const createFleetOrder = /* GraphQL */ `
         transportationType
         vehicleClass
         status
+        statusBeforeAssignment
         supportCreatedByID
         receiverConfirmationStatus
         receiverConfirmedAt
@@ -1520,6 +1536,7 @@ export const updateFleetOrder = /* GraphQL */ `
         transportationType
         vehicleClass
         status
+        statusBeforeAssignment
         supportCreatedByID
         receiverConfirmationStatus
         receiverConfirmedAt
@@ -1823,6 +1840,7 @@ export const deleteFleetOrder = /* GraphQL */ `
         transportationType
         vehicleClass
         status
+        statusBeforeAssignment
         supportCreatedByID
         receiverConfirmationStatus
         receiverConfirmedAt
@@ -2296,6 +2314,7 @@ export const createFleetMember = /* GraphQL */ `
     createFleetMember(input: $input, condition: $condition) {
       id
       fleetID
+      userSub
       courierID
       role
       status
@@ -2444,6 +2463,7 @@ export const updateFleetMember = /* GraphQL */ `
     updateFleetMember(input: $input, condition: $condition) {
       id
       fleetID
+      userSub
       courierID
       role
       status
@@ -2592,6 +2612,7 @@ export const deleteFleetMember = /* GraphQL */ `
     deleteFleetMember(input: $input, condition: $condition) {
       id
       fleetID
+      userSub
       courierID
       role
       status
@@ -3971,7 +3992,10 @@ export const createWallet = /* GraphQL */ `
       availableBalance
       pendingBalance
       lifetimeEarnings
+      cashLifetimeEarnings
+      electronicLifetimeEarnings
       outstandingDebt
+      activeCourierDebtID
       transactions {
         nextToken
         startedAt
@@ -3998,7 +4022,10 @@ export const updateWallet = /* GraphQL */ `
       availableBalance
       pendingBalance
       lifetimeEarnings
+      cashLifetimeEarnings
+      electronicLifetimeEarnings
       outstandingDebt
+      activeCourierDebtID
       transactions {
         nextToken
         startedAt
@@ -4025,7 +4052,10 @@ export const deleteWallet = /* GraphQL */ `
       availableBalance
       pendingBalance
       lifetimeEarnings
+      cashLifetimeEarnings
+      electronicLifetimeEarnings
       outstandingDebt
+      activeCourierDebtID
       transactions {
         nextToken
         startedAt
@@ -4081,6 +4111,7 @@ export const createPayment = /* GraphQL */ `
         transportationType
         vehicleClass
         status
+        statusBeforeAssignment
         supportCreatedByID
         receiverConfirmationStatus
         receiverConfirmedAt
@@ -4285,6 +4316,7 @@ export const updatePayment = /* GraphQL */ `
         transportationType
         vehicleClass
         status
+        statusBeforeAssignment
         supportCreatedByID
         receiverConfirmationStatus
         receiverConfirmedAt
@@ -4489,6 +4521,7 @@ export const deletePayment = /* GraphQL */ `
         transportationType
         vehicleClass
         status
+        statusBeforeAssignment
         supportCreatedByID
         receiverConfirmationStatus
         receiverConfirmedAt
@@ -4682,6 +4715,7 @@ export const createOffer = /* GraphQL */ `
         transportationType
         vehicleClass
         status
+        statusBeforeAssignment
         supportCreatedByID
         receiverConfirmationStatus
         receiverConfirmedAt
@@ -4922,6 +4956,7 @@ export const updateOffer = /* GraphQL */ `
         transportationType
         vehicleClass
         status
+        statusBeforeAssignment
         supportCreatedByID
         receiverConfirmationStatus
         receiverConfirmedAt
@@ -5162,6 +5197,7 @@ export const deleteOffer = /* GraphQL */ `
         transportationType
         vehicleClass
         status
+        statusBeforeAssignment
         supportCreatedByID
         receiverConfirmationStatus
         receiverConfirmedAt
@@ -5486,6 +5522,222 @@ export const deleteOrderCancellation = /* GraphQL */ `
     }
   }
 `;
+export const createCourierDebtReconciliation = /* GraphQL */ `
+  mutation CreateCourierDebtReconciliation(
+    $input: CreateCourierDebtReconciliationInput!
+    $condition: ModelCourierDebtReconciliationConditionInput
+  ) {
+    createCourierDebtReconciliation(input: $input, condition: $condition) {
+      id
+      courierDebtID
+      courierDebt {
+        id
+        courierID
+        walletID
+        amount
+        amountPaid
+        remainingAmount
+        grossDebtAmount
+        earningsOffsetAmount
+        walletRecoveredAmount
+        externalPaymentsAmount
+        status
+        debtStartedAt
+        dueAt
+        firstPaymentAt
+        settledAt
+        idempotencyKey
+        createdAt
+        updatedAt
+        _version
+        _deleted
+        _lastChangedAt
+        __typename
+      }
+      reconciliationID
+      reconciliation {
+        id
+        courierID
+        reconciliationReference
+        periodStart
+        periodEnd
+        onlineCourierEarnings
+        cashCollectedAmount
+        amountCourierOwesAtua
+        amountAtuaOwesCourier
+        previousSettlements
+        adjustments
+        netAmount
+        direction
+        status
+        walletDebtRecovered
+        remainingDebt
+        calculatedAt
+        approvedAt
+        settledAt
+        settlementReference
+        notes
+        createdAt
+        updatedAt
+        _version
+        _deleted
+        _lastChangedAt
+        __typename
+      }
+      amountAttributed
+      createdAt
+      updatedAt
+      _version
+      _deleted
+      _lastChangedAt
+      __typename
+    }
+  }
+`;
+export const updateCourierDebtReconciliation = /* GraphQL */ `
+  mutation UpdateCourierDebtReconciliation(
+    $input: UpdateCourierDebtReconciliationInput!
+    $condition: ModelCourierDebtReconciliationConditionInput
+  ) {
+    updateCourierDebtReconciliation(input: $input, condition: $condition) {
+      id
+      courierDebtID
+      courierDebt {
+        id
+        courierID
+        walletID
+        amount
+        amountPaid
+        remainingAmount
+        grossDebtAmount
+        earningsOffsetAmount
+        walletRecoveredAmount
+        externalPaymentsAmount
+        status
+        debtStartedAt
+        dueAt
+        firstPaymentAt
+        settledAt
+        idempotencyKey
+        createdAt
+        updatedAt
+        _version
+        _deleted
+        _lastChangedAt
+        __typename
+      }
+      reconciliationID
+      reconciliation {
+        id
+        courierID
+        reconciliationReference
+        periodStart
+        periodEnd
+        onlineCourierEarnings
+        cashCollectedAmount
+        amountCourierOwesAtua
+        amountAtuaOwesCourier
+        previousSettlements
+        adjustments
+        netAmount
+        direction
+        status
+        walletDebtRecovered
+        remainingDebt
+        calculatedAt
+        approvedAt
+        settledAt
+        settlementReference
+        notes
+        createdAt
+        updatedAt
+        _version
+        _deleted
+        _lastChangedAt
+        __typename
+      }
+      amountAttributed
+      createdAt
+      updatedAt
+      _version
+      _deleted
+      _lastChangedAt
+      __typename
+    }
+  }
+`;
+export const deleteCourierDebtReconciliation = /* GraphQL */ `
+  mutation DeleteCourierDebtReconciliation(
+    $input: DeleteCourierDebtReconciliationInput!
+    $condition: ModelCourierDebtReconciliationConditionInput
+  ) {
+    deleteCourierDebtReconciliation(input: $input, condition: $condition) {
+      id
+      courierDebtID
+      courierDebt {
+        id
+        courierID
+        walletID
+        amount
+        amountPaid
+        remainingAmount
+        grossDebtAmount
+        earningsOffsetAmount
+        walletRecoveredAmount
+        externalPaymentsAmount
+        status
+        debtStartedAt
+        dueAt
+        firstPaymentAt
+        settledAt
+        idempotencyKey
+        createdAt
+        updatedAt
+        _version
+        _deleted
+        _lastChangedAt
+        __typename
+      }
+      reconciliationID
+      reconciliation {
+        id
+        courierID
+        reconciliationReference
+        periodStart
+        periodEnd
+        onlineCourierEarnings
+        cashCollectedAmount
+        amountCourierOwesAtua
+        amountAtuaOwesCourier
+        previousSettlements
+        adjustments
+        netAmount
+        direction
+        status
+        walletDebtRecovered
+        remainingDebt
+        calculatedAt
+        approvedAt
+        settledAt
+        settlementReference
+        notes
+        createdAt
+        updatedAt
+        _version
+        _deleted
+        _lastChangedAt
+        __typename
+      }
+      amountAttributed
+      createdAt
+      updatedAt
+      _version
+      _deleted
+      _lastChangedAt
+      __typename
+    }
+  }
+`;
 export const createCourierDebt = /* GraphQL */ `
   mutation CreateCourierDebt(
     $input: CreateCourierDebtInput!
@@ -5559,36 +5811,6 @@ export const createCourierDebt = /* GraphQL */ `
         __typename
       }
       walletID
-      reconciliationID
-      reconciliation {
-        id
-        courierID
-        reconciliationReference
-        periodStart
-        periodEnd
-        onlineCourierEarnings
-        cashCollectedAmount
-        amountCourierOwesAtua
-        amountAtuaOwesCourier
-        previousSettlements
-        adjustments
-        netAmount
-        direction
-        status
-        walletDebtRecovered
-        remainingDebt
-        calculatedAt
-        approvedAt
-        settledAt
-        settlementReference
-        notes
-        createdAt
-        updatedAt
-        _version
-        _deleted
-        _lastChangedAt
-        __typename
-      }
       payments {
         nextToken
         startedAt
@@ -5607,6 +5829,11 @@ export const createCourierDebt = /* GraphQL */ `
       firstPaymentAt
       settledAt
       idempotencyKey
+      reconciliations {
+        nextToken
+        startedAt
+        __typename
+      }
       createdAt
       updatedAt
       _version
@@ -5689,36 +5916,6 @@ export const updateCourierDebt = /* GraphQL */ `
         __typename
       }
       walletID
-      reconciliationID
-      reconciliation {
-        id
-        courierID
-        reconciliationReference
-        periodStart
-        periodEnd
-        onlineCourierEarnings
-        cashCollectedAmount
-        amountCourierOwesAtua
-        amountAtuaOwesCourier
-        previousSettlements
-        adjustments
-        netAmount
-        direction
-        status
-        walletDebtRecovered
-        remainingDebt
-        calculatedAt
-        approvedAt
-        settledAt
-        settlementReference
-        notes
-        createdAt
-        updatedAt
-        _version
-        _deleted
-        _lastChangedAt
-        __typename
-      }
       payments {
         nextToken
         startedAt
@@ -5737,6 +5934,11 @@ export const updateCourierDebt = /* GraphQL */ `
       firstPaymentAt
       settledAt
       idempotencyKey
+      reconciliations {
+        nextToken
+        startedAt
+        __typename
+      }
       createdAt
       updatedAt
       _version
@@ -5819,36 +6021,6 @@ export const deleteCourierDebt = /* GraphQL */ `
         __typename
       }
       walletID
-      reconciliationID
-      reconciliation {
-        id
-        courierID
-        reconciliationReference
-        periodStart
-        periodEnd
-        onlineCourierEarnings
-        cashCollectedAmount
-        amountCourierOwesAtua
-        amountAtuaOwesCourier
-        previousSettlements
-        adjustments
-        netAmount
-        direction
-        status
-        walletDebtRecovered
-        remainingDebt
-        calculatedAt
-        approvedAt
-        settledAt
-        settlementReference
-        notes
-        createdAt
-        updatedAt
-        _version
-        _deleted
-        _lastChangedAt
-        __typename
-      }
       payments {
         nextToken
         startedAt
@@ -5867,6 +6039,11 @@ export const deleteCourierDebt = /* GraphQL */ `
       firstPaymentAt
       settledAt
       idempotencyKey
+      reconciliations {
+        nextToken
+        startedAt
+        __typename
+      }
       createdAt
       updatedAt
       _version
@@ -5890,7 +6067,6 @@ export const createCourierDebtPayment = /* GraphQL */ `
         id
         courierID
         walletID
-        reconciliationID
         amount
         amountPaid
         remainingAmount
@@ -5947,7 +6123,6 @@ export const updateCourierDebtPayment = /* GraphQL */ `
         id
         courierID
         walletID
-        reconciliationID
         amount
         amountPaid
         remainingAmount
@@ -6004,7 +6179,6 @@ export const deleteCourierDebtPayment = /* GraphQL */ `
         id
         courierID
         walletID
-        reconciliationID
         amount
         amountPaid
         remainingAmount
@@ -6119,11 +6293,6 @@ export const createCourierReconciliation = /* GraphQL */ `
         _lastChangedAt
         __typename
       }
-      debts {
-        nextToken
-        startedAt
-        __typename
-      }
       reconciliationReference
       periodStart
       periodEnd
@@ -6143,6 +6312,11 @@ export const createCourierReconciliation = /* GraphQL */ `
       settledAt
       settlementReference
       notes
+      debtAllocations {
+        nextToken
+        startedAt
+        __typename
+      }
       createdAt
       updatedAt
       _version
@@ -6224,11 +6398,6 @@ export const updateCourierReconciliation = /* GraphQL */ `
         _lastChangedAt
         __typename
       }
-      debts {
-        nextToken
-        startedAt
-        __typename
-      }
       reconciliationReference
       periodStart
       periodEnd
@@ -6248,6 +6417,11 @@ export const updateCourierReconciliation = /* GraphQL */ `
       settledAt
       settlementReference
       notes
+      debtAllocations {
+        nextToken
+        startedAt
+        __typename
+      }
       createdAt
       updatedAt
       _version
@@ -6329,11 +6503,6 @@ export const deleteCourierReconciliation = /* GraphQL */ `
         _lastChangedAt
         __typename
       }
-      debts {
-        nextToken
-        startedAt
-        __typename
-      }
       reconciliationReference
       periodStart
       periodEnd
@@ -6353,6 +6522,11 @@ export const deleteCourierReconciliation = /* GraphQL */ `
       settledAt
       settlementReference
       notes
+      debtAllocations {
+        nextToken
+        startedAt
+        __typename
+      }
       createdAt
       updatedAt
       _version
@@ -6377,6 +6551,9 @@ export const createCashCollection = /* GraphQL */ `
       confirmedAt
       reconciledAt
       reconciliationReference
+      courierDebtID
+      atuaShareAmount
+      debtAppliedAt
       createdAt
       updatedAt
       _version
@@ -6401,6 +6578,9 @@ export const updateCashCollection = /* GraphQL */ `
       confirmedAt
       reconciledAt
       reconciliationReference
+      courierDebtID
+      atuaShareAmount
+      debtAppliedAt
       createdAt
       updatedAt
       _version
@@ -6425,6 +6605,9 @@ export const deleteCashCollection = /* GraphQL */ `
       confirmedAt
       reconciledAt
       reconciliationReference
+      courierDebtID
+      atuaShareAmount
+      debtAppliedAt
       createdAt
       updatedAt
       _version
@@ -6461,6 +6644,7 @@ export const createOrder = /* GraphQL */ `
       transportationType
       vehicleClass
       status
+      statusBeforeAssignment
       supportCreatedByID
       receiverConfirmationStatus
       receiverConfirmedAt
@@ -6717,6 +6901,7 @@ export const updateOrder = /* GraphQL */ `
       transportationType
       vehicleClass
       status
+      statusBeforeAssignment
       supportCreatedByID
       receiverConfirmationStatus
       receiverConfirmedAt
@@ -6973,6 +7158,7 @@ export const deleteOrder = /* GraphQL */ `
       transportationType
       vehicleClass
       status
+      statusBeforeAssignment
       supportCreatedByID
       receiverConfirmationStatus
       receiverConfirmedAt
@@ -7319,6 +7505,7 @@ export const createCourierReport = /* GraphQL */ `
         transportationType
         vehicleClass
         status
+        statusBeforeAssignment
         supportCreatedByID
         receiverConfirmationStatus
         receiverConfirmedAt
@@ -7584,6 +7771,7 @@ export const updateCourierReport = /* GraphQL */ `
         transportationType
         vehicleClass
         status
+        statusBeforeAssignment
         supportCreatedByID
         receiverConfirmationStatus
         receiverConfirmedAt
@@ -7849,6 +8037,7 @@ export const deleteCourierReport = /* GraphQL */ `
         transportationType
         vehicleClass
         status
+        statusBeforeAssignment
         supportCreatedByID
         receiverConfirmationStatus
         receiverConfirmedAt
@@ -8114,6 +8303,7 @@ export const createCourierReview = /* GraphQL */ `
         transportationType
         vehicleClass
         status
+        statusBeforeAssignment
         supportCreatedByID
         receiverConfirmationStatus
         receiverConfirmedAt
@@ -8375,6 +8565,7 @@ export const updateCourierReview = /* GraphQL */ `
         transportationType
         vehicleClass
         status
+        statusBeforeAssignment
         supportCreatedByID
         receiverConfirmationStatus
         receiverConfirmedAt
@@ -8636,6 +8827,7 @@ export const deleteCourierReview = /* GraphQL */ `
         transportationType
         vehicleClass
         status
+        statusBeforeAssignment
         supportCreatedByID
         receiverConfirmationStatus
         receiverConfirmedAt
@@ -9290,7 +9482,10 @@ export const createCourier = /* GraphQL */ `
         availableBalance
         pendingBalance
         lifetimeEarnings
+        cashLifetimeEarnings
+        electronicLifetimeEarnings
         outstandingDebt
+        activeCourierDebtID
         createdAt
         updatedAt
         _version
@@ -9445,7 +9640,10 @@ export const updateCourier = /* GraphQL */ `
         availableBalance
         pendingBalance
         lifetimeEarnings
+        cashLifetimeEarnings
+        electronicLifetimeEarnings
         outstandingDebt
+        activeCourierDebtID
         createdAt
         updatedAt
         _version
@@ -9600,7 +9798,10 @@ export const deleteCourier = /* GraphQL */ `
         availableBalance
         pendingBalance
         lifetimeEarnings
+        cashLifetimeEarnings
+        electronicLifetimeEarnings
         outstandingDebt
+        activeCourierDebtID
         createdAt
         updatedAt
         _version
@@ -9776,6 +9977,82 @@ export const deleteUser = /* GraphQL */ `
     }
   }
 `;
+export const registerFleet = /* GraphQL */ `
+  mutation RegisterFleet($input: RegisterFleetInput!) {
+    registerFleet(input: $input) {
+      id
+      name
+      businessName
+      organisationType
+      legalStatus
+      verificationStatus
+      registrationNumber
+      registrationCountry
+      registrationAuthority
+      isRecognisedBrand
+      brandWebsite
+      verificationNotes
+      logo
+      phoneNumber
+      email
+      address
+      state
+      city
+      landmark
+      lat
+      lng
+      status
+      ownerUserID
+      subscriptionPlan
+      subscriptionStatus
+      subscriptionStartedAt
+      subscriptionRenewsAt
+      trialEndsAt
+      members {
+        nextToken
+        startedAt
+        __typename
+      }
+      vehicles {
+        nextToken
+        startedAt
+        __typename
+      }
+      invitations {
+        nextToken
+        startedAt
+        __typename
+      }
+      fleetOrders {
+        nextToken
+        startedAt
+        __typename
+      }
+      walletID
+      wallets {
+        nextToken
+        startedAt
+        __typename
+      }
+      transactions {
+        nextToken
+        startedAt
+        __typename
+      }
+      subscriptions {
+        nextToken
+        startedAt
+        __typename
+      }
+      createdAt
+      updatedAt
+      _version
+      _deleted
+      _lastChangedAt
+      __typename
+    }
+  }
+`;
 export const initializeAtuaPayment = /* GraphQL */ `
   mutation InitializeAtuaPayment(
     $orderId: ID!
@@ -9904,6 +10181,18 @@ export const recordCashCollection = /* GraphQL */ `
     }
   }
 `;
+export const acceptDeliveryOrder = /* GraphQL */ `
+  mutation AcceptDeliveryOrder($orderId: ID!) {
+    acceptDeliveryOrder(orderId: $orderId) {
+      success
+      message
+      orderId
+      assignedCourierId
+      acceptedOfferID
+      __typename
+    }
+  }
+`;
 export const selectDeliveryPaymentMethod = /* GraphQL */ `
   mutation SelectDeliveryPaymentMethod(
     $orderId: ID!
@@ -9922,8 +10211,14 @@ export const selectDeliveryPaymentMethod = /* GraphQL */ `
   }
 `;
 export const initializeCourierDebtPayment = /* GraphQL */ `
-  mutation InitializeCourierDebtPayment {
-    initializeCourierDebtPayment {
+  mutation InitializeCourierDebtPayment(
+    $courierDebtID: ID!
+    $requestedAmount: Float!
+  ) {
+    initializeCourierDebtPayment(
+      courierDebtID: $courierDebtID
+      requestedAmount: $requestedAmount
+    ) {
       success
       message
       courierID
@@ -9950,6 +10245,23 @@ export const verifyCourierDebtPayment = /* GraphQL */ `
       previousDebt
       remainingDebt
       paidAt
+      __typename
+    }
+  }
+`;
+export const requestPayout = /* GraphQL */ `
+  mutation RequestPayout(
+    $courierID: ID!
+    $requestedAmount: Float!
+    $payoutMethod: String!
+  ) {
+    requestPayout(
+      courierID: $courierID
+      requestedAmount: $requestedAmount
+      payoutMethod: $payoutMethod
+    ) {
+      statusCode
+      body
       __typename
     }
   }

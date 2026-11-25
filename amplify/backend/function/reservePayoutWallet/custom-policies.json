@@ -1,6 +1,17 @@
 [
   {
-    "Action": [],
-    "Resource": []
+    "Action": ["appsync:GraphQL"],
+    "Resource": [
+      "arn:aws:appsync:eu-north-1:703145406670:apis/n4tb6ywvhnf3zesv5ibhpitqiq/types/Query/fields/getPayout",
+      "arn:aws:appsync:eu-north-1:703145406670:apis/n4tb6ywvhnf3zesv5ibhpitqiq/types/Query/fields/getWallet",
+      "arn:aws:appsync:eu-north-1:703145406670:apis/n4tb6ywvhnf3zesv5ibhpitqiq/types/Query/fields/listWallets",
+      "arn:aws:appsync:eu-north-1:703145406670:apis/n4tb6ywvhnf3zesv5ibhpitqiq/types/Query/fields/getPayoutReservation",
+      "arn:aws:appsync:eu-north-1:703145406670:apis/n4tb6ywvhnf3zesv5ibhpitqiq/types/Query/fields/getCourier",
+      "arn:aws:appsync:eu-north-1:703145406670:apis/n4tb6ywvhnf3zesv5ibhpitqiq/types/Query/fields/getTransaction",
+      "arn:aws:appsync:eu-north-1:703145406670:apis/n4tb6ywvhnf3zesv5ibhpitqiq/types/Mutation/fields/createPayoutReservation",
+      "arn:aws:appsync:eu-north-1:703145406670:apis/n4tb6ywvhnf3zesv5ibhpitqiq/types/Mutation/fields/updatePayoutReservation",
+      "arn:aws:appsync:eu-north-1:703145406670:apis/n4tb6ywvhnf3zesv5ibhpitqiq/types/Mutation/fields/updateWallet",
+      "arn:aws:appsync:eu-north-1:703145406670:apis/n4tb6ywvhnf3zesv5ibhpitqiq/types/Mutation/fields/createTransaction"
+    ]
   }
 ]

@@ -1,16 +1,19 @@
 import { useAuthContext } from "@/providers/AuthProvider";
 import { useLocationContext } from "@/providers/LocationProvider";
 import { useOrderContext } from "@/providers/OrderProvider";
+
 import {
   chargeAtuaPaymentMethod,
   verifyAtuaPayment,
 } from "@/src/graphql/mutations";
+
 import { Order } from "@/src/models";
 
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { generateClient } from "aws-amplify/api";
 import { DataStore } from "aws-amplify/datastore";
 import { router, useLocalSearchParams } from "expo-router";
+import * as WebBrowser from "expo-web-browser";
 
 import { useEffect, useState } from "react";
 
@@ -23,7 +26,6 @@ import {
   View,
 } from "react-native";
 
-import { usePaystack } from "react-native-paystack-webview";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import SavedPaymentMethods from "./SavedPaymentMethods";
@@ -34,6 +36,38 @@ import styles from "./styles";
 //==================================================
 
 const client = generateClient();
+
+//==================================================
+// INITIALIZE ATUA PAYMENT MUTATION
+//==================================================
+// This mutation registers the Payment and reference
+// in Atua's backend BEFORE Paystack checkout opens.
+//==================================================
+
+const initializeAtuaPaymentMutation = `
+  mutation InitializeAtuaPayment(
+    $orderId: ID!
+    $payerEmail: AWSEmail
+    $payerPhone: String
+  ) {
+    initializeAtuaPayment(
+      orderId: $orderId
+      payerEmail: $payerEmail
+      payerPhone: $payerPhone
+    ) {
+      success
+      message
+      orderId
+      paymentId
+      reference
+      checkoutUrl
+      amount
+      currency
+      payerEmail
+      paymentResponsibility
+    }
+  }
+`;
 
 //==================================================
 // PAYMENT COMPONENT
@@ -61,12 +95,6 @@ const Payment = () => {
   const { resetAllLocationFields } = useLocationContext();
 
   //-----------------------------------------
-  // Paystack
-  //-----------------------------------------
-
-  const { popup } = usePaystack();
-
-  //-----------------------------------------
   // State
   //-----------------------------------------
 
@@ -81,21 +109,15 @@ const Payment = () => {
   //================================================
 
   useEffect(() => {
+    let mounted = true;
+
     const fetchOrder = async () => {
       try {
         setLoadingOrder(true);
 
-        //-------------------------------------
-        // Validate Order ID
-        //-------------------------------------
-
         if (!orderId) {
           throw new Error("Order ID was not provided.");
         }
-
-        //-------------------------------------
-        // Get Order
-        //-------------------------------------
 
         const savedOrder = await DataStore.query(Order, orderId);
 
@@ -103,21 +125,15 @@ const Payment = () => {
           throw new Error("Order could not be found.");
         }
 
-        //-------------------------------------
-        // Validate Ownership
-        //-------------------------------------
-
         if (savedOrder.userID !== dbUser?.id) {
           throw new Error(
             "You are not authorized to make payment for this order.",
           );
         }
 
-        //-------------------------------------
-        // Save Order
-        //-------------------------------------
-
-        setOrder(savedOrder);
+        if (mounted) {
+          setOrder(savedOrder);
+        }
       } catch (error) {
         console.log("FETCH PAYMENT ORDER ERROR:", error);
 
@@ -127,23 +143,24 @@ const Payment = () => {
           [
             {
               text: "Go Back",
-
               onPress: () => router.back(),
             },
           ],
         );
       } finally {
-        setLoadingOrder(false);
+        if (mounted) {
+          setLoadingOrder(false);
+        }
       }
     };
-
-    //-------------------------------------
-    // Wait Until User Exists
-    //-------------------------------------
 
     if (dbUser?.id) {
       fetchOrder();
     }
+
+    return () => {
+      mounted = false;
+    };
   }, [orderId, dbUser?.id]);
 
   //================================================
@@ -177,672 +194,240 @@ const Payment = () => {
       return;
     }
 
-    //-------------------------------------
-    // Reset Checkout Context
-    //-------------------------------------
-
     resetAllOrderFields();
     resetAllLocationFields();
-
-    //-------------------------------------
-    // Go To Order Tracking
-    //-------------------------------------
 
     router.replace(`/screens/orderTrackingScreen/${paidOrderId}`);
   };
 
   //================================================
-  // EXTRACT PAYSTACK REFERENCE
+  // CHECK WHETHER ORDER IS FULLY PAID
+  //================================================
+  // We require the webhook's expected Order fields:
+  // - paymentStatus = PAID
+  // - paymentID exists
+  // - fundsStatus = HELD
+  // - deliveryVerificationCode exists
   //================================================
 
-  const getPaymentReference = (response) => {
+  const isOrderPaymentComplete = (savedOrder) => {
     return (
-      response?.reference ||
-      response?.transactionRef?.reference ||
-      response?.transactionRef ||
-      response?.data?.reference ||
-      response?.trxref ||
-      null
+      savedOrder?.id === orderId &&
+      savedOrder?.paymentStatus === "PAID" &&
+      !!savedOrder?.paymentID &&
+      savedOrder?.fundsStatus === "HELD" &&
+      !!savedOrder?.deliveryVerificationCode
     );
   };
 
   //================================================
-  // WAIT FOR DATSTORE ORDER SYNC
+  // WAIT FOR ORDER DATASTORE SYNC
+  //================================================
+  // This function waits for the Paystack webhook
+  // to update the Order and for DataStore to receive
+  // that update.
+  //
+  // It does NOT call verifyAtuaPayment.
   //================================================
 
-  const waitForOrderSync = async (orderId, timeout = 15000) => {
-    return new Promise(async (resolve, reject) => {
-      let resolved = false;
+  const waitForOrderSync = async (targetOrderId, timeout = 15000) => {
+    return new Promise((resolve, reject) => {
+      let finished = false;
+      let subscription = null;
+      let timeoutHandle = null;
 
       const finish = (callback, value) => {
-        if (resolved) return;
+        if (finished) {
+          return;
+        }
 
-        resolved = true;
-        subscription?.unsubscribe();
+        finished = true;
+
+        if (timeoutHandle) {
+          clearTimeout(timeoutHandle);
+        }
+
+        if (subscription) {
+          subscription.unsubscribe();
+        }
 
         callback(value);
       };
 
-      const subscription = DataStore.observe(Order, orderId).subscribe(
-        ({ element, opType }) => {
+      // Subscribe first so an update is not missed
+      // between the initial query and subscription.
+      subscription = DataStore.observe(Order, targetOrderId).subscribe({
+        next: ({ element, opType }) => {
           console.log("ORDER DATASTORE UPDATE:", {
             opType,
             id: element?.id,
-            userID: element?.userID,
             paymentStatus: element?.paymentStatus,
-            status: element?.status,
             paymentID: element?.paymentID,
             fundsStatus: element?.fundsStatus,
             deliveryVerificationCode: element?.deliveryVerificationCode,
           });
 
-          if (
-            element?.id === orderId &&
-            element?.paymentStatus === "PAID" &&
-            element?.paymentID &&
-            element?.fundsStatus === "HELD" &&
-            element?.deliveryVerificationCode
-          ) {
+          if (isOrderPaymentComplete(element)) {
             finish(resolve, element);
           }
         },
-      );
 
-      // Also check the current local copy.
-      try {
-        const currentOrder = await DataStore.query(Order, orderId);
+        error: (error) => {
+          console.error("ORDER DATASTORE OBSERVE ERROR:", error);
+        },
+      });
 
-        if (
-          currentOrder?.paymentStatus === "PAID" &&
-          currentOrder?.paymentID &&
-          currentOrder?.fundsStatus === "HELD" &&
-          currentOrder?.deliveryVerificationCode
-        ) {
-          finish(resolve, currentOrder);
-        }
-      } catch (error) {
-        console.log("Initial Order sync check failed:", error);
-      }
-
-      setTimeout(() => {
+      timeoutHandle = setTimeout(() => {
         finish(reject, new Error("Order synchronization timed out."));
       }, timeout);
+
+      // Also check the current local DataStore record.
+      DataStore.query(Order, targetOrderId)
+        .then((currentOrder) => {
+          if (isOrderPaymentComplete(currentOrder)) {
+            finish(resolve, currentOrder);
+          }
+        })
+        .catch((error) => {
+          console.log("INITIAL DATASTORE PAYMENT CHECK ERROR:", error);
+        });
     });
   };
 
   //================================================
-  // PAYSTACK SUCCESS
+  // DISPLAY PAYMENT SUCCESS
   //================================================
 
-  const handleSuccess = async (response) => {
-    try {
-      setPaymentLoading(true);
+  const showPaymentSuccess = (savedOrder, reference) => {
+    const verificationCode = savedOrder?.deliveryVerificationCode;
 
-      console.log("PAYSTACK SUCCESS RESPONSE:", response);
+    console.log("ATUA PAYMENT CONFIRMED:", {
+      orderId: savedOrder?.id,
+      paymentID: savedOrder?.paymentID,
+      paymentReference: savedOrder?.paymentReference || reference,
+      paymentStatus: savedOrder?.paymentStatus,
+      fundsStatus: savedOrder?.fundsStatus,
+      deliveryVerificationCode: verificationCode,
+    });
 
-      //-------------------------------------
-      // Extract Paystack Reference
-      //-------------------------------------
-
-      const reference = getPaymentReference(response);
-
-      console.log("PAYSTACK REFERENCE:", reference);
-
-      if (!reference) {
-        throw new Error(
-          "Payment was completed, but the transaction reference could not be found.",
-        );
-      }
-
-      //-------------------------------------
-      // Validate Order
-      //-------------------------------------
-
-      if (!order?.id) {
-        throw new Error(
-          "The order could not be found for payment verification.",
-        );
-      }
-
-      //-------------------------------------
-      // Verify Payment With Atua Backend
-      //-------------------------------------
-      //
-      // IMPORTANT:
-      //
-      // We do NOT trust Paystack's
-      // onSuccess callback by itself.
-      //
-      // The Lambda:
-      //
-      // 1. Verifies reference with Paystack
-      // 2. Confirms amount
-      // 3. Confirms currency
-      // 4. Creates Payment
-      // 5. Marks Order PAID
-      // 6. Sets READY_FOR_PICKUP
-      // 7. Generates verification code
-      // 8. Saves code to Order
-      //
-      //-------------------------------------
-
-      console.log("VERIFYING PAYMENT WITH ATUA...");
-
-      const result = await client.graphql({
-        query: verifyAtuaPayment,
-
-        variables: {
-          orderId: order.id,
-
-          reference,
-        },
-      });
-
-      console.log("ATUA VERIFICATION RESPONSE:", result);
-
-      //-------------------------------------
-      // Extract Verification Result
-      //-------------------------------------
-
-      const verification = result?.data?.verifyAtuaPayment;
-
-      console.log("ATUA PAYMENT VERIFICATION:", verification);
-
-      if (!verification) {
-        throw new Error(
-          "The payment verification service returned an invalid response.",
-        );
-      }
-
-      //-------------------------------------
-      // Verification Failed
-      //-------------------------------------
-
-      if (!verification.success || !verification.verified) {
-        throw new Error(
-          verification.message || "Your payment could not be verified.",
-        );
-      }
-
-      //-------------------------------------
-      // Confirm Correct Order
-      //-------------------------------------
-
-      if (verification.orderId && verification.orderId !== order.id) {
-        throw new Error("The verified payment does not match this order.");
-      }
-
-      //-------------------------------------
-      // Get Verification Code
-      //-------------------------------------
-      //
-      // The code was generated by Lambda
-      // and saved directly to Order.
-      //
-      //-------------------------------------
-
-      const verificationCode = verification.deliveryVerificationCode;
-
-      if (!verificationCode) {
-        throw new Error(
-          "Payment was verified, but the delivery verification code could not be retrieved.",
-        );
-      }
-
-      //================================================
-      // WAIT FOR ORDER TO SYNC LOCALLY
-      //================================================
-
-      console.log("WAITING FOR ORDER DATASTORE SYNC...");
-
-      let syncedOrder;
-
-      try {
-        syncedOrder = await waitForOrderSync(order.id);
-
-        console.log("ORDER SUCCESSFULLY SYNCED:", {
-          id: syncedOrder.id,
-          userID: syncedOrder.userID,
-          paymentStatus: syncedOrder.paymentStatus,
-          paymentID: syncedOrder.paymentID,
-          status: syncedOrder.status,
-          fundsStatus: syncedOrder.fundsStatus,
-          deliveryVerificationCode: syncedOrder.deliveryVerificationCode,
-        });
-      } catch (syncError) {
-        console.error("ORDER DATASTORE SYNC FAILED:", syncError);
-
-        // IMPORTANT:
-        // Payment itself has already been verified.
-        // Do NOT tell the customer to pay again.
-
-        Alert.alert(
-          "Payment Confirmed",
-          "Your payment was successful. We're still synchronizing your order. Please continue to your order.",
-          [
-            {
-              text: "Continue",
-              onPress: () => completePaymentFlow(order.id),
-            },
-          ],
-        );
-
-        return;
-      }
-
-      // -------------------------------------
-      // Log Confirmation
-      // -------------------------------------
-
-      console.log("PAYMENT CONFIRMED:", {
-        orderId: verification.orderId || order.id,
-
-        // If verifyAtuaPayment created/found the payment details,
-        // use its reference. If the webhook processed first and
-        // payment is null, we already have the Paystack reference
-        // from the successful checkout response.
-        reference: verification.payment?.reference || reference,
-
-        // payment can legitimately be null when the webhook
-        // processed the transaction first.
-        amount: verification.payment?.amount ?? amount,
-
-        alreadyPaid: verification.alreadyPaid,
-
-        deliveryVerificationCode: verificationCode,
-      });
-
-      //-------------------------------------
-      // Success Alert
-      //-------------------------------------
-
+    if (!verificationCode) {
       Alert.alert(
-        verification.alreadyPaid ? "Payment Confirmed" : "Payment Successful",
-
-        verification.alreadyPaid
-          ? `This payment has already been confirmed.\n\nDelivery Verification Code: ${verificationCode}\n\nKeep this code safe. It will be required to complete your delivery.`
-          : `Your payment has been confirmed successfully.\n\nDelivery Verification Code: ${verificationCode}\n\nKeep this code safe. It will be required to complete your delivery.`,
-
+        "Payment Confirmed",
+        "Your payment has been confirmed. Your delivery verification code is still being synchronized.",
         [
           {
             text: "Continue",
-
-            onPress: () => completePaymentFlow(order.id),
+            onPress: () => completePaymentFlow(savedOrder.id),
           },
         ],
       );
-    } catch (error) {
-      console.log("PAYMENT VERIFICATION ERROR:", error);
-
-      //-------------------------------------
-      // GraphQL Error
-      //-------------------------------------
-
-      const graphQLError = error?.errors?.[0]?.message;
-
-      const message =
-        graphQLError || error?.message || "We could not confirm your payment.";
-
-      //-------------------------------------
-      // IMPORTANT:
-      //
-      // Do NOT tell the customer to simply
-      // pay again.
-      //
-      // Paystack may already have charged
-      // them even if verification failed
-      // because of network/backend issues.
-      //
-      //-------------------------------------
-
-      Alert.alert(
-        "Payment Verification",
-        `${message}\n\nIf the payment went through, do not make another payment yet.`,
-      );
-    } finally {
-      setPaymentLoading(false);
-    }
-  };
-
-  //================================================
-  // SAVED PAYMENT METHOD
-  //================================================
-
-  const handlePayWithSavedCard = async (paymentMethod) => {
-    //-------------------------------------
-    // Prevent Multiple Presses
-    //-------------------------------------
-
-    if (paymentLoading) {
-      return;
-    }
-
-    //-------------------------------------
-    // Validate Order
-    //-------------------------------------
-
-    if (!order?.id) {
-      Alert.alert(
-        "Order Unavailable",
-        "We could not find the order you are trying to pay for.",
-      );
 
       return;
     }
-
-    //-------------------------------------
-    // Validate Payment Method
-    //-------------------------------------
-
-    if (!paymentMethod?.id) {
-      Alert.alert(
-        "Payment Method Unavailable",
-        "Please select a saved card and try again.",
-      );
-
-      return;
-    }
-
-    //-------------------------------------
-    // Already Paid
-    //-------------------------------------
-
-    if (order.paymentStatus === "PAID") {
-      if (order.deliveryVerificationCode) {
-        Alert.alert(
-          "Payment Already Confirmed",
-          `This order has already been paid.\n\nDelivery Verification Code: ${order.deliveryVerificationCode}\n\nKeep this code safe. It will be required to complete your delivery.`,
-          [
-            {
-              text: "Continue",
-              onPress: () => completePaymentFlow(order.id),
-            },
-          ],
-        );
-      } else {
-        Alert.alert(
-          "Payment Already Confirmed",
-          "This order has already been paid. You can continue to your order.",
-          [
-            {
-              text: "Continue",
-              onPress: () => completePaymentFlow(order.id),
-            },
-          ],
-        );
-      }
-
-      return;
-    }
-
-    //-------------------------------------
-    // Start Loading
-    //-------------------------------------
-
-    setPaymentLoading(true);
-
-    try {
-      //-------------------------------------
-      // Charge Saved Payment Method
-      //-------------------------------------
-
-      console.log("CHARGING SAVED PAYMENT METHOD:", {
-        orderId: order.id,
-        paymentMethodId: paymentMethod.id,
-      });
-
-      const result = await client.graphql({
-        query: chargeAtuaPaymentMethod,
-
-        // IMPORTANT:
-        // This mutation must use the authenticated
-        // Cognito User Pool session.
-        //
-        // The Lambda uses the Cognito sub to verify:
-        //
-        //     signed-in user
-        //          ↓
-        //     owns PaymentMethod
-        //          ↓
-        //     owns Order
-        //
-        authMode: "userPool",
-
-        variables: {
-          orderId: order.id,
-          paymentMethodId: paymentMethod.id,
-        },
-      });
-
-      console.log("SAVED PAYMENT METHOD RESPONSE:", result);
-
-      //-------------------------------------
-      // Extract Result
-      //-------------------------------------
-
-      const chargeResult = result?.data?.chargeAtuaPaymentMethod;
-
-      if (!chargeResult) {
-        throw new Error(
-          "The saved-card payment service returned an invalid response.",
-        );
-      }
-
-      //-------------------------------------
-      // Backend Rejected Charge
-      //-------------------------------------
-
-      if (!chargeResult.success) {
-        throw new Error(
-          chargeResult.message || "The saved card could not be charged.",
-        );
-      }
-
-      //-------------------------------------
-      // IMPORTANT
-      //
-      // The response above does NOT mean that
-      // the Order is finally paid.
-      //
-      // Paystack charge_authorization must be
-      // followed by the Paystack webhook.
-      //
-      // The webhook updates the Order.
-      // DataStore then synchronizes the Order.
-      //-------------------------------------
-
-      console.log("SAVED CARD CHARGE ACCEPTED:", {
-        orderId: order.id,
-        paymentMethodId: paymentMethod.id,
-        reference: chargeResult.reference || null,
-      });
-
-      //-------------------------------------
-      // Wait For Order To Become PAID
-      //-------------------------------------
-
-      console.log("WAITING FOR SAVED CARD PAYMENT TO SYNC...");
-
-      let syncedOrder;
-
-      try {
-        syncedOrder = await waitForOrderSync(order.id, 30000);
-
-        console.log("SAVED CARD ORDER SUCCESSFULLY SYNCED:", {
-          id: syncedOrder.id,
-          paymentStatus: syncedOrder.paymentStatus,
-          paymentID: syncedOrder.paymentID,
-          status: syncedOrder.status,
-          fundsStatus: syncedOrder.fundsStatus,
-          deliveryVerificationCode: syncedOrder.deliveryVerificationCode,
-        });
-      } catch (syncError) {
-        console.error("SAVED CARD ORDER DATASTORE SYNC FAILED:", syncError);
-
-        //-------------------------------------
-        // IMPORTANT:
-        //
-        // Do NOT tell the customer to pay again.
-        //
-        // The saved card charge may already have
-        // succeeded and the webhook may simply
-        // still be processing/synchronizing.
-        //-------------------------------------
-
-        Alert.alert(
-          "Payment Processing",
-          "Your saved card payment was submitted successfully, but we're still confirming your order. Please do not make another payment yet.",
-          [
-            {
-              text: "OK",
-            },
-          ],
-        );
-
-        return;
-      }
-
-      //-------------------------------------
-      // Final Confirmation
-      //-------------------------------------
-
-      const verificationCode = syncedOrder.deliveryVerificationCode;
-
-      if (!verificationCode) {
-        Alert.alert(
-          "Payment Confirmed",
-          "Your payment was confirmed, but your delivery verification code is still being synchronized. Please continue to your order.",
-          [
-            {
-              text: "Continue",
-              onPress: () => completePaymentFlow(order.id),
-            },
-          ],
-        );
-
-        return;
-      }
-
-      //-------------------------------------
-      // Payment Successful
-      //-------------------------------------
-
-      Alert.alert(
-        "Payment Successful",
-        `Your payment has been confirmed successfully.\n\nDelivery Verification Code: ${verificationCode}\n\nKeep this code safe. It will be required to complete your delivery.`,
-        [
-          {
-            text: "Continue",
-            onPress: () => completePaymentFlow(order.id),
-          },
-        ],
-      );
-    } catch (error) {
-      console.log("SAVED PAYMENT METHOD ERROR:", error);
-
-      //-------------------------------------
-      // GraphQL Error
-      //-------------------------------------
-
-      const graphQLError = error?.errors?.[0]?.message;
-
-      const message =
-        graphQLError ||
-        error?.message ||
-        "We could not process the saved card payment.";
-
-      //-------------------------------------
-      // IMPORTANT:
-      //
-      // Do not tell the customer to simply
-      // pay again.
-      //-------------------------------------
-
-      Alert.alert(
-        "Saved Card Payment",
-        `${message}\n\nIf you were charged, do not make another payment yet.`,
-      );
-    } finally {
-      setPaymentLoading(false);
-    }
-  };
-
-  //================================================
-  // USE NEW CARD
-  //================================================
-
-  const handleUseNewCard = () => {
-    //-------------------------------------
-    // Prevent Action During Payment
-    //-------------------------------------
-
-    if (paymentLoading) {
-      return;
-    }
-
-    //-------------------------------------
-    // Start Normal Paystack Checkout
-    //-------------------------------------
-    //
-    // The existing handlePay() already:
-    //
-    // 1. Validates the order
-    // 2. Validates the email
-    // 3. Validates the amount
-    // 4. Checks whether the order is already paid
-    // 5. Opens Paystack checkout
-    //
-    // Therefore we simply reuse it.
-    //-------------------------------------
-
-    handlePay();
-  };
-
-  //================================================
-  // PAYSTACK CANCEL
-  //================================================
-
-  const handleCancel = () => {
-    setPaymentLoading(false);
 
     Alert.alert(
-      "Payment Cancelled",
-      "The payment was cancelled. You can try again when you're ready.",
+      "Payment Successful",
+      `Your payment has been confirmed successfully.\n\nDelivery Verification Code: ${verificationCode}\n\nKeep this code safe. It will be required to complete your delivery.`,
+      [
+        {
+          text: "Continue",
+          onPress: () => completePaymentFlow(savedOrder.id),
+        },
+      ],
     );
   };
 
   //================================================
-  // PAYSTACK ERROR
+  // VERIFY PAYMENT - FALLBACK ONLY
+  //================================================
+  // IMPORTANT:
+  // paystackWebhook is the PRIMARY confirmation.
+  //
+  // This function is called only when the webhook
+  // has not updated DataStore within the waiting
+  // period after the customer returns from checkout.
   //================================================
 
-  const handlePaystackError = (error) => {
-    console.log("PAYSTACK WEBVIEW ERROR:", error);
+  const verifyPaymentAsFallback = async (targetOrderId, reference) => {
+    console.log("WEBHOOK WAIT EXPIRED.");
+    console.log("RUNNING FALLBACK PAYMENT VERIFICATION:", {
+      orderId: targetOrderId,
+      reference,
+    });
 
-    setPaymentLoading(false);
+    const result = await client.graphql({
+      query: verifyAtuaPayment,
 
-    Alert.alert(
-      "Payment Error",
-      "Paystack could not open the payment page. Please check your connection and try again.",
-    );
+      variables: {
+        orderId: targetOrderId,
+        reference,
+      },
+    });
+
+    const verification = result?.data?.verifyAtuaPayment;
+
+    console.log("FALLBACK VERIFICATION RESPONSE:", verification);
+
+    if (!verification) {
+      throw new Error(
+        "The payment verification service returned an invalid response.",
+      );
+    }
+
+    if (!verification.success || !verification.verified) {
+      throw new Error(
+        verification.message || "The payment could not be verified.",
+      );
+    }
+
+    if (verification.orderId && verification.orderId !== targetOrderId) {
+      throw new Error("The verified payment does not match this order.");
+    }
+
+    // The fallback has verified the transaction.
+    // Give DataStore another opportunity to receive
+    // the Order update made by the fallback Lambda.
+    try {
+      const syncedOrder = await waitForOrderSync(targetOrderId, 15000);
+
+      return syncedOrder;
+    } catch (syncError) {
+      console.warn("ORDER SYNC AFTER FALLBACK VERIFICATION:", syncError);
+    }
+
+    // If the verifier confirms payment but DataStore
+    // has not synchronized yet, do not ask the user
+    // to pay again.
+    const currentOrder = await DataStore.query(Order, targetOrderId);
+
+    if (currentOrder?.paymentStatus === "PAID") {
+      return currentOrder;
+    }
+
+    // The Lambda response itself confirms that
+    // Paystack verified the transaction.
+    return {
+      id: targetOrderId,
+      paymentStatus: "PAID",
+      paymentReference: verification.payment?.reference || reference,
+      deliveryVerificationCode: verification.deliveryVerificationCode || null,
+      paymentID: null,
+      fundsStatus: null,
+      _fallbackVerified: true,
+    };
   };
 
   //================================================
-  // PAYSTACK LOADED
+  // NEW CARD CHECKOUT
+  //================================================
+  // 1. Initialize payment on Atua backend.
+  // 2. Backend registers Payment and reference.
+  // 3. Open backend-generated Paystack checkout URL.
+  // 4. Wait for paystackWebhook / DataStore.
+  // 5. Call verifyAtuaPayment only as fallback.
   //================================================
 
-  const handlePaystackLoad = (response) => {
-    console.log("PAYSTACK CHECKOUT LOADED:", response);
-  };
-
-  //================================================
-  // START PAYMENT
-  //================================================
-
-  const handlePay = () => {
-    //-------------------------------------
-    // Prevent Multiple Presses
-    //-------------------------------------
-
+  const handlePay = async () => {
     if (paymentLoading) {
       return;
     }
@@ -889,18 +474,8 @@ const Payment = () => {
     //-------------------------------------
     // Already Paid
     //-------------------------------------
-    //
-    // If DataStore already knows that this
-    // Order is paid, don't open Paystack
-    // again.
-    //
-    //-------------------------------------
 
     if (order.paymentStatus === "PAID") {
-      //---------------------------------
-      // Show Existing Code If Available
-      //---------------------------------
-
       if (order.deliveryVerificationCode) {
         Alert.alert(
           "Payment Already Confirmed",
@@ -908,30 +483,22 @@ const Payment = () => {
           [
             {
               text: "Continue",
-
               onPress: () => completePaymentFlow(order.id),
             },
           ],
         );
-
-        return;
+      } else {
+        Alert.alert(
+          "Payment Already Confirmed",
+          "This order has already been paid. You can continue to your order.",
+          [
+            {
+              text: "Continue",
+              onPress: () => completePaymentFlow(order.id),
+            },
+          ],
+        );
       }
-
-      //---------------------------------
-      // Paid But Code Missing
-      //---------------------------------
-
-      Alert.alert(
-        "Payment Already Confirmed",
-        "This order has already been paid. You can continue to your order.",
-        [
-          {
-            text: "Continue",
-
-            onPress: () => completePaymentFlow(order.id),
-          },
-        ],
-      );
 
       return;
     }
@@ -942,65 +509,441 @@ const Payment = () => {
 
     setPaymentLoading(true);
 
-    //-------------------------------------
-    // Generate Paystack Reference
-    //-------------------------------------
-    //
-    // A unique reference makes it easier
-    // to trace each payment.
-    //
-    //-------------------------------------
-
-    const reference = `atua_${order.id}_${Date.now()}`;
-
-    console.log("STARTING PAYSTACK PAYMENT:", {
-      orderId: order.id,
-
-      amount,
-
-      reference,
-    });
-
-    //-------------------------------------
-    // Open Paystack Checkout
-    //-------------------------------------
+    let initializedReference = null;
 
     try {
-      popup.checkout({
-        email: dbUser.email,
-        amount,
-        reference,
-        currency: "NGN",
+      //-------------------------------------
+      // STEP 1: INITIALIZE PAYMENT ON BACKEND
+      //-------------------------------------
+      // Do not generate a reference in the app.
+      //
+      // initializeAtuaPayment generates or reuses
+      // the registered reference and creates/updates
+      // the Payment record before Paystack checkout.
+      //-------------------------------------
 
-        // Do NOT specify channels here.
-        // Paystack will show the payment channels
-        // available for this transaction/account.
+      console.log("INITIALIZING ATUA PAYMENT:", {
+        orderId: order.id,
+        payerEmail: dbUser.email,
+      });
 
-        metadata: {
-          custom_fields: [
+      const initializationResponse = await client.graphql({
+        query: initializeAtuaPaymentMutation,
+
+        // The schema requires an authenticated
+        // Cognito User Pool session for this mutation.
+        authMode: "userPool",
+
+        variables: {
+          orderId: order.id,
+          payerEmail: dbUser.email.trim().toLowerCase(),
+          payerPhone: dbUser.phoneNumber || null,
+        },
+      });
+
+      const initialization =
+        initializationResponse?.data?.initializeAtuaPayment;
+
+      console.log("INITIALIZE ATUA PAYMENT RESPONSE:", initialization);
+
+      //-------------------------------------
+      // Validate Initialization Response
+      //-------------------------------------
+
+      if (!initialization) {
+        throw new Error(
+          "The payment initialization service returned an invalid response.",
+        );
+      }
+
+      if (!initialization.success) {
+        throw new Error(
+          initialization.message || "Atua could not initialize this payment.",
+        );
+      }
+
+      if (initialization.orderId !== order.id) {
+        throw new Error("The initialized payment does not match this order.");
+      }
+
+      if (!initialization.reference) {
+        throw new Error(
+          "The payment service did not return a transaction reference.",
+        );
+      }
+
+      if (!initialization.checkoutUrl) {
+        throw new Error(
+          "The payment service did not return a Paystack checkout URL.",
+        );
+      }
+
+      if (
+        typeof initialization.checkoutUrl !== "string" ||
+        !initialization.checkoutUrl.startsWith("https://")
+      ) {
+        throw new Error("The returned Paystack checkout URL is invalid.");
+      }
+
+      initializedReference = initialization.reference;
+
+      //-------------------------------------
+      // Validate Amount Returned By Backend
+      //-------------------------------------
+      // The backend amount is the authoritative
+      // amount to be charged by Paystack.
+      //-------------------------------------
+
+      const backendAmount = Number(initialization.amount);
+
+      if (!Number.isFinite(backendAmount) || backendAmount <= 0) {
+        throw new Error("The backend returned an invalid payment amount.");
+      }
+
+      if (Math.round(backendAmount * 100) !== Math.round(amount * 100)) {
+        throw new Error(
+          "The payment amount returned by the server does not match the order total. Please contact support before proceeding.",
+        );
+      }
+
+      console.log("ATUA PAYMENT INITIALIZED:", {
+        orderId: order.id,
+        paymentId: initialization.paymentId,
+        reference: initializedReference,
+        amount: backendAmount,
+        currency: initialization.currency,
+        paymentResponsibility: initialization.paymentResponsibility,
+      });
+
+      //-------------------------------------
+      // STEP 2: OPEN PAYSTACK CHECKOUT
+      //-------------------------------------
+      // Paystack receives the checkout URL generated
+      // by the Lambda. We do not initialize Paystack
+      // directly from the frontend.
+      //-------------------------------------
+
+      console.log("OPENING REGISTERED PAYSTACK CHECKOUT:", {
+        orderId: order.id,
+        reference: initializedReference,
+      });
+
+      const browserResult = await WebBrowser.openBrowserAsync(
+        initialization.checkoutUrl,
+      );
+
+      console.log("PAYSTACK BROWSER RESULT:", browserResult);
+
+      //-------------------------------------
+      // STEP 3: WAIT FOR WEBHOOK FIRST
+      //-------------------------------------
+      // Closing the browser does not prove that
+      // payment failed or succeeded.
+      //
+      // Give paystackWebhook time to process the
+      // transaction and DataStore time to sync.
+      //-------------------------------------
+
+      console.log("WAITING FOR PAYSTACK WEBHOOK / DATASTORE UPDATE...");
+
+      let syncedOrder = null;
+
+      try {
+        syncedOrder = await waitForOrderSync(order.id, 15000);
+
+        console.log("PAYMENT CONFIRMED BY WEBHOOK / DATASTORE:", {
+          orderId: syncedOrder.id,
+          paymentID: syncedOrder.paymentID,
+          paymentStatus: syncedOrder.paymentStatus,
+          fundsStatus: syncedOrder.fundsStatus,
+          deliveryVerificationCode: syncedOrder.deliveryVerificationCode,
+        });
+
+        showPaymentSuccess(syncedOrder, initializedReference);
+
+        return;
+      } catch (webhookWaitError) {
+        console.log(
+          "WEBHOOK CONFIRMATION NOT YET AVAILABLE:",
+          webhookWaitError?.message,
+        );
+      }
+
+      //-------------------------------------
+      // STEP 4: CHECK DATASTORE ONE MORE TIME
+      //-------------------------------------
+      // Avoid invoking the fallback if the webhook
+      // updated the order at the end of the wait.
+      //-------------------------------------
+
+      const latestOrder = await DataStore.query(Order, order.id);
+
+      if (isOrderPaymentComplete(latestOrder)) {
+        showPaymentSuccess(latestOrder, initializedReference);
+
+        return;
+      }
+
+      //-------------------------------------
+      // STEP 5: FALLBACK VERIFICATION
+      //-------------------------------------
+      // Only now do we invoke verifyAtuaPayment.
+      //
+      // The exact reference returned by
+      // initializeAtuaPayment is passed through.
+      //-------------------------------------
+
+      const fallbackOrder = await verifyPaymentAsFallback(
+        order.id,
+        initializedReference,
+      );
+
+      //-------------------------------------
+      // STEP 6: SHOW RESULT
+      //-------------------------------------
+
+      if (fallbackOrder?._fallbackVerified) {
+        const verificationCode = fallbackOrder.deliveryVerificationCode;
+
+        console.log("PAYMENT CONFIRMED BY FALLBACK VERIFICATION:", {
+          orderId: fallbackOrder.id,
+          reference: initializedReference,
+          verificationCode,
+        });
+
+        Alert.alert(
+          "Payment Confirmed",
+          verificationCode
+            ? `Your payment has been verified successfully.\n\nDelivery Verification Code: ${verificationCode}\n\nKeep this code safe. It will be required to complete your delivery.`
+            : "Your payment has been verified successfully. Your order is still synchronizing.",
+          [
             {
-              display_name: "Atua Order ID",
-              variable_name: "order_id",
-              value: order.id,
+              text: "Continue",
+              onPress: () => completePaymentFlow(order.id),
             },
           ],
-        },
+        );
 
-        onSuccess: handleSuccess,
-        onCancel: handleCancel,
-        onLoad: handlePaystackLoad,
-        onError: handlePaystackError,
-      });
+        return;
+      }
+
+      showPaymentSuccess(fallbackOrder, initializedReference);
     } catch (error) {
-      console.log("START PAYSTACK ERROR:", error);
+      console.error("ATUA PAYMENT ERROR:", {
+        orderId: order?.id,
+        reference: initializedReference,
+        message: error?.message,
+        errors: error?.errors,
+      });
 
-      setPaymentLoading(false);
+      const graphQLError = error?.errors?.[0]?.message;
+
+      const message =
+        graphQLError || error?.message || "We could not confirm your payment.";
+
+      //-------------------------------------
+      // IMPORTANT
+      //-------------------------------------
+      // Do not tell the customer to pay again.
+      //
+      // The customer may have completed payment
+      // even if the browser closed or the webhook
+      // has not yet updated the Order.
+      //-------------------------------------
 
       Alert.alert(
-        "Unable to Start Payment",
-        error?.message || "The payment page could not be opened.",
+        "Payment Processing",
+        `${message}\n\nIf you completed the Paystack payment, do not make another payment yet. Your transaction may still be processing. Please check your order or contact support if the status does not update.`,
       );
+    } finally {
+      setPaymentLoading(false);
     }
+  };
+
+  //================================================
+  // SAVED PAYMENT METHOD
+  //================================================
+  // This flow is intentionally kept separate.
+  // It continues to use chargeAtuaPaymentMethod
+  // and waits for the webhook to update the Order.
+  //================================================
+
+  const handlePayWithSavedCard = async (paymentMethod) => {
+    if (paymentLoading) {
+      return;
+    }
+
+    if (!order?.id) {
+      Alert.alert(
+        "Order Unavailable",
+        "We could not find the order you are trying to pay for.",
+      );
+
+      return;
+    }
+
+    if (!paymentMethod?.id) {
+      Alert.alert(
+        "Payment Method Unavailable",
+        "Please select a saved card and try again.",
+      );
+
+      return;
+    }
+
+    if (order.paymentStatus === "PAID") {
+      if (order.deliveryVerificationCode) {
+        Alert.alert(
+          "Payment Already Confirmed",
+          `This order has already been paid.\n\nDelivery Verification Code: ${order.deliveryVerificationCode}\n\nKeep this code safe. It will be required to complete your delivery.`,
+          [
+            {
+              text: "Continue",
+              onPress: () => completePaymentFlow(order.id),
+            },
+          ],
+        );
+      } else {
+        Alert.alert(
+          "Payment Already Confirmed",
+          "This order has already been paid. You can continue to your order.",
+          [
+            {
+              text: "Continue",
+              onPress: () => completePaymentFlow(order.id),
+            },
+          ],
+        );
+      }
+
+      return;
+    }
+
+    setPaymentLoading(true);
+
+    try {
+      console.log("CHARGING SAVED PAYMENT METHOD:", {
+        orderId: order.id,
+        paymentMethodId: paymentMethod.id,
+      });
+
+      const result = await client.graphql({
+        query: chargeAtuaPaymentMethod,
+
+        authMode: "userPool",
+
+        variables: {
+          orderId: order.id,
+          paymentMethodId: paymentMethod.id,
+        },
+      });
+
+      console.log("SAVED PAYMENT METHOD RESPONSE:", result);
+
+      const chargeResult = result?.data?.chargeAtuaPaymentMethod;
+
+      if (!chargeResult) {
+        throw new Error(
+          "The saved-card payment service returned an invalid response.",
+        );
+      }
+
+      if (!chargeResult.success) {
+        throw new Error(
+          chargeResult.message || "The saved card could not be charged.",
+        );
+      }
+
+      console.log("SAVED CARD CHARGE ACCEPTED:", {
+        orderId: order.id,
+        paymentMethodId: paymentMethod.id,
+        reference: chargeResult.reference || null,
+      });
+
+      //-------------------------------------
+      // Wait for paystackWebhook
+      //-------------------------------------
+
+      let syncedOrder;
+
+      try {
+        syncedOrder = await waitForOrderSync(order.id, 30000);
+      } catch (syncError) {
+        console.error("SAVED CARD ORDER DATASTORE SYNC FAILED:", syncError);
+
+        Alert.alert(
+          "Payment Processing",
+          "Your saved card payment was submitted successfully, but we're still confirming your order. Please do not make another payment yet.",
+          [
+            {
+              text: "OK",
+            },
+          ],
+        );
+
+        return;
+      }
+
+      //-------------------------------------
+      // Final Confirmation
+      //-------------------------------------
+
+      const verificationCode = syncedOrder.deliveryVerificationCode;
+
+      if (!verificationCode) {
+        Alert.alert(
+          "Payment Confirmed",
+          "Your payment was confirmed, but your delivery verification code is still being synchronized. Please continue to your order.",
+          [
+            {
+              text: "Continue",
+              onPress: () => completePaymentFlow(order.id),
+            },
+          ],
+        );
+
+        return;
+      }
+
+      Alert.alert(
+        "Payment Successful",
+        `Your payment has been confirmed successfully.\n\nDelivery Verification Code: ${verificationCode}\n\nKeep this code safe. It will be required to complete your delivery.`,
+        [
+          {
+            text: "Continue",
+            onPress: () => completePaymentFlow(order.id),
+          },
+        ],
+      );
+    } catch (error) {
+      console.log("SAVED PAYMENT METHOD ERROR:", error);
+
+      const graphQLError = error?.errors?.[0]?.message;
+
+      const message =
+        graphQLError ||
+        error?.message ||
+        "We could not process the saved card payment.";
+
+      Alert.alert(
+        "Saved Card Payment",
+        `${message}\n\nIf you were charged, do not make another payment yet.`,
+      );
+    } finally {
+      setPaymentLoading(false);
+    }
+  };
+
+  //================================================
+  // USE NEW CARD
+  //================================================
+
+  const handleUseNewCard = () => {
+    if (paymentLoading) {
+      return;
+    }
+
+    handlePay();
   };
 
   //================================================
@@ -1064,9 +1007,7 @@ const Payment = () => {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      {/* =====================================
-          HEADER
-      ===================================== */}
+      {/* HEADER */}
 
       <View style={styles.header}>
         <TouchableOpacity
@@ -1082,18 +1023,14 @@ const Payment = () => {
         <View style={styles.headerButton} />
       </View>
 
-      {/* =====================================
-          CONTENT
-      ===================================== */}
+      {/* CONTENT */}
 
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* =================================
-            AMOUNT
-        ================================= */}
+        {/* AMOUNT */}
 
         <View style={styles.amountCard}>
           <Text style={styles.amountLabel}>Total to Pay</Text>
@@ -1109,9 +1046,7 @@ const Payment = () => {
           </View>
         </View>
 
-        {/* =================================
-            PAYMENT SUMMARY
-        ================================= */}
+        {/* PAYMENT SUMMARY */}
 
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>Payment Summary</Text>
@@ -1157,18 +1092,15 @@ const Payment = () => {
           </View>
         </View>
 
-        {/* =================================
-            SAVED PAYMENT METHODS
-        ================================= */}
+        {/* SAVED PAYMENT METHODS */}
+
         <SavedPaymentMethods
           onPayWithSavedCard={handlePayWithSavedCard}
           onUseNewCard={handleUseNewCard}
           paymentLoading={paymentLoading}
         />
 
-        {/* =================================
-            SECURITY
-        ================================= */}
+        {/* SECURITY */}
 
         <View style={styles.securityCard}>
           <View style={styles.securityIcon}>
@@ -1185,9 +1117,7 @@ const Payment = () => {
           </View>
         </View>
 
-        {/* =================================
-            POWERED BY
-        ================================= */}
+        {/* POWERED BY */}
 
         <View style={styles.poweredBy}>
           <Ionicons name="lock-closed" size={13} color="#6B7280" />
@@ -1198,9 +1128,7 @@ const Payment = () => {
         </View>
       </ScrollView>
 
-      {/* =====================================
-          BOTTOM CTA
-      ===================================== */}
+      {/* BOTTOM CTA */}
 
       <View style={styles.bottomContainer}>
         <TouchableOpacity

@@ -15,6 +15,18 @@
     },
     "s3Key": {
       "Type": "String"
+    },
+    "apiAtuaGraphQLAPIIdOutput": {
+      "Type": "String",
+      "Default": "apiAtuaGraphQLAPIIdOutput"
+    },
+    "apiAtuaGraphQLAPIEndpointOutput": {
+      "Type": "String",
+      "Default": "apiAtuaGraphQLAPIEndpointOutput"
+    },
+    "apiAtuaGraphQLAPIKeyOutput": {
+      "Type": "String",
+      "Default": "apiAtuaGraphQLAPIKeyOutput"
     }
   },
   "Conditions": {
@@ -69,6 +81,15 @@
             },
             "REGION": {
               "Ref": "AWS::Region"
+            },
+            "API_ATUA_GRAPHQLAPIIDOUTPUT": {
+              "Ref": "apiAtuaGraphQLAPIIdOutput"
+            },
+            "API_ATUA_GRAPHQLAPIENDPOINTOUTPUT": {
+              "Ref": "apiAtuaGraphQLAPIEndpointOutput"
+            },
+            "API_ATUA_GRAPHQLAPIKEYOUTPUT": {
+              "Ref": "apiAtuaGraphQLAPIKeyOutput"
             }
           }
         },
@@ -160,6 +181,108 @@
                   }
                 ]
               }
+            }
+          ]
+        }
+      }
+    },
+    "CustomLambdaExecutionPolicy": {
+      "Type": "AWS::IAM::Policy",
+      "Properties": {
+        "PolicyName": "custom-lambda-execution-policy",
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Action": [
+                "appsync:GraphQL"
+              ],
+              "Resource": [
+                "arn:aws:appsync:eu-north-1:703145406670:apis/n4tb6ywvhnf3zesv5ibhpitqiq/types/Query/fields/getPayout",
+                "arn:aws:appsync:eu-north-1:703145406670:apis/n4tb6ywvhnf3zesv5ibhpitqiq/types/Query/fields/getWallet",
+                "arn:aws:appsync:eu-north-1:703145406670:apis/n4tb6ywvhnf3zesv5ibhpitqiq/types/Query/fields/listWallets",
+                "arn:aws:appsync:eu-north-1:703145406670:apis/n4tb6ywvhnf3zesv5ibhpitqiq/types/Query/fields/getPayoutReservation",
+                "arn:aws:appsync:eu-north-1:703145406670:apis/n4tb6ywvhnf3zesv5ibhpitqiq/types/Query/fields/getCourier",
+                "arn:aws:appsync:eu-north-1:703145406670:apis/n4tb6ywvhnf3zesv5ibhpitqiq/types/Query/fields/getTransaction",
+                "arn:aws:appsync:eu-north-1:703145406670:apis/n4tb6ywvhnf3zesv5ibhpitqiq/types/Mutation/fields/createPayoutReservation",
+                "arn:aws:appsync:eu-north-1:703145406670:apis/n4tb6ywvhnf3zesv5ibhpitqiq/types/Mutation/fields/updatePayoutReservation",
+                "arn:aws:appsync:eu-north-1:703145406670:apis/n4tb6ywvhnf3zesv5ibhpitqiq/types/Mutation/fields/updateWallet",
+                "arn:aws:appsync:eu-north-1:703145406670:apis/n4tb6ywvhnf3zesv5ibhpitqiq/types/Mutation/fields/createTransaction"
+              ],
+              "Effect": "Allow"
+            }
+          ]
+        },
+        "Roles": [
+          {
+            "Ref": "LambdaExecutionRole"
+          }
+        ]
+      },
+      "DependsOn": "LambdaExecutionRole"
+    },
+    "AmplifyResourcesPolicy": {
+      "DependsOn": [
+        "LambdaExecutionRole"
+      ],
+      "Type": "AWS::IAM::Policy",
+      "Properties": {
+        "PolicyName": "amplify-lambda-execution-policy",
+        "Roles": [
+          {
+            "Ref": "LambdaExecutionRole"
+          }
+        ],
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Action": [
+                "appsync:GraphQL"
+              ],
+              "Resource": [
+                {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "arn:aws:appsync:",
+                      {
+                        "Ref": "AWS::Region"
+                      },
+                      ":",
+                      {
+                        "Ref": "AWS::AccountId"
+                      },
+                      ":apis/",
+                      {
+                        "Ref": "apiAtuaGraphQLAPIIdOutput"
+                      },
+                      "/types/Query/*"
+                    ]
+                  ]
+                },
+                {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "arn:aws:appsync:",
+                      {
+                        "Ref": "AWS::Region"
+                      },
+                      ":",
+                      {
+                        "Ref": "AWS::AccountId"
+                      },
+                      ":apis/",
+                      {
+                        "Ref": "apiAtuaGraphQLAPIIdOutput"
+                      },
+                      "/types/Mutation/*"
+                    ]
+                  ]
+                }
+              ]
             }
           ]
         }

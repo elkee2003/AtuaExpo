@@ -1,0 +1,9 @@
+{
+  "frontend": "javascript",
+  "javascript": {
+    "framework": "none",
+    "config": {
+      "SourceDir": "amplify-codegen-temp"
+    }
+  }
+}

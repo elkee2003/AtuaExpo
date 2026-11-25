@@ -651,50 +651,86 @@ const getPaymentByReference = async (reference) => {
   const query = `
     query ListPayments(
       $filter: ModelPaymentFilterInput
+      $limit: Int
+      $nextToken: String
     ) {
       listPayments(
         filter: $filter
-        limit: 1
+        limit: $limit
+        nextToken: $nextToken
       ) {
         items {
           id
-
           orderID
           userID
-
           amount
           currency
-
           status
           paymentMethod
           provider
-
           reference
-
           createdAt
           updatedAt
-
           _version
           _lastChangedAt
           _deleted
         }
+        nextToken
       }
     }
   `;
 
-  const data = await graphqlRequest(
-    query,
-    {
-      filter: {
-        reference: {
-          eq: reference,
-        },
-      },
-    },
-    "GetPaymentByReference",
-  );
+  let nextToken = null;
+  let payment = null;
 
-  return data?.listPayments?.items?.find((item) => !item?._deleted) || null;
+  do {
+    const data = await graphqlRequest(
+      query,
+      {
+        filter: {
+          reference: {
+            eq: reference,
+          },
+        },
+        limit: 100,
+        nextToken,
+      },
+      "GetPaymentByReference",
+    );
+
+    const result = data?.listPayments;
+
+    if (!result) {
+      throw new Error("AppSync did not return the Payment list.");
+    }
+
+    const matches = (result.items || []).filter(
+      (item) => item && !item._deleted && item.reference === reference,
+    );
+
+    if (matches.length > 1) {
+      throw new Error(
+        `Multiple Payment records found for reference ${reference}.`,
+      );
+    }
+
+    if (matches.length === 1) {
+      payment = matches[0];
+      break;
+    }
+
+    nextToken = result.nextToken || null;
+  } while (nextToken);
+
+  console.log("GET PAYMENT BY REFERENCE RESULT:", {
+    reference,
+    paymentFound: Boolean(payment),
+    paymentID: payment?.id || null,
+    orderID: payment?.orderID || null,
+    status: payment?.status || null,
+  });
+
+  return payment;
 };
 
 /* ==========================================================

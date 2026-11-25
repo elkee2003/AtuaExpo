@@ -621,51 +621,6 @@ const assertCourierOwnsPayoutRequest = async (event, courierID) => {
 };
 
 /* ==========================================================
-   VERIFY ADMIN PAYOUT REQUESTER
-========================================================== */
-
-const assertAdminPayoutRequester = (event) => {
-  const callerSub =
-    event?.identity?.sub || event?.identity?.claims?.sub || null;
-
-  if (!callerSub) {
-    throw new Error(
-      "Unauthorized: authenticated administrator access is required.",
-    );
-  }
-
-  const adminGroup = process.env.ADMIN_GROUP_NAME;
-
-  if (!adminGroup) {
-    throw new Error("ADMIN_GROUP_NAME environment variable is not configured.");
-  }
-
-  const rawGroups =
-    event?.identity?.groups ||
-    event?.identity?.claims?.["cognito:groups"] ||
-    [];
-
-  let groups = [];
-
-  if (Array.isArray(rawGroups)) {
-    groups = rawGroups;
-  } else if (typeof rawGroups === "string") {
-    try {
-      const parsed = JSON.parse(rawGroups);
-      groups = Array.isArray(parsed)
-        ? parsed
-        : rawGroups.split(",").map((group) => group.trim());
-    } catch {
-      groups = rawGroups.split(",").map((group) => group.trim());
-    }
-  }
-
-  if (!groups.includes(adminGroup)) {
-    throw new Error("Unauthorized: administrator privileges are required.");
-  }
-};
-
-/* ==========================================================
    GET COURIER WALLET
 ========================================================== */
 
@@ -870,6 +825,21 @@ const getActiveCourierPayouts = async (courierID) => {
     );
 
     const payouts = data?.listPayouts?.items || [];
+
+    console.log(
+      "[ACTIVE PAYOUT CHECK] Records returned:",
+      JSON.stringify(
+        payouts.map((payout) => ({
+          id: payout?.id,
+          courierID: payout?.courierID,
+          status: payout?.status,
+          reference: payout?.reference,
+          deleted: payout?._deleted,
+        })),
+        null,
+        2,
+      ),
+    );
 
     activePayouts.push(
       ...payouts.filter((payout) => {
@@ -4216,6 +4186,7 @@ const processCourierPayout = async ({
 
     if (
       reservationResult.status !== "RESERVED" ||
+      !reservationResult.reservationID ||
       !reservationResult.transactionID ||
       !reservedWalletID ||
       !reservedPayoutID ||
@@ -4935,113 +4906,41 @@ const processCourierPayout = async ({
       };
     }
 
-    /*
-     * The wallet was reserved, but no debit transaction
-     * is available to identify the exact amount to reverse.
-     * Do not blindly credit the wallet.
-     */
-    if ((walletReserved || reservationAttempted) && !transaction) {
-      console.error(
-        "CRITICAL: WALLET RESERVED BUT DEBIT TRANSACTION IS MISSING:",
-        {
-          courierID,
-          walletID: wallet?.id,
-          payoutID: payout?.id,
-          reference,
-          amountToRestore: financials.totalWalletDebit,
-        },
-      );
+    // The reservation outcome is uncertain.
+    // Keep the payout active so another payout cannot be
+    // created while this one requires reconciliation.
 
-      return {
-        success: false,
-        status: "FAILED_RECONCILIATION_REQUIRED",
-        transferStarted: false,
-        courierID,
-        payout,
-        transaction: null,
-        payoutSource: normalizedSource,
-        payoutMethod: normalizedMethod,
-        financials,
-        message:
-          "Wallet balance was reserved, but the debit transaction could not be confirmed. Reconcile the wallet and transaction records before restoring the balance.",
-      };
-    }
-
-    /*
-     * A debit transaction exists and transfer initiation
-     * has not started. Request reversal through reversePayout
-     * instead of restoring the wallet directly.
-     */
-    if (walletReserved && transaction) {
-      try {
-        const reversal = await requestPayoutReversal({
+    try {
+      if (payout?.id) {
+        payout = await updatePayoutStatus({
           payout,
-          transaction,
-          transfer: null,
-          eventType: "transfer.failed",
-          failureReason:
-            error?.message || "Payout failed before transfer initiation.",
+          status: PAYOUT_STATUS.PROCESSING,
+          updates: {
+            processedAt: new Date().toISOString(),
+            failureReason:
+              "Wallet reservation outcome could not be confirmed. Manual reconciliation is required before retrying.",
+          },
         });
-
-        walletReserved = false;
-
-        return {
-          success: false,
-          status: "FAILED",
-          transferStarted: false,
-          courierID,
-          payout,
-          transaction,
-          payoutSource: normalizedSource,
-          payoutMethod: normalizedMethod,
-          financials,
-          reversal,
-          message:
-            "Payout failed before transfer initiation and the payout reversal was completed.",
-        };
-      } catch (reversalError) {
-        console.error(
-          "CRITICAL: Pre-transfer payout reversal did not complete:",
-          reversalError,
-        );
-
-        return {
-          success: false,
-          status: "FAILED_RECONCILIATION_REQUIRED",
-          transferStarted: false,
-          courierID,
-          payout,
-          transaction,
-          payoutSource: normalizedSource,
-          payoutMethod: normalizedMethod,
-          financials,
-          message:
-            "Payout failed before transfer initiation, but the wallet reversal did not complete. Reconciliation is required.",
-          error: reversalError.message,
-        };
       }
+    } catch (statusUpdateError) {
+      console.error(
+        "CRITICAL: Could not mark uncertain payout as PROCESSING:",
+        statusUpdateError,
+      );
     }
 
     return {
       success: false,
-
-      status: "FAILED",
-
+      status: "FAILED_RECONCILIATION_REQUIRED",
       transferStarted: false,
-
       courierID,
-
       payout,
-
-      transaction,
-
+      transaction: null,
       payoutSource: normalizedSource,
-
       payoutMethod: normalizedMethod,
-
       financials,
-
-      message: error?.message || "Payout processing failed.",
+      message:
+        "Wallet reservation outcome could not be confirmed. Do not retry this payout until the wallet, reservation and transaction records have been reconciled.",
     };
   }
 };
@@ -5050,7 +4949,11 @@ const processCourierPayout = async ({
    EXECUTE MANUAL ALL PAYOUTS
 ==========================================================
 
-   ADMIN ONLY.
+   ADMIN PAYOUT OPERATION.
+
+    Currently invoked through adminMakeAllPayouts.
+    Authorization is temporarily handled in the Lambda handler.
+    Implement proper server-side Admin authorization before production.
 
    This function pays all eligible courier wallets.
 
@@ -6063,7 +5966,12 @@ exports.handler = async (event, context) => {
 
   console.log("==================================================");
 
-  console.log("EVENT:", JSON.stringify(event, null, 2));
+  console.log("PROCESS PAYOUTS REQUEST:", {
+    fieldName: event?.info?.fieldName || event?.fieldName || "unknown",
+    authenticated: Boolean(
+      event?.identity?.sub || event?.identity?.claims?.sub,
+    ),
+  });
 
   try {
     /* ======================================================
@@ -6132,8 +6040,8 @@ exports.handler = async (event, context) => {
     console.log("APPSYNC ARGUMENTS:", JSON.stringify(args, null, 2));
 
     /* ======================================================
-   4. AUTHORIZE PAYOUT REQUEST
-====================================================== */
+      4. AUTHORIZE PAYOUT REQUEST
+    ====================================================== */
 
     const requestedCourierID = getArgumentValue(args, [
       "courierID",
@@ -6159,18 +6067,43 @@ exports.handler = async (event, context) => {
      * These routes must only be accessible to administrators.
      */
     const isAdminPayoutRequest =
-      fieldName === "adminMakePayout" ||
-      fieldName === "adminMakeAllPayouts" ||
-      requestedPayoutMethod === PAYOUT_METHOD.MANUAL_ALL ||
-      requestedPayoutSource === PAYOUT_SOURCE.ADMIN_MANUAL;
+      fieldName === "adminMakePayout" || fieldName === "adminMakeAllPayouts";
 
     /*
-     * COURIER REQUESTS
+     * ==========================================================
+     * TEMPORARY ADMIN PAYOUT AUTHORIZATION — MVP
+     * ==========================================================
      *
-     * These routes must only be accessible to the
-     * authenticated courier whose Courier.sub matches
-     * the Cognito identity sub.
+     * CURRENT IMPLEMENTATION:
+     * Any authenticated Atua user can invoke:
+     *
+     *   1. adminMakePayout
+     *   2. adminMakeAllPayouts
+     *
+     * The Admin page is currently restricted through the
+     * frontend. This is NOT sufficient backend security.
+     *
+     * FUTURE TASK — PROPER ADMIN AUTHORIZATION:
+     *
+     * Replace this temporary authenticated-user check with
+     * a proper server-side administrator authorization system.
+     *
+     * Planned requirements:
+     *
+     *   1. Create an Admin role / permission structure.
+     *   2. Verify administrator privileges inside the backend.
+     *   3. Restrict admin payout mutations to authorized admins.
+     *   4. Record which administrator initiated each payout.
+     *   5. Add audit logs for all admin payout actions.
+     *   6. Consider approval requirements for bulk payouts.
+     *
+     * IMPORTANT:
+     * Do not remove courier ownership verification when
+     * implementing the permanent admin authorization system.
+     *
+     * ==========================================================
      */
+
     const isCourierPayoutRequest =
       fieldName === "requestPayout" ||
       fieldName === "courierRequestPayout" ||
@@ -6178,8 +6111,25 @@ exports.handler = async (event, context) => {
       requestedPayoutMethod === PAYOUT_METHOD.MANUAL_SINGLE;
 
     if (isAdminPayoutRequest) {
-      assertAdminPayoutRequester(event);
+      /*
+       * TEMPORARY MVP AUTHORIZATION
+       *
+       * Only checks that the caller is authenticated.
+       *
+       * FUTURE:
+       * Replace this with a server-side Admin role check.
+       * Do not rely on frontend page restrictions alone.
+       */
+      const callerSub =
+        event?.identity?.sub || event?.identity?.claims?.sub || null;
+
+      if (!callerSub) {
+        throw new Error("Unauthorized: authenticated user access is required.");
+      }
+
+      console.log("AUTHENTICATED ADMIN PAYOUT REQUEST ACCEPTED.");
     } else if (isCourierPayoutRequest) {
+      // Couriers can only request payouts for their own accounts.
       await assertCourierOwnsPayoutRequest(event, requestedCourierID);
     } else {
       throw new Error("Unauthorized or unsupported payout request.");
@@ -6208,6 +6158,16 @@ exports.handler = async (event, context) => {
           - processes eligible couriers sequentially
 
     ====================================================== */
+
+    /*
+     * FUTURE ADMIN FLOW:
+     *
+     * Before production, ensure this operation is protected
+     * by server-side administrator permissions.
+     *
+     * Consider requiring a confirmation or approval step
+     * before initiating high-value payouts.
+     */
 
     if (fieldName === "adminMakePayout") {
       console.log("ADMIN SINGLE PAYOUT REQUEST DETECTED.");

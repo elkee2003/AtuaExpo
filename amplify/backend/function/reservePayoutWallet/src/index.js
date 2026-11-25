@@ -1,9 +1,25 @@
-"use strict";
+/* Amplify Params - DO NOT EDIT
+	API_ATUA_GRAPHQLAPIENDPOINTOUTPUT
+	API_ATUA_GRAPHQLAPIIDOUTPUT
+	API_ATUA_GRAPHQLAPIKEYOUTPUT
+	ENV
+	REGION
+Amplify Params - DO NOT EDIT */"use strict";
 
 const https = require("https");
-const crypto = require("crypto");
+
+const { STSClient, GetCallerIdentityCommand } = require("@aws-sdk/client-sts");
+
+const { SignatureV4 } = require("@smithy/signature-v4");
+const { HttpRequest } = require("@smithy/protocol-http");
+const { Sha256 } = require("@aws-crypto/sha256-js");
+const { defaultProvider } = require("@aws-sdk/credential-provider-node");
+/* ==========================================================
+   CONFIGURATION
+========================================================== */
 
 const GRAPHQL_ENDPOINT = process.env.API_ATUA_GRAPHQLAPIENDPOINTOUTPUT;
+const API_KEY = process.env.API_ATUA_GRAPHQLAPIKEYOUTPUT;
 
 const REGION = process.env.REGION || process.env.AWS_REGION || "eu-north-1";
 
@@ -24,115 +40,40 @@ const money = (value) => {
 const errorMessage = (error) => {
   if (!error) return "Unknown error.";
   if (typeof error === "string") return error;
+
   return error.message || JSON.stringify(error);
 };
 
-/* ==========================================================
-   AWS IAM SIGNING
-========================================================== */
+const definiteFailure = (payoutID, code, message) => ({
+  success: false,
+  status: "FAILED",
+  walletDebited: false,
+  reservationCreated: false,
+  uncertain: false,
+  payoutID: payoutID || null,
+  code,
+  message,
+});
 
-const getAwsCredentials = () => {
-  const accessKeyId = process.env.AWS_ACCESS_KEY_ID;
-  const secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY;
-  const sessionToken = process.env.AWS_SESSION_TOKEN;
-
-  if (!accessKeyId || !secretAccessKey) {
-    throw new Error(
-      "Lambda IAM credentials are unavailable. Check the execution role.",
-    );
-  }
-
-  return {
-    accessKeyId,
-    secretAccessKey,
-    sessionToken,
-  };
-};
-
-const sha256 = (value) =>
-  crypto.createHash("sha256").update(value, "utf8").digest("hex");
-
-const hmac = (key, value, encoding) =>
-  crypto.createHmac("sha256", key).update(value, "utf8").digest(encoding);
-
-const getSigningKey = (secretKey, dateStamp, region, service) => {
-  const kDate = hmac(`AWS4${secretKey}`, dateStamp);
-  const kRegion = hmac(kDate, region);
-  const kService = hmac(kRegion, service);
-
-  return hmac(kService, "aws4_request");
-};
-
-const signAppSyncRequest = ({ method, path, body, host }) => {
-  const credentials = getAwsCredentials();
-
-  const now = new Date();
-  const amzDate = now.toISOString().replace(/[:-]|\.\d{3}/g, "");
-  const dateStamp = amzDate.slice(0, 8);
-
-  const service = "appsync";
-
-  const canonicalHeaders =
-    `content-type:application/json\n` +
-    `host:${host}\n` +
-    `x-amz-date:${amzDate}\n` +
-    (credentials.sessionToken
-      ? `x-amz-security-token:${credentials.sessionToken}\n`
-      : "");
-
-  const signedHeaders = credentials.sessionToken
-    ? "content-type;host;x-amz-date;x-amz-security-token"
-    : "content-type;host;x-amz-date";
-
-  const payloadHash = sha256(body);
-
-  const canonicalRequest =
-    `${method}\n` +
-    `${path}\n` +
-    `\n` +
-    `${canonicalHeaders}` +
-    `${signedHeaders}\n` +
-    `${payloadHash}`;
-
-  const credentialScope = `${dateStamp}/${REGION}/${service}/aws4_request`;
-
-  const stringToSign = [
-    "AWS4-HMAC-SHA256",
-    amzDate,
-    credentialScope,
-    sha256(canonicalRequest),
-  ].join("\n");
-
-  const signingKey = getSigningKey(
-    credentials.secretAccessKey,
-    dateStamp,
-    REGION,
-    service,
-  );
-
-  const signature = hmac(signingKey, stringToSign, "hex");
-
-  const authorization =
-    `AWS4-HMAC-SHA256 ` +
-    `Credential=${credentials.accessKeyId}/${credentialScope}, ` +
-    `SignedHeaders=${signedHeaders}, ` +
-    `Signature=${signature}`;
-
-  const headers = {
-    "Content-Type": "application/json",
-    "X-Amz-Date": amzDate,
-    Authorization: authorization,
-  };
-
-  if (credentials.sessionToken) {
-    headers["X-Amz-Security-Token"] = credentials.sessionToken;
-  }
-
-  return headers;
-};
+const uncertainFailure = (
+  payoutID,
+  message,
+  reservationID = null,
+  status = "PENDING",
+) => ({
+  success: false,
+  status,
+  walletDebited: null,
+  reservationCreated: reservationID !== null,
+  uncertain: true,
+  payoutID: payoutID || null,
+  reservationID,
+  code: "PAYOUT_RESERVATION_UNCERTAIN",
+  message,
+});
 
 /* ==========================================================
-   GRAPHQL REQUEST
+   GRAPHQL REQUEST — API KEY AUTHENTICATION
 ========================================================== */
 
 const graphqlRequest = async (
@@ -144,7 +85,122 @@ const graphqlRequest = async (
     throw new Error("API_ATUA_GRAPHQLAPIENDPOINTOUTPUT is not configured.");
   }
 
+  if (!API_KEY) {
+    throw new Error("API_ATUA_GRAPHQLAPIKEYOUTPUT is not configured.");
+  }
+
   const endpoint = new URL(GRAPHQL_ENDPOINT);
+
+  if (endpoint.protocol !== "https:" || !endpoint.hostname) {
+    throw new Error("The AppSync GraphQL endpoint is invalid.");
+  }
+
+  const response = await fetch(endpoint.toString(), {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": API_KEY,
+    },
+    body: JSON.stringify({
+      query,
+      variables,
+    }),
+    signal: AbortSignal.timeout(15000),
+  });
+
+  const responseText = await response.text();
+
+  let parsed;
+
+  try {
+    parsed = JSON.parse(responseText);
+  } catch {
+    throw new Error(
+      `${operationName}: AppSync returned invalid JSON: ${responseText}`,
+    );
+  }
+
+  if (!response.ok) {
+    throw new Error(
+      `${operationName}: HTTP ${response.status}: ${responseText}`,
+    );
+  }
+
+  if (parsed.errors?.length) {
+    const messages = parsed.errors
+      .map((item) => item.message)
+      .filter(Boolean)
+      .join(" | ");
+
+    console.error(
+      "APPSYNC COMPLETE GRAPHQL ERRORS:",
+      JSON.stringify(parsed.errors, null, 2),
+    );
+
+    const error = new Error(messages || `${operationName} failed.`);
+
+    error.graphqlErrors = parsed.errors;
+
+    throw error;
+  }
+
+  return parsed.data || null;
+};
+
+/* ==========================================================
+   AWS IAM CREDENTIALS
+========================================================== */
+
+const getAwsCredentials = defaultProvider();
+
+/* ==========================================================
+   AWS SIGNATURE V4 SIGNER
+========================================================== */
+
+const appSyncSigner = new SignatureV4({
+  credentials: getAwsCredentials,
+  region: REGION,
+  service: "appsync",
+  sha256: Sha256,
+});
+
+const signAppSyncRequest = async ({ method, path, body, host }) => {
+  const endpoint = new URL(GRAPHQL_ENDPOINT);
+
+  const request = new HttpRequest({
+    protocol: endpoint.protocol,
+    hostname: endpoint.hostname,
+    port: endpoint.port ? Number(endpoint.port) : undefined,
+    method,
+    path,
+    headers: {
+      host,
+      "content-type": "application/json",
+    },
+    body,
+  });
+
+  return appSyncSigner.sign(request);
+};
+
+/* ==========================================================
+   GRAPHQL REQUEST — AWS IAM AUTHENTICATION
+========================================================== */
+
+const graphqlRequestIAM = async (
+  query,
+  variables = {},
+  operationName = "AppSync IAM operation",
+) => {
+  if (!GRAPHQL_ENDPOINT) {
+    throw new Error("API_ATUA_GRAPHQLAPIENDPOINTOUTPUT is not configured.");
+  }
+
+  const endpoint = new URL(GRAPHQL_ENDPOINT);
+
+  if (endpoint.protocol !== "https:" || !endpoint.hostname) {
+    throw new Error("The AppSync GraphQL endpoint is invalid.");
+  }
 
   const body = JSON.stringify({
     query,
@@ -153,11 +209,23 @@ const graphqlRequest = async (
 
   const path = `${endpoint.pathname}${endpoint.search}`;
 
-  const headers = signAppSyncRequest({
+  const signedRequest = await signAppSyncRequest({
     method: "POST",
     path,
     body,
     host: endpoint.host,
+  });
+
+  console.log("APPSYNC IAM REQUEST CHECK:", {
+    operationName,
+    endpointHost: endpoint.host,
+    region: REGION,
+    service: "appsync",
+    hasAuthorizationHeader: !!signedRequest.headers.authorization,
+    hasSecurityTokenHeader: !!(
+      signedRequest.headers["x-amz-security-token"] ||
+      signedRequest.headers["X-Amz-Security-Token"]
+    ),
   });
 
   const options = {
@@ -166,7 +234,7 @@ const graphqlRequest = async (
     path,
     method: "POST",
     headers: {
-      ...headers,
+      ...signedRequest.headers,
       "Content-Length": Buffer.byteLength(body),
     },
   };
@@ -193,7 +261,7 @@ const graphqlRequest = async (
         if (response.statusCode < 200 || response.statusCode >= 300) {
           return reject(
             new Error(
-              `${operationName}: HTTP ${response.statusCode}: ` + responseBody,
+              `${operationName}: HTTP ${response.statusCode}: ${responseBody}`,
             ),
           );
         }
@@ -203,6 +271,11 @@ const graphqlRequest = async (
             .map((item) => item.message)
             .filter(Boolean)
             .join(" | ");
+
+          console.error(
+            "APPSYNC IAM GRAPHQL ERRORS:",
+            JSON.stringify(parsed.errors, null, 2),
+          );
 
           const error = new Error(messages || `${operationName} failed.`);
 
@@ -219,7 +292,7 @@ const graphqlRequest = async (
 
     request.setTimeout(15000, () => {
       request.destroy(
-        new Error(`${operationName}: AppSync request timed out.`),
+        new Error(`${operationName}: AppSync IAM request timed out.`),
       );
     });
 
@@ -376,6 +449,9 @@ const getWallet = async ({ payout, courierID }) => {
 
 /* ==========================================================
    GET PAYOUT RESERVATION
+
+   The reservation ID is deliberately the payout ID.
+   This makes the reservation idempotent for a payout.
 ========================================================== */
 
 const getReservation = async (payoutID) => {
@@ -401,7 +477,7 @@ const getReservation = async (payoutID) => {
     }
   `;
 
-  const data = await graphqlRequest(
+  const data = await graphqlRequestIAM(
     query,
     { id: payoutID },
     "GetPayoutReservation",
@@ -409,7 +485,9 @@ const getReservation = async (payoutID) => {
 
   const reservation = data?.getPayoutReservation || null;
 
-  if (reservation?._deleted === true) return null;
+  if (reservation?._deleted === true) {
+    return null;
+  }
 
   return reservation;
 };
@@ -456,7 +534,7 @@ const createReservation = async ({ payout, wallet, debit }) => {
     reservedAt: null,
   };
 
-  const data = await graphqlRequest(
+  const data = await graphqlRequestIAM(
     mutation,
     { input },
     "CreatePayoutReservation",
@@ -497,7 +575,7 @@ const updateReservation = async (reservation, updates) => {
     }
   `;
 
-  const data = await graphqlRequest(
+  const data = await graphqlRequestIAM(
     mutation,
     {
       input: {
@@ -599,21 +677,24 @@ const getPayoutDebitTransaction = async (transactionID) => {
 
   const transaction = data?.getTransaction || null;
 
-  if (transaction?._deleted === true) return null;
+  if (transaction?._deleted === true) {
+    return null;
+  }
 
   return transaction;
 };
 
 /* ==========================================================
    CREATE PAYOUT DEBIT TRANSACTION
+
+   The transaction ID is deterministic. Retrying the same
+   payout cannot create a second debit transaction.
 ========================================================== */
 
 const createPayoutDebitTransaction = async ({ payout, wallet, debit }) => {
   const transactionID = `${payout.id}-PAYOUT-DEBIT`;
 
-  const existing = await getPayoutDebitTransaction(transactionID);
-
-  if (existing) {
+  const validateExisting = (existing) => {
     if (
       existing.walletID !== wallet.id ||
       existing.payoutID !== payout.id ||
@@ -627,10 +708,18 @@ const createPayoutDebitTransaction = async ({ payout, wallet, debit }) => {
     }
 
     return existing;
+  };
+
+  const existing = await getPayoutDebitTransaction(transactionID);
+
+  if (existing) {
+    return validateExisting(existing);
   }
 
   const mutation = `
-    mutation CreateTransaction($input: CreateTransactionInput!) {
+    mutation CreateTransaction(
+      $input: CreateTransactionInput!
+    ) {
       createTransaction(input: $input) {
         id
         walletID
@@ -671,22 +760,13 @@ const createPayoutDebitTransaction = async ({ payout, wallet, debit }) => {
 
     return transaction;
   } catch (error) {
+    // The mutation may have succeeded even if its response
+    // was lost. Read the deterministic ID before failing.
+
     const retryRead = await getPayoutDebitTransaction(transactionID);
 
     if (retryRead) {
-      if (
-        retryRead.walletID !== wallet.id ||
-        retryRead.payoutID !== payout.id ||
-        retryRead.type !== "DEBIT" ||
-        money(retryRead.amount) !== debit ||
-        retryRead.reference !== payout.reference
-      ) {
-        throw new Error(
-          "Existing payout transaction does not match the requested debit.",
-        );
-      }
-
-      return retryRead;
+      return validateExisting(retryRead);
     }
 
     throw error;
@@ -756,7 +836,14 @@ const validatePayout = ({ payout, wallet }) => {
 ========================================================== */
 
 exports.handler = async (event) => {
-  console.log("RESERVE PAYOUT WALLET EVENT:", JSON.stringify(event));
+  console.log("RESERVE PAYOUT WALLET EVENT:", {
+    payoutID:
+      event?.payoutID ||
+      event?.arguments?.payoutID ||
+      event?.detail?.payoutID ||
+      null,
+    diagnosticOnly: event?.diagnosticOnly === true,
+  });
 
   let payoutID =
     event?.payoutID || event?.arguments?.payoutID || event?.detail?.payoutID;
@@ -768,17 +855,91 @@ exports.handler = async (event) => {
 
       payoutID = body?.payoutID;
     } catch {
-      // Invalid body is handled by the required-field check below.
+      // Required-field validation below handles this.
     }
   }
 
   if (!payoutID) {
-    return {
-      success: false,
-      code: "MISSING_PAYOUT_ID",
-      message: "payoutID is required.",
-    };
+    return definiteFailure(null, "MISSING_PAYOUT_ID", "payoutID is required.");
   }
+
+  if (!GRAPHQL_ENDPOINT) {
+    return definiteFailure(
+      payoutID,
+      "APPSYNC_ENDPOINT_MISSING",
+      "API_ATUA_GRAPHQLAPIENDPOINTOUTPUT is not configured.",
+    );
+  }
+
+  if (!API_KEY) {
+    return definiteFailure(
+      payoutID,
+      "APPSYNC_API_KEY_MISSING",
+      "API_ATUA_GRAPHQLAPIKEYOUTPUT is not configured.",
+    );
+  }
+
+  // TEMPORARY READ-ONLY DIAGNOSTIC
+  // Tests STS identity, API-key payout access and IAM reservation access.
+
+  if (event?.diagnosticOnly === true) {
+    try {
+      const sts = new STSClient({
+        region: REGION,
+      });
+
+      const callerIdentity = await sts.send(new GetCallerIdentityCommand({}));
+
+      console.log("ACTUAL LAMBDA AWS IDENTITY:", {
+        account: callerIdentity.Account,
+        arn: callerIdentity.Arn,
+        userId: callerIdentity.UserId,
+      });
+
+      // Test 1: API-key access to the payout.
+      const payout = await getPayout(payoutID);
+
+      // Test 2: IAM access to the payout reservation.
+      const reservation = await getReservation(payoutID);
+
+      return {
+        diagnosticOnly: true,
+        success: true,
+
+        callerArn: callerIdentity.Arn,
+
+        payoutFound: !!payout,
+        payoutID,
+        payoutStatus: payout?.status || null,
+
+        reservationReadSucceeded: true,
+        reservationFound: !!reservation,
+        reservationID: reservation?.id || null,
+        reservationStatus: reservation?.status || null,
+
+        message: "Read-only payout and IAM reservation checks succeeded.",
+      };
+    } catch (error) {
+      console.error("READ-ONLY APPSYNC DIAGNOSTIC FAILED:", {
+        message: errorMessage(error),
+        graphqlErrors: error.graphqlErrors || null,
+      });
+
+      return {
+        diagnosticOnly: true,
+        success: false,
+        payoutID,
+        message: errorMessage(error),
+        graphqlErrors: error.graphqlErrors || null,
+      };
+    }
+  }
+
+  let reservationLookupCompleted = false;
+  let reservationWasAbsent = false;
+  let reservation = null;
+  let walletDebitAttempted = false;
+  let walletDebitConfirmed = false;
 
   try {
     /* ------------------------------------------------------
@@ -788,7 +949,11 @@ exports.handler = async (event) => {
     const payout = await getPayout(payoutID);
 
     if (!payout) {
-      throw new Error("Payout record does not exist.");
+      return definiteFailure(
+        payoutID,
+        "PAYOUT_NOT_FOUND",
+        "Payout record does not exist.",
+      );
     }
 
     /* ------------------------------------------------------
@@ -801,7 +966,11 @@ exports.handler = async (event) => {
     });
 
     if (!wallet) {
-      throw new Error("Courier wallet does not exist.");
+      return definiteFailure(
+        payoutID,
+        "WALLET_NOT_FOUND",
+        "Courier wallet does not exist.",
+      );
     }
 
     /* ------------------------------------------------------
@@ -819,13 +988,32 @@ exports.handler = async (event) => {
        4. CHECK EXISTING RESERVATION
     ------------------------------------------------------ */
 
-    let reservation = await getReservation(payout.id);
+    reservation = await getReservation(payout.id);
+
+    reservationLookupCompleted = true;
+    reservationWasAbsent = !reservation;
 
     if (reservation) {
+      if (
+        reservation.walletID !== wallet.id ||
+        reservation.courierID !== payout.courierID ||
+        money(reservation.totalWalletDebit) !== debit ||
+        reservation.reference !== payout.reference
+      ) {
+        return uncertainFailure(
+          payout.id,
+          "Existing reservation does not match this payout. Manual reconciliation is required.",
+          reservation.id,
+          reservation.status,
+        );
+      }
+
       if (reservation.status === "RESERVED") {
         return {
           success: true,
           alreadyReserved: true,
+          walletDebited: true,
+          reservationCreated: true,
           payoutID: payout.id,
           walletID: reservation.walletID,
           reservationID: reservation.id,
@@ -839,14 +1027,10 @@ exports.handler = async (event) => {
       }
 
       if (reservation.status === "WALLET_DEBITED") {
-        if (
-          reservation.walletID !== wallet.id ||
-          reservation.courierID !== payout.courierID ||
-          money(reservation.totalWalletDebit) !== debit ||
-          reservation.reference !== payout.reference
-        ) {
-          throw new Error("Existing reservation does not match the payout.");
-        }
+        // The wallet debit already happened.
+        // NEVER deduct the wallet again.
+
+        walletDebitConfirmed = true;
 
         const transaction = await createPayoutDebitTransaction({
           payout,
@@ -862,12 +1046,19 @@ exports.handler = async (event) => {
         });
 
         if (!confirmed) {
-          throw new Error("Could not confirm the final reservation status.");
+          return uncertainFailure(
+            payout.id,
+            "Wallet debit exists, but the final reservation status could not be confirmed. Reconcile before retrying.",
+            reservation.id,
+            "WALLET_DEBITED",
+          );
         }
 
         return {
           success: true,
           resumed: true,
+          walletDebited: true,
+          reservationCreated: true,
           payoutID: payout.id,
           walletID: reservation.walletID,
           reservationID: confirmed.id,
@@ -881,15 +1072,22 @@ exports.handler = async (event) => {
       }
 
       if (reservation.status === "PENDING") {
+        // A previous attempt may have debited the wallet
+        // but failed before updating the reservation.
+        // Never blindly retry the debit.
+
         return {
           success: false,
           inProgress: true,
+          walletDebited: null,
+          reservationCreated: true,
+          uncertain: true,
           payoutID: payout.id,
           reservationID: reservation.id,
           status: reservation.status,
+          code: "RESERVATION_PENDING",
           message:
-            "A payout reservation already exists in PENDING status. " +
-            "No second wallet deduction was attempted. Reconcile it before retrying.",
+            "A payout reservation already exists in PENDING status. No second wallet deduction was attempted. Reconcile it before retrying.",
         };
       }
 
@@ -897,47 +1095,74 @@ exports.handler = async (event) => {
         reservation.status === "FAILED" ||
         reservation.status === "REVERSED"
       ) {
-        throw new Error(
-          `This payout reservation is ${reservation.status}. ` +
-            "It must be reviewed before another reservation can be made.",
-        );
+        return {
+          success: false,
+          walletDebited: null,
+          reservationCreated: true,
+          uncertain: true,
+          payoutID: payout.id,
+          reservationID: reservation.id,
+          status: reservation.status,
+          code: "RESERVATION_REQUIRES_REVIEW",
+          message: `This payout reservation is ${reservation.status}. It must be reviewed before another reservation can be made.`,
+        };
       }
 
-      throw new Error(`Unsupported reservation status: ${reservation.status}`);
+      return uncertainFailure(
+        payout.id,
+        `Unsupported reservation status: ${reservation.status}`,
+        reservation.id,
+        reservation.status,
+      );
     }
 
     /* ------------------------------------------------------
-       5. CHECK COURIER RESTRICTIONS BEFORE A NEW RESERVATION
+       5. CHECK COURIER RESTRICTIONS
     ------------------------------------------------------ */
 
     const courier = await getCourier(payout.courierID);
 
     if (!courier) {
-      throw new Error("Courier record could not be found.");
+      return definiteFailure(
+        payout.id,
+        "COURIER_NOT_FOUND",
+        "Payout courier could not be found.",
+      );
     }
 
     if (courier.isBlocked === true) {
-      throw new Error(
+      return definiteFailure(
+        payout.id,
+        "COURIER_ADMIN_BLOCKED",
         "This courier is administratively blocked and cannot withdraw.",
       );
     }
 
     if (courier.debtRestrictionActive === true) {
-      return {
-        success: false,
-        blocked: true,
-        code: "COURIER_DEBT_RESTRICTED",
-        payoutID: payout.id,
-        message:
-          "This courier has overdue Atua debt. Withdrawals are frozen until the overdue debt is repaid.",
-      };
+      return definiteFailure(
+        payout.id,
+        "COURIER_DEBT_RESTRICTED",
+        "This courier has overdue Atua debt. Withdrawals are frozen until the overdue debt is repaid.",
+      );
     }
 
     /* ------------------------------------------------------
-       6. CREATE THE RESERVATION RECORD
+       6. CHECK AVAILABLE BALANCE
     ------------------------------------------------------ */
 
-    let createdByThisInvocation = false;
+    const currentBalance = money(wallet.availableBalance || 0);
+
+    if (currentBalance < debit) {
+      return definiteFailure(
+        payout.id,
+        "INSUFFICIENT_BALANCE",
+        "Insufficient available wallet balance for this payout.",
+      );
+    }
+
+    /* ------------------------------------------------------
+       7. CREATE RESERVATION RECORD
+    ------------------------------------------------------ */
 
     try {
       reservation = await createReservation({
@@ -949,33 +1174,54 @@ exports.handler = async (event) => {
       if (!reservation) {
         throw new Error("Reservation creation was not confirmed.");
       }
-
-      createdByThisInvocation = true;
     } catch (createError) {
-      const existing = await getReservation(payout.id);
+      // The create operation may have succeeded even if
+      // its response was lost. Read before deciding.
+
+      let existing;
+
+      try {
+        existing = await getReservation(payout.id);
+      } catch (readError) {
+        return uncertainFailure(
+          payout.id,
+          "Reservation creation could not be confirmed and the follow-up read also failed. Reconcile before retrying. " +
+            errorMessage(readError),
+        );
+      }
 
       if (existing) {
         return {
           success: false,
           inProgress: true,
+          walletDebited: null,
+          reservationCreated: true,
+          uncertain: true,
           payoutID: payout.id,
           reservationID: existing.id,
           status: existing.status,
+          code: "RESERVATION_ALREADY_EXISTS",
           message:
-            "A reservation already exists. No additional wallet debit was attempted.",
+            "A reservation already exists. No additional wallet debit was attempted. Reconcile it before retrying.",
         };
       }
 
-      throw createError;
-    }
-
-    if (!createdByThisInvocation) {
-      throw new Error("Reservation ownership could not be confirmed.");
+      return definiteFailure(
+        payout.id,
+        "RESERVATION_CREATION_FAILED",
+        errorMessage(createError),
+      );
     }
 
     /* ------------------------------------------------------
-       7. DEDUCT WALLET BALANCE
+       8. DEDUCT WALLET BALANCE
     ------------------------------------------------------ */
+
+    // From this point onward, an error may have an
+    // uncertain outcome. Do not report walletDebited:false
+    // unless it is established that no debit occurred.
+
+    walletDebitAttempted = true;
 
     let updatedWallet;
 
@@ -984,23 +1230,20 @@ exports.handler = async (event) => {
         wallet,
         debit,
       });
+
+      walletDebitConfirmed = true;
     } catch (walletError) {
       console.error(
         "WALLET DEDUCTION NOT CONFIRMED:",
         errorMessage(walletError),
       );
 
-      return {
-        success: false,
-        uncertain: true,
-        payoutID: payout.id,
-        reservationID: reservation.id,
-        status: "PENDING",
-        message:
-          "Wallet deduction could not be confirmed. " +
-          "The reservation remains PENDING to prevent a duplicate debit. " +
-          "Reconcile before retrying.",
-      };
+      return uncertainFailure(
+        payout.id,
+        "Wallet deduction could not be confirmed. The reservation remains PENDING to prevent a duplicate debit. Reconcile before retrying.",
+        reservation.id,
+        "PENDING",
+      );
     }
 
     console.log("PAYOUT WALLET DEBIT CONFIRMED:", {
@@ -1012,64 +1255,101 @@ exports.handler = async (event) => {
     });
 
     /* ------------------------------------------------------
-       8. MARK WALLET_DEBITED
+       9. MARK RESERVATION WALLET_DEBITED
     ------------------------------------------------------ */
 
-    reservation = await updateReservation(reservation, {
-      status: "WALLET_DEBITED",
-      failureReason: null,
-    });
-
-    if (!reservation) {
-      return {
-        success: false,
-        uncertain: true,
-        payoutID: payout.id,
-        reservationID: payout.id,
+    try {
+      reservation = await updateReservation(reservation, {
         status: "WALLET_DEBITED",
-        message:
-          "Wallet debit succeeded, but reservation status update was not confirmed. " +
-          "Do not repeat the wallet debit. Reconcile this payout.",
-      };
+        failureReason: null,
+      });
+
+      if (!reservation) {
+        return uncertainFailure(
+          payout.id,
+          "Wallet debit succeeded, but the reservation status update was not confirmed. Do not repeat the wallet debit. Reconcile this payout.",
+          payout.id,
+          "WALLET_DEBITED",
+        );
+      }
+    } catch (reservationUpdateError) {
+      console.error(
+        "RESERVATION WALLET_DEBITED UPDATE FAILED:",
+        errorMessage(reservationUpdateError),
+      );
+
+      return uncertainFailure(
+        payout.id,
+        "Wallet debit succeeded, but the reservation status update failed. Do not repeat the wallet debit. Reconcile this payout.",
+        payout.id,
+        "WALLET_DEBITED",
+      );
     }
 
     /* ------------------------------------------------------
-       9. CREATE OR RETRIEVE DEBIT TRANSACTION
+       10. CREATE OR RETRIEVE DEBIT TRANSACTION
     ------------------------------------------------------ */
 
-    const transaction = await createPayoutDebitTransaction({
-      payout,
-      wallet: updatedWallet,
-      debit,
-    });
+    let transaction;
+
+    try {
+      transaction = await createPayoutDebitTransaction({
+        payout,
+        wallet: updatedWallet,
+        debit,
+      });
+    } catch (transactionError) {
+      console.error(
+        "PAYOUT DEBIT TRANSACTION FAILED:",
+        errorMessage(transactionError),
+      );
+
+      return uncertainFailure(
+        payout.id,
+        "Wallet debit succeeded, but the payout debit transaction could not be confirmed. Do not deduct again. Reconcile this payout.",
+        reservation.id,
+        "WALLET_DEBITED",
+      );
+    }
 
     /* ------------------------------------------------------
-       10. MARK RESERVATION RESERVED
+       11. MARK RESERVATION RESERVED
     ------------------------------------------------------ */
 
-    const confirmedReservation = await updateReservation(reservation, {
-      transactionID: transaction.id,
-      status: "RESERVED",
-      failureReason: null,
-      reservedAt: new Date().toISOString(),
-    });
+    let confirmedReservation;
+
+    try {
+      confirmedReservation = await updateReservation(reservation, {
+        transactionID: transaction.id,
+        status: "RESERVED",
+        failureReason: null,
+        reservedAt: new Date().toISOString(),
+      });
+    } catch (finalUpdateError) {
+      console.error(
+        "FINAL RESERVATION UPDATE FAILED:",
+        errorMessage(finalUpdateError),
+      );
+
+      return uncertainFailure(
+        payout.id,
+        "Wallet debit and transaction are recorded, but final reservation confirmation failed. Do not deduct again. Reconcile this payout.",
+        reservation.id,
+        "WALLET_DEBITED",
+      );
+    }
 
     if (!confirmedReservation) {
-      return {
-        success: false,
-        uncertain: true,
-        payoutID: payout.id,
-        reservationID: reservation.id,
-        transactionID: transaction.id,
-        status: "WALLET_DEBITED",
-        message:
-          "Wallet debit and transaction are recorded, but final reservation confirmation failed. " +
-          "Do not deduct again. Reconcile this payout.",
-      };
+      return uncertainFailure(
+        payout.id,
+        "Wallet debit and transaction are recorded, but final reservation confirmation failed. Do not deduct again. Reconcile this payout.",
+        reservation.id,
+        "WALLET_DEBITED",
+      );
     }
 
     /* ------------------------------------------------------
-       11. SUCCESS
+       12. SUCCESS
     ------------------------------------------------------ */
 
     console.log("PAYOUT WALLET RESERVED SUCCESSFULLY:", {
@@ -1082,6 +1362,8 @@ exports.handler = async (event) => {
 
     return {
       success: true,
+      walletDebited: true,
+      reservationCreated: true,
       payoutID: payout.id,
       reservationID: confirmedReservation.id,
       walletID: wallet.id,
@@ -1097,11 +1379,32 @@ exports.handler = async (event) => {
   } catch (error) {
     console.error("RESERVE PAYOUT WALLET FAILED:", errorMessage(error));
 
-    return {
-      success: false,
+    // Only classify as a definite no-debit failure when
+    // the reservation lookup confirmed there was no
+    // existing reservation and no wallet debit was attempted.
+
+    if (
+      reservationLookupCompleted &&
+      reservationWasAbsent &&
+      !walletDebitAttempted &&
+      !walletDebitConfirmed &&
+      !reservation
+    ) {
+      return definiteFailure(
+        payoutID,
+        "PAYOUT_RESERVATION_FAILED",
+        errorMessage(error),
+      );
+    }
+
+    // If a reservation exists or a wallet debit was
+    // attempted, preserve the uncertainty.
+
+    return uncertainFailure(
       payoutID,
-      code: "PAYOUT_RESERVATION_FAILED",
-      message: errorMessage(error),
-    };
+      errorMessage(error),
+      reservation?.id || null,
+      reservation?.status || "PENDING",
+    );
   }
 };

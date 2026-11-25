@@ -22,6 +22,7 @@ Amplify Params - DO NOT EDIT */
  * 6. The Order is conditionally claimed for release.
  * 7. Wallet pendingBalance decreases.
  * 8. Wallet availableBalance increases.
+ * 9. Wallet electronicLifetimeEarnings and lifetimeEarnings increase.
  *
  * IMPORTANT
  * ---------
@@ -29,7 +30,10 @@ Amplify Params - DO NOT EDIT */
  * - MAXI orders must use releaseCourierMilestoneFunds.
  * - This Lambda does not calculate courier earnings.
  * - This Lambda does not recover courier debt.
- * - This Lambda does not increase lifetimeEarnings.
+ * - This Lambda increases electronicLifetimeEarnings when
+ *   earnings are released into availableBalance.
+ * - cashLifetimeEarnings is preserved and never changed here.
+ * - lifetimeEarnings remains the combined cash and electronic total.
  *
  * FINANCIAL SAFETY
  * ----------------
@@ -379,8 +383,18 @@ exports.handler = async (event) => {
     const availableBalance = money(wallet.availableBalance ?? 0);
 
     const lifetimeEarnings = money(wallet.lifetimeEarnings ?? 0);
+    const cashLifetimeEarnings = money(wallet.cashLifetimeEarnings ?? 0);
+    const electronicLifetimeEarnings = money(
+      wallet.electronicLifetimeEarnings ?? 0,
+    );
 
-    if (pendingBalance < 0 || availableBalance < 0 || lifetimeEarnings < 0) {
+    if (
+      pendingBalance < 0 ||
+      availableBalance < 0 ||
+      lifetimeEarnings < 0 ||
+      cashLifetimeEarnings < 0 ||
+      electronicLifetimeEarnings < 0
+    ) {
       throw new Error(`Wallet ${wallet.id} contains a negative balance.`);
     }
 
@@ -412,28 +426,24 @@ exports.handler = async (event) => {
     // =======================================================================
 
     const newPendingBalance = money(pendingBalance - earnings);
-
     const newAvailableBalance = money(availableBalance + earnings);
 
-    /**
-     * IMPORTANT:
-     *
-     * lifetimeEarnings is NOT increased here.
-     *
-     * allocateCourierEarnings already records the earnings
-     * as generated. This Lambda only moves the same money
-     * from pendingBalance to availableBalance.
-     *
-     * Increasing lifetimeEarnings here would count the
-     * same courier earnings twice.
-     */
+    const newCashLifetimeEarnings = money(wallet.cashLifetimeEarnings ?? 0);
 
-    const newLifetimeEarnings = lifetimeEarnings;
+    const newElectronicLifetimeEarnings = money(
+      electronicLifetimeEarnings + earnings,
+    );
+
+    const newLifetimeEarnings = money(
+      newCashLifetimeEarnings + newElectronicLifetimeEarnings,
+    );
 
     expectedWalletBalances = {
       pendingBalance: newPendingBalance,
       availableBalance: newAvailableBalance,
       lifetimeEarnings: newLifetimeEarnings,
+      cashLifetimeEarnings: newCashLifetimeEarnings,
+      electronicLifetimeEarnings: newElectronicLifetimeEarnings,
     };
 
     // =======================================================================
@@ -483,6 +493,11 @@ exports.handler = async (event) => {
      * - pendingBalance has not changed.
      * - availableBalance has not changed.
      * - lifetimeEarnings has not changed.
+     * - cashLifetimeEarnings has not changed.
+     * - electronicLifetimeEarnings has not changed.
+     *
+     * The release increases electronicLifetimeEarnings and
+     * lifetimeEarnings, while preserving cashLifetimeEarnings.
      *
      * If another financial operation updates the Wallet first,
      * this mutation must fail rather than overwrite that update.
@@ -494,6 +509,8 @@ exports.handler = async (event) => {
         pendingBalance: newPendingBalance,
         availableBalance: newAvailableBalance,
         lifetimeEarnings: newLifetimeEarnings,
+        cashLifetimeEarnings: newCashLifetimeEarnings,
+        electronicLifetimeEarnings: newElectronicLifetimeEarnings,
       });
 
       walletUpdated = true;
@@ -526,17 +543,28 @@ exports.handler = async (event) => {
         pendingBalance: money(latestWallet.pendingBalance ?? 0),
         availableBalance: money(latestWallet.availableBalance ?? 0),
         lifetimeEarnings: money(latestWallet.lifetimeEarnings ?? 0),
+        cashLifetimeEarnings: money(latestWallet.cashLifetimeEarnings ?? 0),
+        electronicLifetimeEarnings: money(
+          latestWallet.electronicLifetimeEarnings ?? 0,
+        ),
       };
 
       const updateWasCommitted =
         latestBalances.pendingBalance === newPendingBalance &&
         latestBalances.availableBalance === newAvailableBalance &&
-        latestBalances.lifetimeEarnings === newLifetimeEarnings;
+        latestBalances.lifetimeEarnings === newLifetimeEarnings &&
+        latestBalances.cashLifetimeEarnings === newCashLifetimeEarnings &&
+        latestBalances.electronicLifetimeEarnings ===
+          newElectronicLifetimeEarnings;
 
       const walletRemainsUnchanged =
         latestBalances.pendingBalance === pendingBalance &&
         latestBalances.availableBalance === availableBalance &&
-        latestBalances.lifetimeEarnings === lifetimeEarnings;
+        latestBalances.lifetimeEarnings === lifetimeEarnings &&
+        latestBalances.cashLifetimeEarnings ===
+          money(wallet.cashLifetimeEarnings ?? 0) &&
+        latestBalances.electronicLifetimeEarnings ===
+          money(wallet.electronicLifetimeEarnings ?? 0);
 
       if (updateWasCommitted) {
         console.warn(
@@ -1008,27 +1036,21 @@ async function updateWallet({
   pendingBalance,
   availableBalance,
   lifetimeEarnings,
+  cashLifetimeEarnings,
+  electronicLifetimeEarnings,
 }) {
   const input = {
     id: wallet.id,
     pendingBalance: money(pendingBalance),
     availableBalance: money(availableBalance),
-
-    // Do not increment lifetimeEarnings during a balance transfer.
     lifetimeEarnings: money(lifetimeEarnings),
+    cashLifetimeEarnings: money(cashLifetimeEarnings),
+    electronicLifetimeEarnings: money(electronicLifetimeEarnings),
   };
 
   if (wallet._version != null) {
     input._version = wallet._version;
   }
-
-  /**
-   * Prevent stale wallet data from overwriting a concurrent
-   * financial operation.
-   *
-   * If any expected old value has changed, AppSync must reject
-   * the mutation.
-   */
 
   const condition = {
     ownerID: { eq: wallet.ownerID },
@@ -1043,6 +1065,20 @@ async function updateWallet({
       eq: money(wallet.lifetimeEarnings ?? 0),
     },
   };
+
+  // Only add conditions for the new fields when they are not null.
+  // The _version check above protects against concurrent updates.
+  if (wallet.cashLifetimeEarnings != null) {
+    condition.cashLifetimeEarnings = {
+      eq: money(wallet.cashLifetimeEarnings),
+    };
+  }
+
+  if (wallet.electronicLifetimeEarnings != null) {
+    condition.electronicLifetimeEarnings = {
+      eq: money(wallet.electronicLifetimeEarnings),
+    };
+  }
 
   const result = await graphqlRequest(UPDATE_WALLET_MUTATION, {
     input,
@@ -1136,6 +1172,8 @@ const GET_WALLET_QUERY = /* GraphQL */ `
       availableBalance
       pendingBalance
       lifetimeEarnings
+      cashLifetimeEarnings
+      electronicLifetimeEarnings
       _version
       _deleted
     }
@@ -1156,6 +1194,8 @@ const LIST_WALLETS_QUERY = /* GraphQL */ `
         availableBalance
         pendingBalance
         lifetimeEarnings
+        cashLifetimeEarnings
+        electronicLifetimeEarnings
         _version
         _deleted
       }
@@ -1221,6 +1261,8 @@ const UPDATE_WALLET_MUTATION = /* GraphQL */ `
       availableBalance
       pendingBalance
       lifetimeEarnings
+      cashLifetimeEarnings
+      electronicLifetimeEarnings
       _version
       _deleted
     }

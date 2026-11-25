@@ -88,6 +88,11 @@
     }
   },
   "function": {
+    "acceptDeliveryOrder": {
+      "build": true,
+      "providerPlugin": "awscloudformation",
+      "service": "Lambda"
+    },
     "allocateCourierEarnings": {
       "build": true,
       "dependsOn": [
@@ -171,6 +176,22 @@
       "providerPlugin": "awscloudformation",
       "service": "Lambda"
     },
+    "createFleet": {
+      "build": true,
+      "dependsOn": [
+        {
+          "attributes": [
+            "GraphQLAPIIdOutput",
+            "GraphQLAPIEndpointOutput",
+            "GraphQLAPIKeyOutput"
+          ],
+          "category": "api",
+          "resourceName": "Atua"
+        }
+      ],
+      "providerPlugin": "awscloudformation",
+      "service": "Lambda"
+    },
     "deleteOrder": {
       "build": true,
       "dependsOn": [
@@ -226,6 +247,44 @@
       "service": "Lambda"
     },
     "forceDispatch": {
+      "build": true,
+      "dependsOn": [
+        {
+          "attributes": [
+            "GraphQLAPIIdOutput",
+            "GraphQLAPIEndpointOutput",
+            "GraphQLAPIKeyOutput"
+          ],
+          "category": "api",
+          "resourceName": "Atua"
+        }
+      ],
+      "providerPlugin": "awscloudformation",
+      "service": "Lambda"
+    },
+    "getAssignedOrderStatus": {
+      "build": true,
+      "dependsOn": [],
+      "providerPlugin": "awscloudformation",
+      "service": "Lambda"
+    },
+    "getMyCashCollections": {
+      "build": true,
+      "dependsOn": [
+        {
+          "attributes": [
+            "GraphQLAPIIdOutput",
+            "GraphQLAPIEndpointOutput",
+            "GraphQLAPIKeyOutput"
+          ],
+          "category": "api",
+          "resourceName": "Atua"
+        }
+      ],
+      "providerPlugin": "awscloudformation",
+      "service": "Lambda"
+    },
+    "getMyFleets": {
       "build": true,
       "dependsOn": [
         {
@@ -419,6 +478,17 @@
     },
     "reservePayoutWallet": {
       "build": true,
+      "dependsOn": [
+        {
+          "attributes": [
+            "GraphQLAPIIdOutput",
+            "GraphQLAPIEndpointOutput",
+            "GraphQLAPIKeyOutput"
+          ],
+          "category": "api",
+          "resourceName": "Atua"
+        }
+      ],
       "providerPlugin": "awscloudformation",
       "service": "Lambda"
     },
@@ -470,6 +540,12 @@
       "providerPlugin": "awscloudformation",
       "service": "Lambda"
     },
+    "updateCourierOrderStatus": {
+      "build": true,
+      "dependsOn": [],
+      "providerPlugin": "awscloudformation",
+      "service": "Lambda"
+    },
     "verifyAtuaPayment": {
       "build": true,
       "dependsOn": [
@@ -504,6 +580,22 @@
     }
   },
   "parameters": {
+    "AMPLIFY_function_acceptDeliveryOrder_deploymentBucketName": {
+      "usedBy": [
+        {
+          "category": "function",
+          "resourceName": "acceptDeliveryOrder"
+        }
+      ]
+    },
+    "AMPLIFY_function_acceptDeliveryOrder_s3Key": {
+      "usedBy": [
+        {
+          "category": "function",
+          "resourceName": "acceptDeliveryOrder"
+        }
+      ]
+    },
     "AMPLIFY_function_allocateCourierEarnings_deploymentBucketName": {
       "usedBy": [
         {
@@ -616,6 +708,22 @@
         }
       ]
     },
+    "AMPLIFY_function_createFleet_deploymentBucketName": {
+      "usedBy": [
+        {
+          "category": "function",
+          "resourceName": "createFleet"
+        }
+      ]
+    },
+    "AMPLIFY_function_createFleet_s3Key": {
+      "usedBy": [
+        {
+          "category": "function",
+          "resourceName": "createFleet"
+        }
+      ]
+    },
     "AMPLIFY_function_deleteOrder_deploymentBucketName": {
       "usedBy": [
         {
@@ -701,6 +809,54 @@
         {
           "category": "function",
           "resourceName": "forceDispatch"
+        }
+      ]
+    },
+    "AMPLIFY_function_getAssignedOrderStatus_deploymentBucketName": {
+      "usedBy": [
+        {
+          "category": "function",
+          "resourceName": "getAssignedOrderStatus"
+        }
+      ]
+    },
+    "AMPLIFY_function_getAssignedOrderStatus_s3Key": {
+      "usedBy": [
+        {
+          "category": "function",
+          "resourceName": "getAssignedOrderStatus"
+        }
+      ]
+    },
+    "AMPLIFY_function_getMyCashCollections_deploymentBucketName": {
+      "usedBy": [
+        {
+          "category": "function",
+          "resourceName": "getMyCashCollections"
+        }
+      ]
+    },
+    "AMPLIFY_function_getMyCashCollections_s3Key": {
+      "usedBy": [
+        {
+          "category": "function",
+          "resourceName": "getMyCashCollections"
+        }
+      ]
+    },
+    "AMPLIFY_function_getMyFleets_deploymentBucketName": {
+      "usedBy": [
+        {
+          "category": "function",
+          "resourceName": "getMyFleets"
+        }
+      ]
+    },
+    "AMPLIFY_function_getMyFleets_s3Key": {
+      "usedBy": [
+        {
+          "category": "function",
+          "resourceName": "getMyFleets"
         }
       ]
     },
@@ -1021,6 +1177,22 @@
         {
           "category": "function",
           "resourceName": "selectDeliveryPaymentMethod"
+        }
+      ]
+    },
+    "AMPLIFY_function_updateCourierOrderStatus_deploymentBucketName": {
+      "usedBy": [
+        {
+          "category": "function",
+          "resourceName": "updateCourierOrderStatus"
+        }
+      ]
+    },
+    "AMPLIFY_function_updateCourierOrderStatus_s3Key": {
+      "usedBy": [
+        {
+          "category": "function",
+          "resourceName": "updateCourierOrderStatus"
         }
       ]
     },

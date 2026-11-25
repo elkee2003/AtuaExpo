@@ -2,18 +2,6 @@ const crypto = require("crypto");
 
 // =============================================================================
 // ATUA — RECORD CASH COLLECTION
-//
-// Records physical cash received by the assigned courier and immediately
-// attributes Atua's share (commission + platform fee + VAT) to one consolidated
-// CourierDebt cycle.
-//
-// Debt-cycle rules:
-// - First cash collection starts a fixed 24-hour repayment window.
-// - Further cash collections increase the same outstanding cycle.
-// - Further collections never reset debtStartedAt or dueAt.
-// - Partial repayments are preserved.
-// - This Lambda never deducts Wallet.availableBalance.
-// - Each CashCollection remains an independent audit record.
 // =============================================================================
 
 const GRAPHQL_ENDPOINT = process.env.API_ATUA_GRAPHQLAPIENDPOINTOUTPUT;
@@ -30,6 +18,7 @@ const CLOSED_DEBT_STATUSES = new Set(["PAID", "REVERSED", "WAIVED"]);
 const ORDER_FIELDS = `
   id
   totalPrice
+  courierEarnings
   status
   assignedCourierId
   paymentStatus
@@ -75,6 +64,11 @@ const WALLET_FIELDS = `
   id
   ownerID
   ownerType
+  availableBalance
+  pendingBalance
+  lifetimeEarnings
+  cashLifetimeEarnings
+  electronicLifetimeEarnings
   outstandingDebt
   activeCourierDebtID
   _version
@@ -100,6 +94,18 @@ const DEBT_FIELDS = `
   _version
 `;
 
+const TRANSACTION_FIELDS = `
+  id
+  walletID
+  type
+  amount
+  description
+  orderID
+  paymentID
+  reference
+  status
+`;
+
 function result(success, message, details = {}) {
   return {
     success,
@@ -109,6 +115,9 @@ function result(success, message, details = {}) {
     amount: Number.isFinite(details.amount) ? details.amount : null,
     atuaShareAmount: Number.isFinite(details.atuaShareAmount)
       ? details.atuaShareAmount
+      : null,
+    courierEarnings: Number.isFinite(details.courierEarnings)
+      ? details.courierEarnings
       : null,
     courierDebtID: details.courierDebtID || null,
     debtRemaining: Number.isFinite(details.debtRemaining)
@@ -134,6 +143,10 @@ function getCashCollectionId(orderId) {
 
 function getIdempotencyKey(orderId) {
   return `cash-collection:${orderId}`;
+}
+
+function getCashEarningsTransactionId(orderId) {
+  return `cash-earnings-${orderId}`;
 }
 
 function normalizeStatus(value) {
@@ -164,9 +177,7 @@ function requiredMoney(value, fieldName) {
 
 function getAtuaShare(order) {
   const commission = requiredMoney(order.commissionAmount, "commissionAmount");
-
   const platformFee = requiredMoney(order.platformFee, "platformFee");
-
   const vat = requiredMoney(order.vatAmount, "vatAmount");
 
   const share = roundMoney(commission + platformFee + vat);
@@ -179,6 +190,22 @@ function getAtuaShare(order) {
 
   return share;
 }
+
+function getCourierEarnings(order) {
+  const earnings = requiredMoney(order.courierEarnings, "courierEarnings");
+
+  if (earnings <= 0) {
+    throw new Error(
+      "Order courierEarnings is zero or invalid. Cash earnings cannot be posted.",
+    );
+  }
+
+  return earnings;
+}
+
+// =============================================================================
+// APPSYNC REQUEST SIGNING
+// =============================================================================
 
 function hmac(key, value, encoding) {
   return crypto
@@ -193,7 +220,6 @@ function getAppSyncRegion() {
   }
 
   const hostname = new URL(GRAPHQL_ENDPOINT).hostname;
-
   const match = hostname.match(
     /appsync-api\.([a-z0-9-]+)\.amazonaws\.com(?:\.cn)?$/,
   );
@@ -220,9 +246,7 @@ function signAwsRequest(url, body) {
   }
 
   const now = new Date();
-
   const amzDate = now.toISOString().replace(/[:-]|\.\d{3}/g, "");
-
   const dateStamp = amzDate.slice(0, 8);
 
   const payloadHash = crypto
@@ -290,11 +314,7 @@ async function graphqlRequest(
     throw new Error("Atua GraphQL endpoint is not configured.");
   }
 
-  const body = JSON.stringify({
-    query,
-    variables,
-    operationName,
-  });
+  const body = JSON.stringify({ query, variables, operationName });
 
   let headers;
 
@@ -348,7 +368,7 @@ async function graphqlRequest(
 function assertVersioned(record, label) {
   if (!Number.isInteger(record?._version)) {
     throw new Error(
-      `${label} does not expose an AppSync _version. Enable/confirm AppSync conflict detection before using concurrent debt updates.`,
+      `${label} does not expose an AppSync _version. Confirm AppSync conflict detection before using concurrent updates.`,
     );
   }
 }
@@ -378,14 +398,15 @@ async function getOrder(orderId) {
 
 async function getCourierBySub(sub) {
   const query = `
-    query GetCourierForCashCollection(
-      $sub: String!
-      $limit: Int
-    ) {
+    query GetCourierForCashCollection($sub: String!, $limit: Int) {
       couriersBySub(sub: $sub, limit: $limit) {
         items {
           id
           sub
+          walletID
+          _version
+          _lastChangedAt
+          _deleted
         }
       }
     }
@@ -400,19 +421,17 @@ async function getCourierBySub(sub) {
 
   const couriers = data?.couriersBySub?.items || [];
 
-  return couriers.find((courier) => courier.sub === sub) || null;
+  return (
+    couriers.find(
+      (courier) => courier.sub === sub && courier._deleted !== true,
+    ) || null
+  );
 }
 
 async function getPaymentsForOrder(orderId) {
   const query = `
-    query GetPaymentsForCashCollection(
-      $orderID: ID!
-      $limit: Int
-    ) {
-      paymentsByOrderID(
-        orderID: $orderID
-        limit: $limit
-      ) {
+    query GetPaymentsForCashCollection($orderID: ID!, $limit: Int) {
+      paymentsByOrderID(orderID: $orderID, limit: $limit) {
         items {
           ${PAYMENT_FIELDS}
         }
@@ -473,9 +492,7 @@ async function createCashCollectionRecord({
   };
 
   const mutation = `
-    mutation CreateCashCollection(
-      $input: CreateCashCollectionInput!
-    ) {
+    mutation CreateCashCollection($input: CreateCashCollectionInput!) {
       createCashCollection(input: $input) {
         ${COLLECTION_FIELDS}
       }
@@ -507,18 +524,15 @@ async function createCashCollectionRecord({
 
     return created;
   } catch (error) {
-    let existing;
-
-    try {
-      existing = await getCashCollection(collectionId);
-    } catch (readError) {
-      console.error(
-        "CASH COLLECTION RETRY CHECK FAILED:",
-        readError?.message || readError,
-      );
-
-      throw error;
-    }
+    const existing = await getCashCollection(collectionId).catch(
+      (readError) => {
+        console.error(
+          "CASH COLLECTION RETRY CHECK FAILED:",
+          readError?.message || readError,
+        );
+        return null;
+      },
+    );
 
     if (
       existing &&
@@ -552,9 +566,7 @@ async function updateCashCollection(collection, updates) {
     };
 
     const mutation = `
-      mutation UpdateCashCollectionForDebt(
-        $input: UpdateCashCollectionInput!
-      ) {
+      mutation UpdateCashCollectionForDebt($input: UpdateCashCollectionInput!) {
         updateCashCollection(input: $input) {
           ${COLLECTION_FIELDS}
         }
@@ -609,18 +621,40 @@ async function ensureCollectionShare(collection, atuaShareAmount) {
 // WALLET AND COURIER DEBT READS
 // =============================================================================
 
-async function getWalletForCourier(courierId) {
+async function getWalletById(walletId) {
+  if (!walletId) return null;
+
   const query = `
-    query GetCourierWallet(
+    query GetCourierWalletByID($id: ID!) {
+      getWallet(id: $id) {
+        ${WALLET_FIELDS}
+        _deleted
+      }
+    }
+  `;
+
+  const data = await graphqlRequest(
+    query,
+    { id: walletId },
+    "GetCourierWalletByID",
+    "API_KEY",
+  );
+
+  const wallet = data?.getWallet;
+
+  return wallet && wallet._deleted !== true ? wallet : null;
+}
+
+async function getWalletByOwner(courierId) {
+  const query = `
+    query GetCourierWalletByOwner(
       $filter: ModelWalletFilterInput
       $limit: Int
     ) {
-      listWallets(
-        filter: $filter
-        limit: $limit
-      ) {
+      listWallets(filter: $filter, limit: $limit) {
         items {
           ${WALLET_FIELDS}
+          _deleted
         }
         nextToken
       }
@@ -632,26 +666,267 @@ async function getWalletForCourier(courierId) {
     {
       filter: {
         ownerID: { eq: courierId },
+        ownerType: { eq: "COURIER" },
       },
       limit: 100,
     },
-    "GetCourierWallet",
-    "IAM",
+    "GetCourierWalletByOwner",
+    "API_KEY",
   );
 
-  const wallets = data?.listWallets?.items || [];
+  const wallets = (data?.listWallets?.items || []).filter(
+    (wallet) =>
+      wallet &&
+      wallet._deleted !== true &&
+      wallet.ownerID === courierId &&
+      normalizeStatus(wallet.ownerType) === "COURIER",
+  );
 
-  const matching = wallets.filter((wallet) => wallet.ownerID === courierId);
-
-  if (matching.length !== 1) {
+  if (wallets.length > 1) {
     throw new Error(
-      matching.length === 0
-        ? "The courier wallet could not be found. Cash collection was recorded but debt posting needs attention."
-        : "More than one wallet is linked to this courier. Debt posting was stopped to prevent an incorrect balance.",
+      "More than one wallet is linked to this courier. Wallet posting was stopped for manual reconciliation.",
     );
   }
 
-  return matching[0];
+  return wallets[0] || null;
+}
+
+async function createCourierWallet(courierId) {
+  const mutation = `
+    mutation CreateCourierWallet($input: CreateWalletInput!) {
+      createWallet(input: $input) {
+        ${WALLET_FIELDS}
+      }
+    }
+  `;
+
+  const input = {
+    ownerID: courierId,
+    ownerType: "COURIER",
+    availableBalance: 0,
+    pendingBalance: 0,
+    lifetimeEarnings: 0,
+    cashLifetimeEarnings: 0,
+    electronicLifetimeEarnings: 0,
+    outstandingDebt: 0,
+  };
+
+  const data = await graphqlRequest(
+    mutation,
+    { input },
+    "CreateCourierWallet",
+    "API_KEY",
+  );
+
+  const wallet = data?.createWallet;
+
+  if (!wallet?.id) {
+    throw new Error("Courier wallet creation returned no wallet.");
+  }
+
+  if (
+    wallet.ownerID !== courierId ||
+    normalizeStatus(wallet.ownerType) !== "COURIER"
+  ) {
+    throw new Error("Created wallet does not belong to the expected courier.");
+  }
+
+  return wallet;
+}
+
+async function updateCourierWalletID(courier, walletId) {
+  if (!courier?.id || !walletId) {
+    throw new Error("Courier and wallet ID are required to link the wallet.");
+  }
+
+  if (courier.walletID === walletId) {
+    return courier;
+  }
+
+  const input = {
+    id: courier.id,
+    walletID: walletId,
+  };
+
+  if (Number.isInteger(courier._version)) {
+    input._version = courier._version;
+  }
+
+  const mutation = `
+    mutation UpdateCourierWalletID($input: UpdateCourierInput!) {
+      updateCourier(input: $input) {
+        id
+        sub
+        walletID
+        _version
+        _lastChangedAt
+        _deleted
+      }
+    }
+  `;
+
+  try {
+    const data = await graphqlRequest(
+      mutation,
+      { input },
+      "UpdateCourierWalletID",
+      "API_KEY",
+    );
+
+    const updated = data?.updateCourier;
+
+    if (updated?.walletID === walletId) {
+      return updated;
+    }
+  } catch (error) {
+    console.error("COURIER WALLET ID UPDATE ERROR:", error?.message || error);
+  }
+
+  // Recover if the update succeeded but its response failed.
+  const verifyQuery = `
+    query VerifyCourierWalletID($id: ID!) {
+      getCourier(id: $id) {
+        id
+        sub
+        walletID
+        _version
+        _lastChangedAt
+        _deleted
+      }
+    }
+  `;
+
+  const verifyData = await graphqlRequest(
+    verifyQuery,
+    { id: courier.id },
+    "VerifyCourierWalletID",
+    "API_KEY",
+  );
+
+  const verified = verifyData?.getCourier;
+
+  if (verified?.walletID === walletId) {
+    return verified;
+  }
+
+  throw new Error(
+    "The wallet exists, but its ID could not be saved to the courier record.",
+  );
+}
+
+async function getWalletForCourier(courierId) {
+  const courierQuery = `
+    query GetCourierForWalletSetup($id: ID!) {
+      getCourier(id: $id) {
+        id
+        walletID
+        sub
+        _version
+        _lastChangedAt
+        _deleted
+      }
+    }
+  `;
+
+  let courierData = await graphqlRequest(
+    courierQuery,
+    { id: courierId },
+    "GetCourierForWalletSetup",
+    "API_KEY",
+  );
+
+  let courier = courierData?.getCourier;
+
+  if (!courier || courier._deleted === true) {
+    throw new Error("Courier could not be found while setting up the wallet.");
+  }
+
+  // 1. Try the wallet ID already saved on Courier.
+  if (courier.walletID) {
+    const linkedWallet = await getWalletById(courier.walletID);
+
+    if (
+      linkedWallet &&
+      linkedWallet.ownerID === courierId &&
+      normalizeStatus(linkedWallet.ownerType) === "COURIER"
+    ) {
+      return linkedWallet;
+    }
+  }
+
+  // 2. Search by ownerID and ownerType.
+  let wallet = await getWalletByOwner(courierId);
+
+  if (wallet) {
+    // Repair Courier.walletID if necessary.
+    if (courier.walletID !== wallet.id) {
+      courier = await updateCourierWalletID(courier, wallet.id);
+    }
+
+    return wallet;
+  }
+
+  // 3. No wallet exists. Create one.
+  try {
+    wallet = await createCourierWallet(courierId);
+  } catch (createError) {
+    // Another invocation may have created the wallet first.
+    console.warn(
+      "WALLET CREATION FAILED; CHECKING FOR CONCURRENT CREATION:",
+      createError?.message || createError,
+    );
+
+    wallet = await getWalletByOwner(courierId).catch(() => null);
+
+    if (!wallet) {
+      throw createError;
+    }
+  }
+
+  // 4. Verify ownership before linking.
+  if (
+    !wallet ||
+    wallet.ownerID !== courierId ||
+    normalizeStatus(wallet.ownerType) !== "COURIER"
+  ) {
+    throw new Error("Courier wallet ownership verification failed.");
+  }
+
+  // 5. Save the wallet ID on Courier.
+
+  const latestCourierData = await graphqlRequest(
+    courierQuery,
+    { id: courierId },
+    "GetCourierForWalletSetup",
+    "API_KEY",
+  );
+
+  const latestCourier = latestCourierData?.getCourier;
+
+  if (!latestCourier || latestCourier._deleted === true) {
+    throw new Error("Courier could not be reloaded while linking the wallet.");
+  }
+
+  if (latestCourier.walletID && latestCourier.walletID !== wallet.id) {
+    const existingLinkedWallet = await getWalletById(latestCourier.walletID);
+
+    if (
+      existingLinkedWallet &&
+      existingLinkedWallet.ownerID === courierId &&
+      normalizeStatus(existingLinkedWallet.ownerType) === "COURIER"
+    ) {
+      return existingLinkedWallet;
+    }
+  }
+
+  await updateCourierWalletID(latestCourier, wallet.id);
+
+  console.log("COURIER WALLET READY:", {
+    courierId,
+    walletId: wallet.id,
+  });
+
+  return wallet;
 }
 
 async function getCourierDebt(debtId) {
@@ -680,11 +955,7 @@ async function listAllCourierDebts(courierId) {
       $limit: Int
       $nextToken: String
     ) {
-      listCourierDebts(
-        filter: $filter
-        limit: $limit
-        nextToken: $nextToken
-      ) {
+      listCourierDebts(filter: $filter, limit: $limit, nextToken: $nextToken) {
         items {
           ${DEBT_FIELDS}
         }
@@ -700,9 +971,7 @@ async function listAllCourierDebts(courierId) {
     const data = await graphqlRequest(
       query,
       {
-        filter: {
-          courierID: { eq: courierId },
-        },
+        filter: { courierID: { eq: courierId } },
         limit: PAGE_SIZE,
         nextToken,
       },
@@ -711,9 +980,7 @@ async function listAllCourierDebts(courierId) {
     );
 
     const page = data?.listCourierDebts;
-
     all.push(...(page?.items || []));
-
     nextToken = page?.nextToken || null;
   } while (nextToken);
 
@@ -727,11 +994,7 @@ async function listAllCourierCollections(courierId) {
       $limit: Int
       $nextToken: String
     ) {
-      listCashCollections(
-        filter: $filter
-        limit: $limit
-        nextToken: $nextToken
-      ) {
+      listCashCollections(filter: $filter, limit: $limit, nextToken: $nextToken) {
         items {
           ${COLLECTION_FIELDS}
         }
@@ -747,9 +1010,7 @@ async function listAllCourierCollections(courierId) {
     const data = await graphqlRequest(
       query,
       {
-        filter: {
-          courierID: { eq: courierId },
-        },
+        filter: { courierID: { eq: courierId } },
         limit: PAGE_SIZE,
         nextToken,
       },
@@ -758,13 +1019,336 @@ async function listAllCourierCollections(courierId) {
     );
 
     const page = data?.listCashCollections;
-
     all.push(...(page?.items || []));
-
     nextToken = page?.nextToken || null;
   } while (nextToken);
 
   return all;
+}
+
+// =============================================================================
+// CASH EARNINGS TRANSACTION AND LIFETIME EARNINGS
+// =============================================================================
+
+async function getTransaction(transactionId) {
+  const query = `
+    query GetCashEarningsTransaction($id: ID!) {
+      getTransaction(id: $id) {
+        ${TRANSACTION_FIELDS}
+      }
+    }
+  `;
+
+  const data = await graphqlRequest(
+    query,
+    { id: transactionId },
+    "GetCashEarningsTransaction",
+    "IAM",
+  );
+
+  return data?.getTransaction || null;
+}
+
+async function createCashEarningsTransaction({
+  walletId,
+  orderId,
+  courierEarnings,
+}) {
+  const transactionId = getCashEarningsTransactionId(orderId);
+
+  const input = {
+    id: transactionId,
+    walletID: walletId,
+    type: "CASH_EARNINGS",
+    amount: courierEarnings,
+    description: `Courier earnings from cash order ${orderId}`,
+    orderID: orderId,
+    reference: `CASH-EARNINGS-${orderId}`,
+    status: "COMPLETED",
+  };
+
+  const mutation = `
+    mutation CreateCashEarningsTransaction(
+      $input: CreateTransactionInput!
+    ) {
+      createTransaction(input: $input) {
+        ${TRANSACTION_FIELDS}
+      }
+    }
+  `;
+
+  try {
+    const data = await graphqlRequest(
+      mutation,
+      { input },
+      "CreateCashEarningsTransaction",
+      "IAM",
+    );
+
+    const created = data?.createTransaction;
+
+    if (
+      !created ||
+      created.id !== transactionId ||
+      created.walletID !== walletId ||
+      created.orderID !== orderId ||
+      created.type !== "CASH_EARNINGS" ||
+      Number(created.amount) !== Number(courierEarnings) ||
+      created.status !== "COMPLETED"
+    ) {
+      throw new Error("Cash earnings transaction was not saved correctly.");
+    }
+
+    return created;
+  } catch (error) {
+    // The create may have succeeded even if the response timed out.
+    const existing = await getTransaction(transactionId).catch(() => null);
+
+    if (
+      existing &&
+      existing.walletID === walletId &&
+      existing.orderID === orderId &&
+      existing.type === "CASH_EARNINGS" &&
+      Number(existing.amount) === Number(courierEarnings) &&
+      existing.status === "COMPLETED"
+    ) {
+      return existing;
+    }
+
+    if (existing) {
+      throw new Error(
+        "A conflicting cash earnings transaction already exists for this order.",
+      );
+    }
+
+    throw error;
+  }
+}
+
+async function listCashEarningsTransactions(walletId) {
+  const query = `
+    query ListCashEarningsTransactions(
+      $filter: ModelTransactionFilterInput
+      $limit: Int
+      $nextToken: String
+    ) {
+      listTransactions(filter: $filter, limit: $limit, nextToken: $nextToken) {
+        items {
+          ${TRANSACTION_FIELDS}
+        }
+        nextToken
+      }
+    }
+  `;
+
+  const all = [];
+  let nextToken = null;
+
+  do {
+    const data = await graphqlRequest(
+      query,
+      {
+        filter: { walletID: { eq: walletId } },
+        limit: PAGE_SIZE,
+        nextToken,
+      },
+      "ListCashEarningsTransactions",
+      "IAM",
+    );
+
+    const page = data?.listTransactions;
+    all.push(...(page?.items || []));
+    nextToken = page?.nextToken || null;
+  } while (nextToken);
+
+  return all.filter(
+    (transaction) =>
+      transaction.walletID === walletId &&
+      transaction.type === "CASH_EARNINGS" &&
+      transaction.status === "COMPLETED",
+  );
+}
+
+async function updateWallet(wallet, updates) {
+  let current = wallet;
+
+  for (let attempt = 0; attempt < MAX_CAS_ATTEMPTS; attempt++) {
+    assertVersioned(current, "Wallet");
+
+    const input = {
+      id: current.id,
+      ...updates,
+      _version: current._version,
+    };
+
+    const mutation = `
+      mutation UpdateWalletForCourierDebt($input: UpdateWalletInput!) {
+        updateWallet(input: $input) {
+          ${WALLET_FIELDS}
+        }
+      }
+    `;
+
+    try {
+      const data = await graphqlRequest(
+        mutation,
+        { input },
+        "UpdateWalletForCourierDebt",
+        "IAM",
+      );
+
+      const updated = data?.updateWallet;
+
+      if (!updated) {
+        throw new Error("Courier wallet update failed.");
+      }
+
+      return updated;
+    } catch (error) {
+      // Updates passed here are absolute values, not increments.
+      // Reloading and retrying therefore does not add the same amount twice.
+      current = await getWalletForCourier(wallet.ownerID);
+
+      if (attempt === MAX_CAS_ATTEMPTS - 1) {
+        throw error;
+      }
+    }
+  }
+
+  throw new Error("Unable to update courier wallet after repeated conflicts.");
+}
+
+async function updateWalletEarnings(wallet, cashLifetimeEarnings) {
+  let current = wallet;
+
+  for (let attempt = 0; attempt < MAX_CAS_ATTEMPTS; attempt++) {
+    assertVersioned(current, "Wallet");
+
+    // Always use the latest electronic total from the wallet.
+    // This prevents cash collection from overwriting electronic earnings.
+    const electronicLifetimeEarnings = roundMoney(
+      Number(current.electronicLifetimeEarnings || 0),
+    );
+
+    const newCashLifetimeEarnings = roundMoney(cashLifetimeEarnings);
+
+    const lifetimeEarnings = roundMoney(
+      newCashLifetimeEarnings + electronicLifetimeEarnings,
+    );
+
+    const input = {
+      id: current.id,
+      cashLifetimeEarnings: newCashLifetimeEarnings,
+      lifetimeEarnings,
+      _version: current._version,
+    };
+
+    const mutation = `
+      mutation UpdateWalletLifetimeEarnings(
+        $input: UpdateWalletInput!
+      ) {
+        updateWallet(input: $input) {
+          ${WALLET_FIELDS}
+        }
+      }
+    `;
+
+    try {
+      const data = await graphqlRequest(
+        mutation,
+        { input },
+        "UpdateWalletLifetimeEarnings",
+        "IAM",
+      );
+
+      const updated = data?.updateWallet;
+
+      if (!updated) {
+        throw new Error("Wallet lifetime earnings update failed.");
+      }
+
+      return updated;
+    } catch (error) {
+      // Reload the wallet before retrying.
+      // The next attempt recalculates the combined total using
+      // the latest electronic earnings value.
+      current = await getWalletForCourier(current.ownerID);
+
+      if (!current) {
+        throw new Error("Courier wallet could not be reloaded.");
+      }
+
+      // The update may have succeeded even if the response timed out.
+      if (
+        roundMoney(Number(current.cashLifetimeEarnings || 0)) ===
+          newCashLifetimeEarnings &&
+        roundMoney(Number(current.lifetimeEarnings || 0)) ===
+          roundMoney(
+            newCashLifetimeEarnings +
+              Number(current.electronicLifetimeEarnings || 0),
+          )
+      ) {
+        return current;
+      }
+
+      if (attempt === MAX_CAS_ATTEMPTS - 1) {
+        throw error;
+      }
+    }
+  }
+
+  throw new Error(
+    "Unable to update wallet lifetime earnings after repeated conflicts.",
+  );
+}
+
+async function ensureCashEarnings({ order, courierId, courierEarnings }) {
+  const earnings = getCourierEarnings({
+    ...order,
+    courierEarnings,
+  });
+
+  let wallet = await getWalletForCourier(courierId);
+
+  // Create one deterministic transaction for this cash order.
+  // This prevents the same order from being counted twice.
+  await createCashEarningsTransaction({
+    walletId: wallet.id,
+    orderId: order.id,
+    courierEarnings: earnings,
+  });
+
+  // Rebuild the cash earnings total from the cash earnings ledger.
+  const transactions = await listCashEarningsTransactions(wallet.id);
+
+  const cashLifetimeEarnings = roundMoney(
+    transactions.reduce((sum, transaction) => {
+      const amount = Number(transaction.amount);
+
+      if (!Number.isFinite(amount) || amount < 0) {
+        throw new Error(
+          `Cash earnings transaction ${transaction.id} has an invalid amount.`,
+        );
+      }
+
+      return sum + amount;
+    }, 0),
+  );
+
+  // Reload the latest wallet before updating its lifetime earnings.
+  wallet = await getWalletForCourier(courierId);
+
+  // Update cash lifetime earnings and recalculate the combined total.
+  // Electronic lifetime earnings are preserved.
+  wallet = await updateWalletEarnings(wallet, cashLifetimeEarnings);
+
+  return {
+    wallet,
+    courierEarnings: earnings,
+    cashLifetimeEarnings: Number(wallet.cashLifetimeEarnings || 0),
+    electronicLifetimeEarnings: Number(wallet.electronicLifetimeEarnings || 0),
+    lifetimeEarnings: Number(wallet.lifetimeEarnings || 0),
+  };
 }
 
 // =============================================================================
@@ -792,7 +1376,6 @@ function makeDebtId(courierId, collectionId, startedAt) {
 
 function getStartTimeFromDebtId(debtId) {
   const parts = String(debtId || "").split("-");
-
   const timestamp = Number(parts[parts.length - 2]);
 
   return Number.isFinite(timestamp) && timestamp > 0
@@ -807,9 +1390,7 @@ async function createDebtCycle({
   confirmedAt,
 }) {
   const debtId = makeDebtId(courierId, collectionId, confirmedAt);
-
   const startedAt = confirmedAt;
-
   const dueAt = new Date(Date.parse(startedAt) + DEBT_WINDOW_MS).toISOString();
 
   const input = {
@@ -830,9 +1411,7 @@ async function createDebtCycle({
   };
 
   const mutation = `
-    mutation CreateCourierDebtCycle(
-      $input: CreateCourierDebtInput!
-    ) {
+    mutation CreateCourierDebtCycle($input: CreateCourierDebtInput!) {
       createCourierDebt(input: $input) {
         ${DEBT_FIELDS}
       }
@@ -894,9 +1473,7 @@ async function createDebtWithId({
   };
 
   const mutation = `
-    mutation RecoverCourierDebtCycle(
-      $input: CreateCourierDebtInput!
-    ) {
+    mutation RecoverCourierDebtCycle($input: CreateCourierDebtInput!) {
       createCourierDebt(input: $input) {
         ${DEBT_FIELDS}
       }
@@ -924,57 +1501,8 @@ async function createDebtWithId({
 }
 
 // =============================================================================
-// VERSIONED WALLET AND DEBT UPDATES
+// VERSIONED DEBT UPDATE
 // =============================================================================
-
-async function updateWallet(wallet, updates) {
-  let current = wallet;
-
-  for (let attempt = 0; attempt < MAX_CAS_ATTEMPTS; attempt++) {
-    assertVersioned(current, "Wallet");
-
-    const input = {
-      id: current.id,
-      ...updates,
-      _version: current._version,
-    };
-
-    const mutation = `
-      mutation UpdateWalletForCourierDebt(
-        $input: UpdateWalletInput!
-      ) {
-        updateWallet(input: $input) {
-          ${WALLET_FIELDS}
-        }
-      }
-    `;
-
-    try {
-      const data = await graphqlRequest(
-        mutation,
-        { input },
-        "UpdateWalletForCourierDebt",
-        "IAM",
-      );
-
-      const updated = data?.updateWallet;
-
-      if (!updated) {
-        throw new Error("Courier wallet update failed.");
-      }
-
-      return updated;
-    } catch (error) {
-      current = await getWalletForCourier(wallet.ownerID);
-
-      if (attempt === MAX_CAS_ATTEMPTS - 1) {
-        throw error;
-      }
-    }
-  }
-
-  throw new Error("Unable to update courier wallet after repeated conflicts.");
-}
 
 async function updateDebt(debt, updates) {
   let current = debt;
@@ -1029,15 +1557,9 @@ async function updateDebt(debt, updates) {
 // FIND OR RESERVE THE COURIER'S ACTIVE DEBT CYCLE
 // =============================================================================
 
-async function reserveOrGetActiveDebt({
-  courierId,
-  collection,
-  atuaShareAmount,
-}) {
+async function reserveOrGetActiveDebt({ courierId, collection }) {
   let wallet = await getWalletForCourier(courierId);
 
-  // If this collection was already assigned to a debt cycle,
-  // always repair that same cycle.
   if (collection.courierDebtID) {
     const mappedDebt = await getCourierDebt(collection.courierDebtID);
 
@@ -1047,11 +1569,7 @@ async function reserveOrGetActiveDebt({
       );
     }
 
-    return {
-      wallet,
-      debt: mappedDebt,
-      collection,
-    };
+    return { wallet, debt: mappedDebt, collection };
   }
 
   for (let attempt = 0; attempt < MAX_CAS_ATTEMPTS; attempt++) {
@@ -1061,8 +1579,6 @@ async function reserveOrGetActiveDebt({
       const activeDebt = await getCourierDebt(wallet.activeCourierDebtID);
 
       if (!activeDebt) {
-        // Recover if the Lambda stopped after reserving the wallet
-        // pointer but before creating the debt record.
         const recoveredStart = getStartTimeFromDebtId(
           wallet.activeCourierDebtID,
         );
@@ -1085,11 +1601,7 @@ async function reserveOrGetActiveDebt({
           dueAt: recoveredDue,
         });
 
-        return {
-          wallet,
-          debt: recovered,
-          collection,
-        };
+        return { wallet, debt: recovered, collection };
       }
 
       if (
@@ -1107,11 +1619,7 @@ async function reserveOrGetActiveDebt({
           (Number(activeDebt.amount) === 0 &&
             Number(activeDebt.remainingAmount) === 0))
       ) {
-        return {
-          wallet,
-          debt: activeDebt,
-          collection,
-        };
+        return { wallet, debt: activeDebt, collection };
       }
 
       if (
@@ -1135,9 +1643,7 @@ async function reserveOrGetActiveDebt({
     };
 
     const mutation = `
-      mutation ReserveCourierDebtCycle(
-        $input: UpdateWalletInput!
-      ) {
+      mutation ReserveCourierDebtCycle($input: UpdateWalletInput!) {
         updateWallet(input: $input) {
           ${WALLET_FIELDS}
         }
@@ -1165,11 +1671,7 @@ async function reserveOrGetActiveDebt({
         confirmedAt: collection.confirmedAt,
       });
 
-      return {
-        wallet: reservedWallet,
-        debt,
-        collection,
-      };
+      return { wallet: reservedWallet, debt, collection };
     } catch (error) {
       wallet = await getWalletForCourier(courierId);
 
@@ -1181,11 +1683,7 @@ async function reserveOrGetActiveDebt({
           confirmedAt: collection.confirmedAt,
         });
 
-        return {
-          wallet,
-          debt,
-          collection,
-        };
+        return { wallet, debt, collection };
       }
 
       if (attempt === MAX_CAS_ATTEMPTS - 1) {
@@ -1200,7 +1698,7 @@ async function reserveOrGetActiveDebt({
 }
 
 // =============================================================================
-// ATTACH THE CASH COLLECTION TO THE DEBT CYCLE
+// ATTACH CASH COLLECTION TO DEBT CYCLE
 // =============================================================================
 
 async function attachCollectionToDebt(collection, debt, atuaShareAmount) {
@@ -1245,7 +1743,7 @@ async function recomputeDebtFromCollections(
     !cycleCollections.some((item) => item.id === expectedCollectionId)
   ) {
     throw new Error(
-      "The new cash collection is not yet visible in the debt ledger. Retry the debt posting.",
+      "The new cash collection is not yet visible in the debt ledger. Retry debt posting.",
     );
   }
 
@@ -1277,22 +1775,18 @@ async function recomputeDebtFromCollections(
 
   for (let attempt = 0; attempt < MAX_CAS_ATTEMPTS; attempt++) {
     const amountPaid = roundMoney(Number(current.amountPaid || 0));
-
     const remaining = roundMoney(totalAtuaShare - amountPaid);
 
     if (amountPaid < 0 || remaining < -0.01) {
       throw new Error(
-        "Courier debt repayment totals exceed the linked cash collections. Manual review is required.",
+        "Courier debt repayment totals exceed linked cash collections. Manual review is required.",
       );
     }
 
     const safeRemaining = Math.max(0, remaining);
-
-    const now = Date.now();
     const dueTime = Date.parse(current.dueAt);
-
     const isOverdue =
-      Number.isFinite(dueTime) && dueTime <= now && safeRemaining > 0;
+      Number.isFinite(dueTime) && dueTime <= Date.now() && safeRemaining > 0;
 
     let status = "OPEN";
 
@@ -1310,12 +1804,8 @@ async function recomputeDebtFromCollections(
       amountPaid,
       remainingAmount: safeRemaining,
       status,
-
-      // Retain legacy values without using them to offset debt.
       earningsOffsetAmount: Number(current.earningsOffsetAmount || 0),
-
       walletRecoveredAmount: Number(current.walletRecoveredAmount || 0),
-
       externalPaymentsAmount: Number(current.externalPaymentsAmount || 0),
     };
 
@@ -1360,12 +1850,10 @@ async function recomputeWalletOutstandingDebt(wallet, courierId) {
   let currentWallet = await getWalletForCourier(courierId);
 
   for (let attempt = 0; attempt < MAX_CAS_ATTEMPTS; attempt++) {
-    const updates = {
-      outstandingDebt: totalOutstanding,
-    };
-
     try {
-      return await updateWallet(currentWallet, updates);
+      return await updateWallet(currentWallet, {
+        outstandingDebt: totalOutstanding,
+      });
     } catch (error) {
       currentWallet = await getWalletForCourier(courierId);
 
@@ -1388,8 +1876,6 @@ async function ensureDebtApplied({ collection, courierId, atuaShareAmount }) {
     atuaShareAmount,
   );
 
-  // If the completion marker exists, the previous invocation completed
-  // the debt and wallet updates.
   if (verifiedCollection.debtAppliedAt && verifiedCollection.courierDebtID) {
     const debt = await getCourierDebt(verifiedCollection.courierDebtID);
 
@@ -1411,7 +1897,6 @@ async function ensureDebtApplied({ collection, courierId, atuaShareAmount }) {
   const reserved = await reserveOrGetActiveDebt({
     courierId,
     collection: verifiedCollection,
-    atuaShareAmount,
   });
 
   const attached = await attachCollectionToDebt(
@@ -1420,23 +1905,17 @@ async function ensureDebtApplied({ collection, courierId, atuaShareAmount }) {
     atuaShareAmount,
   );
 
-  // Recalculate from the audit rows instead of incrementing a balance.
-  // This makes retry repair possible after a partial failure.
   const debt = await recomputeDebtFromCollections(
     reserved.debt,
     courierId,
     attached.id,
   );
 
-  // Wallet.outstandingDebt is the aggregate of unpaid CourierDebt records.
-  // availableBalance, pendingBalance and lifetimeEarnings are untouched.
   const wallet = await recomputeWalletOutstandingDebt(
     reserved.wallet,
     courierId,
   );
 
-  // This is the final completion marker. If an earlier step fails,
-  // the next retry recalculates the debt from the audit records.
   const marked = await updateCashCollection(attached, {
     debtAppliedAt: new Date().toISOString(),
   });
@@ -1460,9 +1939,7 @@ async function updateOrderForCashCollection({
   confirmedAt,
 }) {
   const mutation = `
-    mutation ConfirmOrderCashCollection(
-      $input: UpdateOrderInput!
-    ) {
+    mutation ConfirmOrderCashCollection($input: UpdateOrderInput!) {
       updateOrder(input: $input) {
         ${ORDER_FIELDS}
       }
@@ -1535,6 +2012,7 @@ async function ensureLedgerAndDebt({
     throw new Error("The recorded cash collection has an invalid amount.");
   }
 
+  const courierEarnings = getCourierEarnings(order);
   const confirmedAt = order.cashCollectedAt || new Date().toISOString();
 
   const collection = await createCashCollectionRecord({
@@ -1546,11 +2024,26 @@ async function ensureLedgerAndDebt({
     confirmedAt,
   });
 
-  return ensureDebtApplied({
+  const debtPosting = await ensureDebtApplied({
     collection,
     courierId,
     atuaShareAmount,
   });
+
+  // Always run this after debt posting, including on retries.
+  // If a previous invocation stopped after debtAppliedAt was written,
+  // this step still creates/repairs the earnings ledger and wallet total.
+  const earningsPosting = await ensureCashEarnings({
+    order,
+    courierId,
+    courierEarnings,
+  });
+
+  return {
+    ...debtPosting,
+    courierEarnings: earningsPosting.courierEarnings,
+    lifetimeEarnings: earningsPosting.lifetimeEarnings,
+  };
 }
 
 // =============================================================================
@@ -1649,7 +2142,6 @@ exports.handler = async (event) => {
 
   try {
     orderId = getOrderId(event);
-
     const sub = getIdentitySub(event);
 
     if (!sub) {
@@ -1695,11 +2187,10 @@ exports.handler = async (event) => {
     }
 
     const collectionId = getCashCollectionId(order.id);
-
     const atuaShareAmount = getAtuaShare(order);
 
     // -------------------------------------------------------------------------
-    // Idempotent retry: repair missing audit/debt posting.
+    // Idempotent retry: repair missing audit, debt or earnings posting.
     // -------------------------------------------------------------------------
 
     if (alreadyCollectedByThisCourier(order, courier.id, collectionId)) {
@@ -1721,16 +2212,21 @@ exports.handler = async (event) => {
         atuaShareAmount,
       });
 
-      return result(true, "Cash collection and courier debt are confirmed.", {
-        orderId: order.id,
-        cashCollectionID: posted.collection.id,
-        amount: Number(posted.collection.amount),
-        atuaShareAmount,
-        courierDebtID: posted.debt.id,
-        debtRemaining: Number(posted.debt.remainingAmount),
-        dueAt: posted.debt.dueAt,
-        confirmedAt: posted.collection.confirmedAt,
-      });
+      return result(
+        true,
+        "Cash collection, courier debt and earnings are confirmed.",
+        {
+          orderId: order.id,
+          cashCollectionID: posted.collection.id,
+          amount: Number(posted.collection.amount),
+          atuaShareAmount,
+          courierEarnings: posted.courierEarnings,
+          courierDebtID: posted.debt.id,
+          debtRemaining: Number(posted.debt.remainingAmount),
+          dueAt: posted.debt.dueAt,
+          confirmedAt: posted.collection.confirmedAt,
+        },
+      );
     }
 
     // -------------------------------------------------------------------------
@@ -1852,10 +2348,11 @@ exports.handler = async (event) => {
     }
 
     // -------------------------------------------------------------------------
-    // Derive amount from saved Order.
+    // Derive order amount and courier earnings from saved Order.
     // -------------------------------------------------------------------------
 
     const amount = Number(order.totalPrice);
+    const courierEarnings = getCourierEarnings(order);
 
     if (!Number.isFinite(amount) || amount <= 0) {
       return result(
@@ -1918,16 +2415,21 @@ exports.handler = async (event) => {
           atuaShareAmount,
         });
 
-        return result(true, "Cash collection and courier debt are confirmed.", {
-          orderId: latestOrder.id,
-          cashCollectionID: posted.collection.id,
-          amount: Number(posted.collection.amount),
-          atuaShareAmount,
-          courierDebtID: posted.debt.id,
-          debtRemaining: Number(posted.debt.remainingAmount),
-          dueAt: posted.debt.dueAt,
-          confirmedAt: posted.collection.confirmedAt,
-        });
+        return result(
+          true,
+          "Cash collection, courier debt and earnings are confirmed.",
+          {
+            orderId: latestOrder.id,
+            cashCollectionID: posted.collection.id,
+            amount: Number(posted.collection.amount),
+            atuaShareAmount,
+            courierEarnings: posted.courierEarnings,
+            courierDebtID: posted.debt.id,
+            debtRemaining: Number(posted.debt.remainingAmount),
+            dueAt: posted.debt.dueAt,
+            confirmedAt: posted.collection.confirmedAt,
+          },
+        );
       }
 
       console.error(
@@ -1943,7 +2445,8 @@ exports.handler = async (event) => {
     }
 
     // -------------------------------------------------------------------------
-    // Create audit record and immediately apply Atua's share to CourierDebt.
+    // Create audit record, apply Atua's share to CourierDebt and record
+    // the courier's cash earnings.
     // -------------------------------------------------------------------------
 
     const posted = await ensureLedgerAndDebt({
@@ -1957,13 +2460,15 @@ exports.handler = async (event) => {
       atuaShareAmount,
     });
 
-    console.log("CASH COLLECTION AND COURIER DEBT RECORDED:", {
+    console.log("CASH COLLECTION, DEBT AND EARNINGS RECORDED:", {
       orderId: order.id,
       courierId: courier.id,
       cashCollectionID: posted.collection.id,
       courierDebtID: posted.debt.id,
       amount,
       atuaShareAmount,
+      courierEarnings: posted.courierEarnings,
+      lifetimeEarnings: posted.lifetimeEarnings,
       debtRemaining: posted.debt.remainingAmount,
       dueAt: posted.debt.dueAt,
       confirmedAt,
@@ -1971,12 +2476,13 @@ exports.handler = async (event) => {
 
     return result(
       true,
-      "Cash collection recorded and courier debt updated successfully.",
+      "Cash collection recorded. Courier debt and lifetime earnings updated successfully.",
       {
         orderId: order.id,
         cashCollectionID: posted.collection.id,
         amount,
         atuaShareAmount,
+        courierEarnings: posted.courierEarnings,
         courierDebtID: posted.debt.id,
         debtRemaining: Number(posted.debt.remainingAmount),
         dueAt: posted.debt.dueAt,
@@ -1988,7 +2494,7 @@ exports.handler = async (event) => {
 
     return result(
       false,
-      "Cash may already have been recorded on the order. Refresh and retry so the audit and debt records can be repaired. If the problem continues, contact Atua support.",
+      "Cash may already have been recorded on the order. Refresh and retry so the audit, debt and earnings records can be repaired. If the problem continues, contact Atua support.",
       { orderId },
     );
   }
